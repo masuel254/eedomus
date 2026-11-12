@@ -1,7 +1,17 @@
 {
-  "version": "1.3.0",
+  "version": "1.3.1",
   "date": "2026-11-12",
   "releases": [
+    {
+      "version": "1.3.1",
+      "date": "2026-11-12",
+      "time": "16:23",
+      "title": "Réglages plus lisibles",
+      "changes": [
+        "Heure de publication affichée pour chaque version",
+        "Nouveautés, ce qui fonctionne et reste à faire rangés en accordéons"
+      ]
+    },
     {
       "version": "1.3.0",
       "date": "2026-11-12",
@@ -11,7 +21,8 @@
         "Photo instantanée et vidéo en direct (qualité standard, bouton HD)",
         "Chaque caméra s'affiche dans sa pièce ; toucher la miniature lance le direct",
         "Écran Caméras commun : Imou et Netatmo réunis"
-      ]
+      ],
+      "time": "15:04"
     },
     {
       "version": "1.2.0",
@@ -23,7 +34,8 @@
         "Modes de la maison : Planning, Absent, Hors-gel",
         "Caméras extérieures Netatmo (Presence et Caméra Extérieure) : photo, vidéo en direct, derniers événements",
         "Écran Réglages : version, nouveautés et suivi du projet"
-      ]
+      ],
+      "time": "14:44"
     },
     {
       "version": "1.1.0",
@@ -33,7 +45,8 @@
         "Un QR code d'installation par personne (Sam, Françoise, Adam, Thomas)",
         "Accueil personnalisé avec le prénom",
         "Accès révocable personne par personne"
-      ]
+      ],
+      "time": "14:16"
     },
     {
       "version": "1.0.0",
@@ -45,7 +58,8 @@
         "État de la maison : portes, alarme, présence",
         "Températures, piscine (Ondilo) et station météo",
         "Barre d'icônes : Portail, Garage, Caméra, Alarme (confirmation en deux temps)"
-      ]
+      ],
+      "time": "10:22"
     }
   ],
   "works": [
@@ -60,5 +74,6 @@
     "Surveiller la consommation vidéo Imou (2 Go gratuits)",
     "État réel de la porte de garage (pas de capteur d'ouverture aujourd'hui)",
     "Révoquer les codes d'accès partagés pendant la mise en place (eedomus, n8n, Netatmo, Imou)"
-  ]
+  ],
+  "time": "16:23"
 }

@@ -343,16 +343,21 @@
   function renderSettings() {
     var L = LOG || { version: '—', releases: [], works: [], todo: [] };
     var h = '<div class="sh-hd"><h2>Réglages</h2><button class="close" data-close aria-label="Fermer">×</button></div>' +
-      '<div class="card ver"><div><b>Maison</b><small>Version ' + esc(L.version) + (L.date ? ' · ' + esc(dateFr(L.date)) : '') + '</small></div>' +
+      '<div class="card ver"><div><b>Maison</b><small>Version ' + esc(L.version) + (L.date ? ' · ' + esc(dateFr(L.date)) + (L.time ? ' à ' + esc(L.time) : '') : '') + '</small></div>' +
       '<button class="act" data-update>Vérifier</button></div>' +
       '<div class="card"><div class="kv"><span>Connecté en tant que</span><b>' + esc(userName || '—') + '</b></div>' +
       '<div class="kv"><span>Box eedomus</span><b class="' + (offline ? 'bad' : 'ok') + '">' + (offline ? 'Hors ligne' : lastOk ? 'Connectée' : '…') + '</b></div>' +
       '<div class="kv"><span>Netatmo</span><b class="' + (NT ? 'ok' : ntErr ? 'bad' : '') + '">' + (NT ? 'Connecté' : ntErr ? 'Indisponible' : '…') + '</b></div></div>' +
-      '<h3>Ce qui fonctionne</h3><ul class="lst ok">' + L.works.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' +
-      '<h3>Reste à faire</h3><ul class="lst todo">' + L.todo.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' +
+      '<h3>Suivi du projet</h3>' +
+      '<details class="acc2"><summary><span>Ce qui fonctionne</span><span class="cnt ok">' + L.works.length + '</span>' + icon('down') + '</summary>' +
+      '<ul class="lst ok">' + L.works.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></details>' +
+      '<details class="acc2"><summary><span>Reste à faire</span><span class="cnt todo">' + L.todo.length + '</span>' + icon('down') + '</summary>' +
+      '<ul class="lst todo">' + L.todo.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></details>' +
       '<h3>Historique des versions</h3>' + L.releases.map(function (r, i) {
-        return '<div class="rel"><div class="rel-hd"><b>v' + esc(r.version) + '</b>' + (i === 0 ? '<span class="new">Actuelle</span>' : '') + '<small>' + esc(dateFr(r.date)) + '</small></div>' +
-          '<p>' + esc(r.title) + '</p><ul>' + r.changes.map(function (c) { return '<li>' + esc(c) + '</li>'; }).join('') + '</ul></div>';
+        return '<details class="acc2 rel"><summary><span class="rel-v">v' + esc(r.version) + '</span>' +
+          '<span class="rel-t"><b>' + esc(r.title) + '</b><small>' + esc(dateFr(r.date)) + (r.time ? ' à ' + esc(r.time) : '') + '</small></span>' +
+          (i === 0 ? '<span class="new">Actuelle</span>' : '') + icon('down') + '</summary>' +
+          '<ul>' + r.changes.map(function (c) { return '<li>' + esc(c) + '</li>'; }).join('') + '</ul></details>';
       }).join('');
     sheet.innerHTML = '<div class="sh-in">' + h + '</div>';
     if (newVersion) { newVersion = false; store.set('maison.seenVersion', L.version); render(); }
