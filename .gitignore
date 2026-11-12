@@ -1,0 +1,13 @@
+# Secrets - ne JAMAIS publier
+.env
+private/
+
+# Données personnelles exportées
+/modules.json
+
+# Divers
+node_modules/
+.DS_Store
+Thumbs.db
+design/
+private/

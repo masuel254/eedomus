@@ -1,0 +1,362 @@
+{
+  "api": "https://vps-444b360b.vps.ovh.net/webhook/maison",
+  "heating": {
+    "room": "Séjour",
+    "roomTemp": 953769,
+    "outside": 3000581,
+    "humidity": 3000578,
+    "upstairs": 961070
+  },
+  "status": {
+    "doors": [
+      1066364,
+      904641
+    ],
+    "alarm": 881876,
+    "people": [
+      857448,
+      920233,
+      3327972,
+      3388143
+    ]
+  },
+  "dock": {
+    "gate": 1895923,
+    "garage": 1920540,
+    "alarm": 881876
+  },
+  "groups": [
+    {
+      "name": "Toute la maison",
+      "rooms": [
+        {
+          "id": "volets",
+          "name": "Tous les volets",
+          "items": [
+            {
+              "id": 835741,
+              "name": "Ouvrir tous les volets",
+              "type": "action",
+              "value": 1,
+              "label": "Ouvrir",
+              "icon": "up"
+            },
+            {
+              "id": 835747,
+              "name": "Fermer tous les volets",
+              "type": "action",
+              "value": 1,
+              "label": "Fermer",
+              "icon": "down"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Rez-de-chaussée",
+      "rooms": [
+        {
+          "id": "salon",
+          "name": "Salon",
+          "temp": 953769,
+          "items": [
+            {
+              "id": 3225291,
+              "name": "Hue salon",
+              "type": "light"
+            },
+            {
+              "id": 3217309,
+              "name": "Hue bar",
+              "type": "light"
+            },
+            {
+              "id": 3324907,
+              "name": "Lampe portail salon",
+              "type": "light"
+            },
+            {
+              "id": 835108,
+              "name": "Volet salon",
+              "type": "shutter"
+            },
+            {
+              "id": 835517,
+              "name": "Volet salon gauche",
+              "type": "shutter"
+            },
+            {
+              "id": 835301,
+              "name": "Volet salon droit",
+              "type": "shutter"
+            }
+          ]
+        },
+        {
+          "id": "cuisine",
+          "name": "Cuisine",
+          "temp": 976950,
+          "items": [
+            {
+              "id": 831048,
+              "name": "Volet cuisine",
+              "type": "shutter"
+            }
+          ]
+        },
+        {
+          "id": "sam",
+          "name": "Salle à manger",
+          "items": [
+            {
+              "id": 834341,
+              "name": "Volet salle à manger",
+              "type": "shutter"
+            },
+            {
+              "id": 1039374,
+              "name": "Baie aquarium",
+              "type": "shutter"
+            }
+          ]
+        },
+        {
+          "id": "entree",
+          "name": "Entrée",
+          "temp": 899338,
+          "items": [
+            {
+              "id": 3226049,
+              "name": "Hue entrée",
+              "type": "light"
+            },
+            {
+              "id": 3225294,
+              "name": "Hue escalier",
+              "type": "light"
+            },
+            {
+              "id": 1066364,
+              "name": "Porte d'entrée",
+              "type": "door"
+            }
+          ]
+        },
+        {
+          "id": "cellier",
+          "name": "Cellier",
+          "temp": 846111,
+          "items": [
+            {
+              "id": 845236,
+              "name": "Volet cellier",
+              "type": "shutter"
+            },
+            {
+              "id": 904641,
+              "name": "Porte cellier",
+              "type": "door"
+            }
+          ]
+        },
+        {
+          "id": "garage",
+          "name": "Garage",
+          "items": [
+            {
+              "id": 1920540,
+              "name": "Porte de garage",
+              "type": "garage"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Étage",
+      "rooms": [
+        {
+          "id": "chambre",
+          "name": "Chambre",
+          "temp": 961070,
+          "items": [
+            {
+              "id": 845428,
+              "name": "Volet chambre",
+              "type": "shutter"
+            },
+            {
+              "id": 845390,
+              "name": "Volet chambre droit",
+              "type": "shutter"
+            }
+          ]
+        },
+        {
+          "id": "sdb",
+          "name": "Salle de bains",
+          "items": [
+            {
+              "id": 929535,
+              "name": "Sèche-serviettes",
+              "type": "switch",
+              "icon": "towel"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Extérieur",
+      "rooms": [
+        {
+          "id": "jardin",
+          "name": "Jardin",
+          "temp": 2999507,
+          "camera": true,
+          "items": [
+            {
+              "id": 3226063,
+              "name": "Tout l'extérieur",
+              "type": "light"
+            },
+            {
+              "id": 2991071,
+              "name": "Palmiers",
+              "type": "light",
+              "on": "on",
+              "off": "off"
+            },
+            {
+              "id": 2991079,
+              "name": "Olivier",
+              "type": "light",
+              "on": "on",
+              "off": "off"
+            },
+            {
+              "id": 2991078,
+              "name": "Pétanque",
+              "type": "light",
+              "on": "on",
+              "off": "off"
+            },
+            {
+              "id": 1895923,
+              "name": "Portail",
+              "type": "action",
+              "value": 100,
+              "label": "Ouvrir",
+              "icon": "gate",
+              "confirm": true
+            }
+          ]
+        },
+        {
+          "id": "pergola",
+          "name": "Pergola",
+          "temp": 3227865,
+          "items": [
+            {
+              "id": 3254852,
+              "name": "Hue pergola",
+              "type": "light"
+            }
+          ]
+        },
+        {
+          "id": "piscine",
+          "name": "Piscine",
+          "temp": 3557562,
+          "items": [
+            {
+              "id": 2090770,
+              "name": "Spot abri",
+              "type": "light"
+            },
+            {
+              "id": 3557562,
+              "name": "Eau",
+              "type": "sensor",
+              "icon": "drop",
+              "unit": "°",
+              "decimals": 1
+            },
+            {
+              "id": 3557564,
+              "name": "pH",
+              "type": "sensor",
+              "icon": "drop",
+              "decimals": 2
+            },
+            {
+              "id": 3557563,
+              "name": "Redox",
+              "type": "sensor",
+              "icon": "drop",
+              "unit": " mV",
+              "decimals": 0
+            },
+            {
+              "id": 3557566,
+              "name": "Sel",
+              "type": "sensor",
+              "icon": "drop",
+              "unit": " g/L",
+              "scale": 0.001,
+              "decimals": 1
+            }
+          ]
+        },
+        {
+          "id": "meteo",
+          "name": "Météo",
+          "temp": 3000581,
+          "items": [
+            {
+              "id": 3000573,
+              "name": "Vent",
+              "type": "sensor",
+              "icon": "wind",
+              "unit": " km/h",
+              "decimals": 0
+            },
+            {
+              "id": 3000574,
+              "name": "Rafales",
+              "type": "sensor",
+              "icon": "wind",
+              "unit": " km/h",
+              "decimals": 0
+            },
+            {
+              "id": 3000579,
+              "name": "Pluie",
+              "type": "sensor",
+              "icon": "drop",
+              "unit": " mm",
+              "decimals": 1
+            },
+            {
+              "id": 3000578,
+              "name": "Humidité",
+              "type": "sensor",
+              "icon": "drop",
+              "unit": " %",
+              "decimals": 0
+            },
+            {
+              "id": 3000577,
+              "name": "Pression",
+              "type": "sensor",
+              "icon": "thermo",
+              "unit": " hPa",
+              "decimals": 0
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
