@@ -1,8 +1,17 @@
 {
   "api": "https://vps-444b360b.vps.ovh.net/webhook/maison",
   "cameras": {
-    "order": ["Presence", "Garage", "Salon", "Jardin", "Piscine", "Cellier"],
-    "hidden": ["Caméra Extérieure"]
+    "order": [
+      "Presence",
+      "Garage",
+      "Salon",
+      "Jardin",
+      "Piscine",
+      "Cellier"
+    ],
+    "hidden": [
+      "Caméra Extérieure"
+    ]
   },
   "heating": {
     "room": "Séjour",
@@ -201,6 +210,13 @@
               "name": "Sauna",
               "type": "tuya-switch",
               "icon": "flame"
+            },
+            {
+              "key": "sauna",
+              "name": "Consommation du sauna",
+              "label": "Sauna",
+              "type": "tuya-meter",
+              "icon": "bolt"
             },
             {
               "id": 929535,

@@ -101,12 +101,16 @@ let body = req.body;
 if (typeof body === 'string') { try { body = JSON.parse(body); } catch (e) { body = {}; } }
 body = body || {};
 const reply = (status, data) => [{ json: { status, data } }];
-if (!body.token || !CFG.tokens.includes(body.token)) return reply(401, { ok: false, error: 'unauthorized' });
+// Déclenchement par la minuterie (relevés d'énergie) : pas de requête HTTP, donc ni corps ni en-têtes.
+const isCron = req.body === undefined && req.headers === undefined;
+if (!isCron && (!body.token || !CFG.tokens.includes(body.token))) return reply(401, { ok: false, error: 'unauthorized' });
 
 const auth = 'api_user=' + encodeURIComponent(CFG.user) + '&api_secret=' + encodeURIComponent(CFG.secret);
-async function eedomus(kind, query, retry) {
-  // Lecture : un second essai après 600 ms si eedomus ne répond pas (coupures brèves du cloud eedomus).
-  // Commande (set) : jamais rejouée automatiquement, pour ne pas envoyer deux fois un ordre.
+async function eedomus(kind, query, attempt) {
+  // Lecture : jusqu'à 2 nouveaux essais (0,6 s puis 1,5 s) si eedomus ne répond pas.
+  // Commande (set) : rejouée UNIQUEMENT si l'erreur est un échec DNS (la requête n'est jamais partie),
+  // pour ne jamais envoyer deux fois un ordre.
+  attempt = attempt || 0;
   try {
     const raw = await helpers.httpRequest({
       url: 'https://api.eedomus.com/' + kind + '?' + auth + '&' + query,
@@ -115,12 +119,13 @@ async function eedomus(kind, query, retry) {
       timeout: 15000,
     });
     const r = JSON.parse(Buffer.from(raw).toString('latin1'));
-    if (kind === 'get' && r.success !== 1 && !retry) throw new Error('eedomus success=' + r.success);
+    if (kind === 'get' && r.success !== 1 && attempt < 2) throw new Error('eedomus success=' + r.success);
     return r;
   } catch (e) {
-    if (kind !== 'get' || retry) throw e;
-    await new Promise((ok) => setTimeout(ok, 600));
-    return eedomus(kind, query, true);
+    const dns = /getaddrinfo|ENOTFOUND|EAI_AGAIN/i.test(String(e && (e.message || e.code) || ''));
+    if (attempt >= 2 || (kind !== 'get' && !dns)) throw e;
+    await new Promise((ok) => setTimeout(ok, attempt === 0 ? 600 : 1500));
+    return eedomus(kind, query, attempt + 1);
   }
 }
 
@@ -516,10 +521,65 @@ async function tuState(fresh) {
   }
   const data = { ok: true, devices, at: new Date().toISOString() };
   SD.tuState = { at: Date.now(), data };
+  enRecord(devices);
   return data;
 }
+
+// ---- Relevés d'énergie (historique maison, car le service « Statistiques » de Tuya n'est pas activé) ----
+// Compteurs : index kWh (forward_energy_total). Sauna : énergie intégrée à partir de la puissance mesurée.
+// SD.en[clé] = { h: { AAAAMMJJHH: index au début de l'heure }, d: { AAAAMMJJ: index au début du jour }, last, t, p, acc }
+function enKey(ts) {
+  const p = {};
+  new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23' })
+    .formatToParts(new Date(ts)).forEach((x) => { p[x.type] = x.value; });
+  return p.year + p.month + p.day + p.hour;
+}
+function enRecord(devices) {
+  SD.en = SD.en || {};
+  const now = Date.now(), hk = enKey(now), dk = hk.slice(0, 8);
+  const hCut = enKey(now - 9 * 86400000), dCut = enKey(now - 800 * 86400000).slice(0, 8);
+  Object.keys(devices).forEach((k) => {
+    const d = devices[k], e = SD.en[k] = SD.en[k] || { h: {}, d: {}, acc: 0, t: 0, p: null, last: null };
+    let idx;
+    if (d.energy != null) idx = d.energy;
+    else {
+      // intégration trapèze de la puissance (W) entre deux relevés espacés de moins de 20 min
+      if (e.t && e.p != null) { const dt = (now - e.t) / 3600000; if (dt > 0 && dt < 0.34) e.acc += ((e.p + (d.power || 0)) / 2) / 1000 * dt; }
+      idx = Math.round(e.acc * 10000) / 10000;
+    }
+    e.t = now; e.p = d.power || 0; e.last = idx;
+    if (e.h[hk] === undefined) e.h[hk] = idx;
+    if (e.d[dk] === undefined) e.d[dk] = idx;
+    Object.keys(e.h).forEach((x) => { if (x < hCut) delete e.h[x]; });
+    Object.keys(e.d).forEach((x) => { if (x < dCut) delete e.d[x]; });
+  });
+}
+async function enSample() {
+  // Minuterie toutes les 5 min : relevé si le sauna chauffe, sinon au plus tous les 14 min (forfait Tuya préservé).
+  if (!CFG.tu) return;
+  const sauna = SD.en && SD.en.sauna, heating = sauna && sauna.p > 50;
+  const lastAt = SD.tuState ? SD.tuState.at : 0;
+  if (!heating && Date.now() - lastAt < 14 * 60000) return;
+  await tuState(true);
+}
+function enSeries(k) {
+  const e = (SD.en || {})[k];
+  if (!e) return { hours: [], days: [], since: null };
+  const diff = (obj) => {
+    const keys = Object.keys(obj).sort();
+    return keys.map((key, i) => ({ k: key, kwh: Math.max(0, Math.round(((i + 1 < keys.length ? obj[keys[i + 1]] : e.last) - obj[key]) * 1000) / 1000) }));
+  };
+  const days = diff(e.d), hours = diff(e.h);
+  return { hours, days, since: Object.keys(e.d).sort()[0] || null, index: e.last };
+}
+
 async function tuya(b) {
   if (!CFG.tu) throw fail(503, 'tuya_not_configured');
+  if (b.action === 'tu.energy') {
+    if (!CFG.tu.devices[b.key]) throw fail(403, 'not_allowed');
+    const st = await tuState(!(SD.tuState && SD.tuState.at > Date.now() - 5000));
+    return Object.assign({ ok: true, key: b.key, now: st.devices[b.key] || null }, enSeries(b.key));
+  }
   // fresh : lecture directe chez Tuya (retour dans l'appli, ouverture d'une pièce), au plus une fois toutes les 5 s
   if (b.action === 'tu.state') return tuState(!!b.fresh && !(SD.tuState && SD.tuState.at > Date.now() - 5000));
   if (b.action === 'tu.switch') {
@@ -568,6 +628,7 @@ async function netatmo(b) {
 }
 
 try {
+  if (isCron) { await enSample(); return []; } // aucune réponse HTTP à envoyer
   if (body.action === 'ping') return reply(200, { ok: true });
 
   if (body.action === 'state') {
@@ -598,6 +659,7 @@ try {
 
   return reply(400, { ok: false, error: 'unknown_action' });
 } catch (e) {
+  if (isCron) return [];
   if (e && e.httpStatus) return reply(e.httpStatus, { ok: false, error: e.code || 'error', detail: e.detail });
   return reply(500, { ok: false, error: 'exception', detail: String(e && e.message || e) });
 }
@@ -632,6 +694,15 @@ const workflow = {
       webhookId: '6d1f5c2e-6a0b-4c55-9d2a-3c8e5a1f0b01',
     },
     {
+      // Minuterie : relevés d'énergie Smart Life toutes les 5 minutes (le code décide s'il faut vraiment interroger Tuya)
+      parameters: { rule: { interval: [{ field: 'minutes', minutesInterval: 5 }] } },
+      id: randomUUID(),
+      name: 'Relevés énergie',
+      type: 'n8n-nodes-base.scheduleTrigger',
+      typeVersion: 1.2,
+      position: [0, 220],
+    },
+    {
       parameters: { jsCode: code },
       id: randomUUID(),
       name: 'eedomus',
@@ -657,6 +728,7 @@ const workflow = {
   ],
   connections: {
     Webhook: { main: [[{ node: 'eedomus', type: 'main', index: 0 }]] },
+    'Relevés énergie': { main: [[{ node: 'eedomus', type: 'main', index: 0 }]] },
     eedomus: { main: [[{ node: 'Réponse', type: 'main', index: 0 }]] },
   },
   settings: { executionOrder: 'v1', saveDataSuccessExecution: 'none' },

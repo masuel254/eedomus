@@ -215,8 +215,9 @@
       var m = tuDev(it.key), running = m && m.power > 5;
       var msub = !m ? 'Chargement…' : m.on === false ? 'Coupé par son compteur' : running ? 'En marche' : "À l'arrêt";
       if (m && m.energy != null) msub += ' · index ' + fmt(m.energy, 0) + ' kWh';
-      return '<div class="row' + (running ? ' run' : '') + '"><span class="ic">' + icon(it.icon || 'bolt') + '</span><span><b>' + esc(it.name) + '</b><small>' + esc(msub) + '</small></span>' +
-        '<span class="val">' + (m ? watts(m.power) : '—') + '</span></div>';
+      msub += ' · détails';
+      return '<button class="row meter' + (running ? ' run' : '') + '" data-energy="' + esc(it.key) + '" data-ename="' + esc(it.label || it.name) + '"><span class="ic">' + icon(it.icon || 'bolt') + '</span><span><b>' + esc(it.name) + '</b><small>' + esc(msub) + '</small></span>' +
+        '<span class="val">' + (m ? watts(m.power) : '—') + '</span></button>';
     }
     if (it.type === 'sensor') {
       var x = num(id); if (x != null && it.scale) x = x * it.scale;
@@ -352,10 +353,11 @@
     sheet.dataset.view = view; sheet.hidden = false; document.body.classList.add('noscroll');
     if (view === 'cams') { loadCams(true); loadImou(false); renderCams(); }
     else if (view === 'rec') renderRec();
+    else if (view === 'energy') renderEnergy();
     else renderSettings();
   }
   function closeSheet() {
-    sheet.hidden = true; sheet.innerHTML = ''; liveCam = null; liveHd = true; REC = null; document.body.classList.remove('noscroll');
+    sheet.hidden = true; sheet.innerHTML = ''; liveCam = null; liveHd = true; REC = null; ENG = null; document.body.classList.remove('noscroll');
   }
   function camCardHTML(c) {
     var live = liveCam === c.id && c.live;
@@ -431,6 +433,93 @@
     sheet.innerHTML = '<div class="sh-in">' + h + '</div>';
     sheet.scrollTop = keep;
   }
+  // ---------- Consommation électrique (électrolyseur, pompe à chaleur, sauna) ----------
+  var ENG = null; // { key, name, tab: 'day'|'month'|'year', day: 'AAAAMMJJ', month: 'AAAAMM', year: 'AAAA', data, loading }
+  function ymdK(d) { return ymd(d).replace(/-/g, ''); }
+  function openEnergy(key, name) {
+    var t = new Date();
+    ENG = { key: key, name: name, tab: 'day', day: ymdK(t), month: ymdK(t).slice(0, 6), year: String(t.getFullYear()), data: null, loading: true };
+    sheet.scrollTop = 0; openSheet('energy'); loadEnergy();
+  }
+  function loadEnergy() {
+    if (!ENG) return; var k = ENG.key;
+    api({ action: 'tu.energy', key: k }).then(function (j) { if (ENG && ENG.key === k) { ENG.data = j; ENG.loading = false; renderEnergy(); } })
+      .catch(function () { if (ENG) { ENG.loading = false; ENG.error = true; renderEnergy(); } });
+  }
+  function kwh(v) { return v == null ? '—' : v < 10 ? fmt(v, 2) : v < 100 ? fmt(v, 1) : fmt(v, 0); }
+  function bars(vals, labels, hi) {
+    // Histogramme SVG : vals = [nombre|null], labels = { index: texte }, hi = index mis en avant
+    var n = vals.length, W = 320, H = 150, top = 8, base = 124, gap = n > 20 ? 2 : 4, bw = (W - gap * (n - 1)) / n;
+    var max = Math.max.apply(null, vals.map(function (v) { return v || 0; }).concat([0.001]));
+    var s = '<svg class="bars" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Consommation">';
+    s += '<line x1="0" x2="' + W + '" y1="' + base + '" y2="' + base + '" class="axis"/>';
+    vals.forEach(function (v, i) {
+      var x = i * (bw + gap), h = v == null ? 0 : Math.max(v > 0 ? 3 : 1.5, (v / max) * (base - top));
+      if (v == null) s += '<rect x="' + x.toFixed(1) + '" y="' + (base - 1.5) + '" width="' + bw.toFixed(1) + '" height="1.5" rx="0.75" class="b-empty"/>';
+      else s += '<rect x="' + x.toFixed(1) + '" y="' + (base - h).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="' + Math.min(3, bw / 2).toFixed(1) + '" class="' + (i === hi ? 'b-hi' : 'b') + '"><title>' + kwh(v) + ' kWh</title></rect>';
+      if (labels[i] !== undefined) { var anc = i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle', lx = i === 0 ? x : i === n - 1 ? x + bw : x + bw / 2; s += '<text x="' + lx.toFixed(1) + '" y="' + (H - 6) + '" text-anchor="' + anc + '" class="lbl">' + labels[i] + '</text>'; }
+    });
+    return s + '</svg>';
+  }
+  function renderEnergy() {
+    if (!ENG) return;
+    var D = ENG.data || {}, now = D.now || {}, h = '';
+    h += '<div class="sh-hd"><h2>' + esc(ENG.name) + '</h2><button class="close" data-close aria-label="Fermer">×</button></div>';
+    if (ENG.loading && !ENG.data) { sheet.innerHTML = '<div class="sh-in">' + h + '<p class="muted">Chargement…</p></div>'; return; }
+    if (ENG.error && !ENG.data) { sheet.innerHTML = '<div class="sh-in">' + h + '<p class="muted">Smart Life ne répond pas, réessaie dans un instant.</p></div>'; return; }
+    // En-tête : index total (compteurs) ou énergie cumulée depuis le début des relevés (sauna)
+    h += '<div class="en-total"><b>' + (now.energy != null ? fmt(now.energy, 2) : kwh(D.index)) + '</b><small>' + icon('bolt') +
+      (now.energy != null ? 'Index total (kWh)' : 'kWh mesurés depuis le début des relevés') + '</small></div>';
+    h += '<div class="en-live"><div><small>Puissance</small><b>' + watts(now.power) + '</b></div><div><small>Courant</small><b>' + (now.current == null ? '—' : fmt(now.current, 2) + ' A') + '</b></div>' +
+      '<div><small>Tension</small><b>' + (now.voltage == null ? '—' : fmt(now.voltage, 1) + ' V') + '</b></div></div>';
+    h += '<div class="en-tabs">' + [['day', 'Jour'], ['month', 'Mois'], ['year', 'Année']].map(function (t) {
+      return '<button class="' + (ENG.tab === t[0] ? 'on' : '') + '" data-entab="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>';
+    var hours = {}, days = {}; (D.hours || []).forEach(function (x) { hours[x.k] = x.kwh; }); (D.days || []).forEach(function (x) { days[x.k] = x.kwh; });
+    var vals = [], labels = {}, total = 0, any = false, title = '', hi = -1, today = ymdK(new Date());
+    if (ENG.tab === 'day') {
+      for (var i = 0; i < 24; i++) { var hk = ENG.day + String(i).padStart(2, '0'), v = hours[hk]; vals.push(v === undefined ? null : v); if (v !== undefined) { total += v; any = true; } }
+      [0, 6, 12, 18, 23].forEach(function (i) { labels[i] = String(i).padStart(2, '0') + 'h'; });
+      if (ENG.day === today) hi = new Date().getHours();
+      var dd = new Date(+ENG.day.slice(0, 4), +ENG.day.slice(4, 6) - 1, +ENG.day.slice(6, 8));
+      title = ENG.day === today ? "Aujourd'hui" : dd.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+      if (days[ENG.day] !== undefined) total = days[ENG.day];
+    } else if (ENG.tab === 'month') {
+      var y = +ENG.month.slice(0, 4), mo = +ENG.month.slice(4, 6), nd = new Date(y, mo, 0).getDate();
+      for (var d = 1; d <= nd; d++) { var dk = ENG.month + String(d).padStart(2, '0'), dv = days[dk]; vals.push(dv === undefined ? null : dv); if (dv !== undefined) { total += dv; any = true; } }
+      [0, 9, 19, nd - 1].forEach(function (i) { labels[i] = String(i + 1); });
+      if (ENG.month === today.slice(0, 6)) hi = new Date().getDate() - 1;
+      title = new Date(y, mo - 1, 1).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+    } else {
+      for (var mm = 1; mm <= 12; mm++) {
+        var pre = ENG.year + String(mm).padStart(2, '0'), sum = null;
+        Object.keys(days).forEach(function (k) { if (k.slice(0, 6) === pre) sum = (sum || 0) + days[k]; });
+        vals.push(sum); if (sum != null) { total += sum; any = true; }
+      }
+      'JFMAMJJASOND'.split('').forEach(function (c, i) { labels[i] = c; });
+      if (ENG.year === today.slice(0, 4)) hi = new Date().getMonth();
+      title = ENG.year;
+    }
+    if (ENG.tab === 'day' && days[ENG.day] !== undefined) any = true;
+    h += '<div class="en-card"><div class="en-period"><button data-enstep="-1" aria-label="Période précédente">' + icon('down') + '</button><span>' + esc(title.charAt(0).toUpperCase() + title.slice(1)) + '</span>' +
+      '<button data-enstep="1" aria-label="Période suivante">' + icon('down') + '</button></div>' +
+      '<div class="en-sum"><b>' + (any ? kwh(total) : '—') + '</b> kWh</div>' + bars(vals, labels, hi) + '</div>';
+    if (D.since) {
+      var s = D.since;
+      h += '<p class="note-q">Historique enregistré par la maison depuis le ' + (+s.slice(6, 8)) + '/' + s.slice(4, 6) + '/' + s.slice(0, 4) +
+        '. Les jours précédents de Smart Life ne sont pas accessibles. Détail heure par heure gardé 8 jours, jours et mois gardés 2 ans.</p>';
+    }
+    var keep = sheet.scrollTop;
+    sheet.innerHTML = '<div class="sh-in">' + h + '</div>';
+    sheet.scrollTop = keep;
+  }
+  function stepEnergy(dir) {
+    if (!ENG) return;
+    if (ENG.tab === 'day') { var d = new Date(+ENG.day.slice(0, 4), +ENG.day.slice(4, 6) - 1, +ENG.day.slice(6, 8) + dir); if (d > new Date()) return; ENG.day = ymdK(d); }
+    else if (ENG.tab === 'month') { var m = new Date(+ENG.month.slice(0, 4), +ENG.month.slice(4, 6) - 1 + dir, 1); if (m > new Date()) return; ENG.month = ymdK(m).slice(0, 6); }
+    else { var y = +ENG.year + dir; if (y > new Date().getFullYear()) return; ENG.year = String(y); }
+    renderEnergy();
+  }
+
   function playEvent(id) {
     var e = ((CAMS && CAMS.events) || []).filter(function (x) { return x.id === id; })[0]; if (!e || !e.video) return;
     var lbl = (EV[e.type] || 'Événement') + ' · ' + new Date(e.time * 1000).toLocaleString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -548,6 +637,7 @@
       }); });
       return render();
     }
+    if ((b = e.target.closest('[data-energy]'))) return openEnergy(b.dataset.energy, b.dataset.ename);
     if ((b = e.target.closest('[data-tuya]'))) {
       if (!confirmed(b)) return;
       var key = b.dataset.tuya, want = !tuOn(key), nameT = b.querySelector('b').textContent;
@@ -577,6 +667,8 @@
     if ((b = e.target.closest('[data-live]'))) { liveCam = b.dataset.live; liveHd = true; return renderCams(); }
     if (e.target.closest('[data-hd]')) { liveHd = !liveHd; return renderCams(); }
     if ((b = e.target.closest('[data-rec]'))) return openRec(b.dataset.rec);
+    if ((b = e.target.closest('[data-entab]'))) { ENG.tab = b.dataset.entab; return renderEnergy(); }
+    if ((b = e.target.closest('[data-enstep]'))) return stepEnergy(+b.dataset.enstep);
     if (e.target.closest('[data-recback]')) { REC = null; sheet.dataset.view = 'cams'; sheet.scrollTop = 0; return renderCams(); }
     if ((b = e.target.closest('[data-recday]'))) { REC.date = b.dataset.recday; REC.list = null; return loadRec(); }
     if ((b = e.target.closest('[data-evplay]'))) return playEvent(b.dataset.evplay);

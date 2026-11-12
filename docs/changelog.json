@@ -1,7 +1,20 @@
 {
-  "version": "1.6.2",
+  "version": "1.7.0",
   "date": "2026-11-12",
   "releases": [
+    {
+      "version": "1.7.0",
+      "date": "2026-11-12",
+      "time": "17:50",
+      "title": "Consommation électrique",
+      "changes": [
+        "Écran Consommation pour l’électrolyseur, la pompe à chaleur et le sauna (toucher la ligne)",
+        "Puissance, courant et tension en direct, index total",
+        "Histogrammes par heure (jour), par jour (mois) et par mois (année)",
+        "Relevés automatiques toutes les 5 min par la maison, même appli fermée (historique depuis le 12/11/2026)",
+        "Connexion eedomus encore plus robuste (nouveaux essais en cas de coupure DNS)"
+      ]
+    },
     {
       "version": "1.6.2",
       "date": "2026-11-12",
@@ -162,7 +175,8 @@
     "Installation sur iPhone pour toute la famille",
     "Caméras : Presence (Netatmo) + 5 Imou, photo, direct et événements Presence",
     "Smart Life : sauna (marche/arrêt) et compteurs électrolyseur + pompe à chaleur",
-    "Enregistrements : carte SD des caméras Imou (7 jours) et clips des événements Presence"
+    "Enregistrements : carte SD des caméras Imou (7 jours) et clips des événements Presence",
+    "Consommation électrique : électrolyseur, pompe à chaleur et sauna (jour, mois, année)"
   ],
   "todo": [
     "Tester la vidéo en direct sur iPhone (Imou et Netatmo)",
@@ -170,7 +184,7 @@
     "État réel de la porte de garage (pas de capteur d'ouverture aujourd'hui)",
     "Révoquer les codes d'accès partagés pendant la mise en place (eedomus, n8n, Netatmo, Imou, Tuya)",
     "Tuya : prolongation demandée le 12/11/2026, en attente de validation (essai actuel jusqu'au 12/12/2026 à 16:47)",
-    "Consommation du jour en kWh pour la piscine et le sauna"
+    "Option : demander à Tuya le service « Statistiques » pour récupérer l'historique d'avant le 12/11/2026"
   ],
-  "time": "17:43"
+  "time": "17:50"
 }

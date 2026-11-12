@@ -275,3 +275,30 @@ button.ev { width: 100%; text-align: left; }
 .ev.rec .evic { color: var(--cool); }
 .ev.rec.on { background: rgba(124,178,255,.10); }
 .ev.busy { opacity: .5; }
+
+/* ---------- v1.7 : consommation électrique ---------- */
+.row.meter { cursor: pointer; }
+.en-total { display: grid; gap: 4px; margin: 4px 4px 16px; }
+.en-total b { font-family: var(--f-mono); font-size: 40px; font-weight: 500; letter-spacing: -.02em; line-height: 1; }
+.en-total small { display: inline-flex; align-items: center; gap: 5px; color: var(--mu); font-size: 13px; }
+.en-total small svg.i { width: 14px; height: 14px; color: var(--amber); }
+.en-live { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 16px; }
+.en-live div { background: linear-gradient(160deg, rgba(74,222,128,.16), rgba(74,222,128,.05)); border: 1px solid rgba(74,222,128,.25); border-radius: 16px; padding: 12px; display: grid; gap: 4px; }
+.en-live small { color: var(--mu); font-size: 12px; font-weight: 600; }
+.en-live b { font-family: var(--f-mono); font-size: 17px; font-weight: 500; }
+.en-tabs { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--s1); border: 1px solid var(--ln); border-radius: 12px; padding: 3px; margin-bottom: 12px; }
+.en-tabs button { text-align: center; font-size: 13.5px; font-weight: 700; padding: 8px 0; border-radius: 9px; color: var(--mu); }
+.en-tabs button.on { background: var(--ok); color: #06210F; }
+.en-card { background: var(--s1); border: 1px solid var(--ln); border-radius: 20px; padding: 14px; }
+.en-period { display: grid; grid-template-columns: 36px 1fr 36px; align-items: center; text-align: center; font-weight: 700; font-size: 15px; }
+.en-period button { width: 36px; height: 36px; border-radius: 50%; background: var(--s2); display: grid; place-items: center; color: var(--mu); }
+.en-period button:first-child svg.i { transform: rotate(90deg); }
+.en-period button:last-child svg.i { transform: rotate(-90deg); }
+.en-sum { text-align: center; color: var(--mu); margin: 8px 0 4px; font-size: 14px; }
+.en-sum b { font-family: var(--f-mono); font-size: 28px; font-weight: 500; color: var(--tx); }
+svg.bars { display: block; width: 100%; height: auto; margin-top: 6px; }
+svg.bars .axis { stroke: var(--ln); stroke-width: 1; }
+svg.bars .b { fill: var(--ok); opacity: .45; }
+svg.bars .b-hi { fill: var(--ok); }
+svg.bars .b-empty { fill: var(--s3); }
+svg.bars .lbl { fill: var(--mu); font-size: 10px; font-family: var(--f-mono); }
