@@ -764,6 +764,54 @@ async function iaqua(b) {
 
 async function tuya(b) {
   if (!CFG.tu) throw fail(503, 'tuya_not_configured');
+  // Reconstitution de l'historique à partir du journal Tuya (7 derniers jours au maximum)
+  // Compteurs : relevés de l'index (forward_energy_total). Sauna : petites quantités consommées (add_ele) additionnées.
+  if (b.action === 'tu.backfill') {
+    const id = CFG.tu.devices[b.key];
+    if (!id) throw fail(403, 'not_allowed');
+    const sc = await tuScales(id);
+    const code = b.key === 'sauna' ? 'add_ele' : 'forward_energy_total';
+    const end = Date.now(), start = end - 7 * 86400000;
+    const logs = [];
+    let rowKey = null;
+    for (let page = 0; page < 60; page++) {
+      const q = { codes: code, end_time: String(end), size: '100', start_time: String(start) };
+      if (rowKey) q.last_row_key = rowKey;
+      const path = '/v2.0/cloud/thing/' + id + '/report-logs?' + Object.keys(q).sort().map((k) => k + '=' + q[k]).join('&');
+      const r = await tu('GET', path);
+      (r.logs || []).forEach((x) => logs.push([Number(x.event_time), Number(x.value)]));
+      if (!r.has_more || !r.last_row_key) break;
+      rowKey = r.last_row_key;
+    }
+    logs.sort((x, y) => x[0] - y[0]);
+    const div = Math.pow(10, sc[code] || 0);
+    SD.en = SD.en || {};
+    const e = SD.en[b.key] = SD.en[b.key] || { h: {}, d: {}, acc: 0, t: 0, p: null, last: null };
+    const hKeys = Object.keys(e.h).sort(), firstKey = hKeys[0] || enKey(Date.now());
+    // série d'index (kWh) dans le temps
+    let series = [];
+    if (code === 'forward_energy_total') series = logs.map((x) => [x[0], x[1] / div]);
+    else {
+      // sauna : on remonte le temps à partir de l'index du premier relevé déjà enregistré
+      const anchor = hKeys.length ? e.h[firstKey] : (e.last || 0);
+      const before = logs.filter((x) => enKey(x[0]) < firstKey);
+      let cum = anchor - before.reduce((s, x) => s + x[1] / div, 0);
+      series = before.map((x) => { cum += x[1] / div; return [x[0], Math.round(cum * 10000) / 10000]; });
+      series.unshift([start, anchor - before.reduce((s, x) => s + x[1] / div, 0)]);
+    }
+    let addedH = 0, addedD = 0;
+    series.forEach(([t, idx]) => {
+      const hk = enKey(t), dk = hk.slice(0, 8);
+      if (hk >= firstKey) return; // on ne touche pas à l'historique déjà enregistré
+      if (e.h[hk] === undefined || idx < e.h[hk]) { if (e.h[hk] === undefined) addedH++; e.h[hk] = idx; }
+      if (e.d[dk] === undefined || idx < e.d[dk]) { if (e.d[dk] === undefined) addedD++; e.d[dk] = idx; }
+    });
+    // le jour le plus récent reconstitué doit aussi couvrir le début du jour déjà enregistré
+    const todayK = firstKey.slice(0, 8);
+    const sameDay = series.filter(([t]) => enKey(t).slice(0, 8) === todayK && enKey(t) < firstKey);
+    if (sameDay.length && sameDay[0][1] < (e.d[todayK] ?? Infinity)) e.d[todayK] = sameDay[0][1];
+    return { ok: true, key: b.key, logs: logs.length, addedHours: addedH, addedDays: addedD, from: logs.length ? new Date(logs[0][0]).toISOString() : null };
+  }
   if (b.action === 'tu.energy') {
     if (!CFG.tu.devices[b.key]) throw fail(403, 'not_allowed');
     const st = await tuState(!(SD.tuState && SD.tuState.at > Date.now() - 5000));

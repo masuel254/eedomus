@@ -1,7 +1,17 @@
 {
-  "version": "2.1.4",
+  "version": "2.1.5",
   "date": "2026-11-12",
   "releases": [
+    {
+      "version": "2.1.5",
+      "date": "2026-11-12",
+      "time": "21:18",
+      "title": "Historique de consommation reconstitué",
+      "changes": [
+        "Électrolyseur et sauna : 7 jours d’historique repris depuis le journal Tuya (du 5 au 12 novembre)",
+        "Pompe à chaleur : aucun relevé à reprendre (coupée depuis l’automne)"
+      ]
+    },
     {
       "version": "2.1.4",
       "date": "2026-11-12",
@@ -317,5 +327,5 @@
     "Graphiques supplémentaires : température extérieure, consommation sur la semaine",
     "Surveiller le forfait vidéo Imou avec « Tout en direct » activé"
   ],
-  "time": "21:10"
+  "time": "21:18"
 }
