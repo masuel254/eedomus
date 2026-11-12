@@ -19,7 +19,7 @@
   var CFG = null, LOG = null, STATES = {}, lastOk = 0, offline = false;
   var NT = null, ntErr = false, ntRoom = store.get('maison.ntRoom') || '';
   var ntPend = null;           // { room, temp, timer } : consigne en cours de réglage
-  var CAMS = null, camsAt = 0, camsLoading = false, liveCam = null, liveHd = false;
+  var CAMS = null, camsAt = 0, camsLoading = false, liveCam = null, liveHd = true;
   var IM = null, imAt = 0, imLoading = false;
   var TU = null, tuPend = {};   // Smart Life : état des appareils, actions en cours
   var openRoom = store.get('maison.open') || 'salon';
@@ -350,10 +350,12 @@
   // ---------- Panneaux plein écran : caméras et réglages ----------
   function openSheet(view) {
     sheet.dataset.view = view; sheet.hidden = false; document.body.classList.add('noscroll');
-    if (view === 'cams') { loadCams(true); loadImou(false); renderCams(); } else renderSettings();
+    if (view === 'cams') { loadCams(true); loadImou(false); renderCams(); }
+    else if (view === 'rec') renderRec();
+    else renderSettings();
   }
   function closeSheet() {
-    sheet.hidden = true; sheet.innerHTML = ''; liveCam = null; liveHd = false; document.body.classList.remove('noscroll');
+    sheet.hidden = true; sheet.innerHTML = ''; liveCam = null; liveHd = true; REC = null; document.body.classList.remove('noscroll');
   }
   function camCardHTML(c) {
     var live = liveCam === c.id && c.live;
@@ -363,8 +365,77 @@
         : '<button class="camimg" data-live="' + esc(c.id) + '"' + (c.live ? '' : ' disabled') + '>' + (c.snapshot ? '<img alt="" src="' + esc(snapUrl(c)) + '">' : '') +
           '<span class="play">' + icon('play') + (c.live ? 'Voir en direct' : 'Indisponible') + '</span></button>') +
       '<div class="cammeta"><b>' + esc(c.name) + '</b><span class="cm-r">' +
-      (live && c.src === 'imou' && c.liveHd ? '<button class="hdbtn' + (liveHd ? ' on' : '') + '" data-hd>HD</button>' : '') +
+      (live && c.src === 'imou' && c.liveHd ? '<button class="hdbtn' + (liveHd ? ' on' : '') + '" data-hd>' + (liveHd ? 'HD' : 'SD') + '</button>' : '') +
+      '<button class="recbtn" data-rec="' + esc(c.id) + '">' + icon('rec') + 'Enregistrements</button>' +
       '<span class="' + (c.on ? 'ok' : 'bad') + '">' + (c.on ? 'En ligne' : 'Hors ligne') + '</span></span></div></div>';
+  }
+
+  // ---------- Enregistrements : carte SD Imou (par jour) et clips d'événements Netatmo ----------
+  var REC = null; // { cam, date, list, loading, error, play: { url, label } }
+  function ymd(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  function camById(id) { return allCams().filter(function (c) { return c.id === id; })[0] || null; }
+  function openRec(camId, play) {
+    REC = { cam: camId, date: ymd(new Date()), list: null, loading: false, error: false, play: play || null };
+    liveCam = null; sheet.scrollTop = 0; openSheet('rec'); loadRec();
+  }
+  function loadRec() {
+    var c = REC && camById(REC.cam); if (!c || c.src !== 'imou') return;
+    REC.loading = true; REC.error = false; var want = REC.date;
+    api({ action: 'im.records', cam: c.id, date: want }).then(function (j) { if (REC && REC.date === want) { REC.list = j.records; REC.loading = false; renderRec(); } })
+      .catch(function () { if (REC) { REC.loading = false; REC.error = true; renderRec(); } });
+    renderRec();
+  }
+  var RT = { videomotion: 'Mouvement', alarm: 'Alarme', human: 'Personne', manual: 'Manuel', regular: 'Continu', all: 'Enregistrement' };
+  function dur(a, b) {
+    var s = Math.max(0, (new Date(b.replace(' ', 'T')) - new Date(a.replace(' ', 'T'))) / 1000);
+    return s < 60 ? Math.round(s) + ' s' : Math.floor(s / 60) + ' min ' + String(Math.round(s % 60)).padStart(2, '0');
+  }
+  function renderRec() {
+    if (!REC) return;
+    var c = camById(REC.cam);
+    var h = '<div class="sh-hd"><button class="back2" data-recback>' + icon('down') + 'Caméras</button><button class="close" data-close aria-label="Fermer">×</button></div>' +
+      '<h2 class="rec-title">' + esc(c ? c.name : 'Caméra') + ' · enregistrements</h2>';
+    h += REC.play ? '<div class="camcard player"><video id="recv" src="' + esc(REC.play.url) + '" autoplay playsinline controls></video>' +
+      '<div class="cammeta"><b>' + esc(REC.play.label) + '</b></div></div>'
+      : '<div class="camcard player empty"><span>' + icon('play') + 'Choisis un enregistrement ci-dessous</span></div>';
+    if (c && c.src === 'imou') {
+      var days = '';
+      for (var i = 0; i < 7; i++) {
+        var d = new Date(); d.setDate(d.getDate() - i);
+        var lbl = i === 0 ? "Aujourd'hui" : i === 1 ? 'Hier' : d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' });
+        days += '<button class="' + (ymd(d) === REC.date ? 'on' : '') + '" data-recday="' + ymd(d) + '">' + esc(lbl) + '</button>';
+      }
+      h += '<div class="days">' + days + '</div>';
+      if (REC.loading && !REC.list) h += '<p class="muted">Lecture de la carte SD…</p>';
+      else if (REC.error) h += '<p class="muted">La caméra ne répond pas. Réessaie dans un instant.</p>';
+      else if (REC.list && !REC.list.length) h += '<p class="muted">Aucun enregistrement ce jour-là.</p>';
+      else if (REC.list) h += '<div class="evlist">' + REC.list.map(function (r, i) {
+        var playing = REC.play && REC.play.key === r.begin;
+        return '<button class="ev rec' + (playing ? ' on' : '') + '" data-recplay="' + i + '"><span class="evic">' + icon('play') + '</span>' +
+          '<span><b>' + esc(r.begin.slice(11, 16)) + ' → ' + esc(r.end.slice(11, 16)) + '</b><small>' + esc(RT[String(r.type || '').toLowerCase()] || 'Enregistrement') + ' · ' + dur(r.begin, r.end) + '</small></span>' +
+          '<span class="evt">' + (r.size ? fmt(r.size / 1048576, 1) + ' Mo' : '') + '</span></button>';
+      }).join('') + '</div>';
+      h += '<p class="note-q">Enregistrements de la carte SD de la caméra. La lecture consomme le forfait vidéo Imou (2 Go gratuits).</p>';
+    } else if (c) {
+      var evs = ((CAMS && CAMS.events) || []).filter(function (e) { return e.camera === c.id && e.video; });
+      h += evs.length ? '<div class="evlist">' + evs.map(function (e) {
+        var day = new Date(e.time * 1000), today = new Date().toDateString() === day.toDateString();
+        var playing = REC.play && REC.play.key === e.id;
+        return '<button class="ev rec' + (playing ? ' on' : '') + '" data-evplay="' + esc(e.id) + '">' + (e.snapshot ? '<img alt="" loading="lazy" src="' + esc(e.snapshot) + '">' : '<span class="evic">' + icon('cam') + '</span>') +
+          '<span><b>' + esc(EV[e.type] || 'Événement') + '</b><small>' + (today ? "Aujourd'hui" : day.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })) + '</small></span>' +
+          '<span class="evt">' + hhmm(e.time) + '</span></button>';
+      }).join('') + '</div>' : '<p class="muted">Aucun clip disponible pour le moment.</p>';
+      h += '<p class="note-q">Clips des derniers événements, lus depuis la carte SD de la caméra.</p>';
+    }
+    var keep = sheet.scrollTop;
+    sheet.innerHTML = '<div class="sh-in">' + h + '</div>';
+    sheet.scrollTop = keep;
+  }
+  function playEvent(id) {
+    var e = ((CAMS && CAMS.events) || []).filter(function (x) { return x.id === id; })[0]; if (!e || !e.video) return;
+    var lbl = (EV[e.type] || 'Événement') + ' · ' + new Date(e.time * 1000).toLocaleString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    if (!REC || REC.cam !== e.camera) return openRec(e.camera, { url: e.video, label: lbl, key: e.id });
+    REC.play = { url: e.video, label: lbl, key: e.id }; sheet.scrollTop = 0; renderRec();
   }
   var EV = { human: 'Personne', vehicle: 'Véhicule', animal: 'Animal', movement: 'Mouvement', outdoor: 'Mouvement', person: 'Personne' };
   function renderCams() {
@@ -373,16 +444,17 @@
     h += cams.map(camCardHTML).join('');
     if (!CAMS || !IM) h += '<p class="muted">Chargement des caméras…</p>';
     if (IM && IM.error) h += '<p class="muted">Caméras Imou indisponibles pour le moment.</p>';
-    h += '<p class="note-q">Vidéo Imou en qualité standard pour économiser les 2 Go gratuits. Touche « HD » pendant le direct pour la haute définition.</p>';
+    h += '<p class="note-q">Direct Imou en HD. Touche « HD » pendant le direct pour passer en SD et économiser le forfait vidéo (2 Go gratuits).</p>';
     if (CAMS && CAMS.cameras) {
       var names = {}; cams.forEach(function (c) { if (c.src === 'netatmo') names[c.id] = c.name; });
       var evs = (CAMS.events || []).filter(function (e) { return names[e.camera]; });
       h += '<h3>Derniers événements · ' + esc(Object.keys(names).map(function (k) { return names[k]; }).join(', ')) + '</h3>';
       h += evs.length ? '<div class="evlist">' + evs.map(function (e) {
         var day = new Date(e.time * 1000), today = new Date().toDateString() === day.toDateString();
-        return '<div class="ev">' + (e.snapshot ? '<img alt="" loading="lazy" src="' + esc(e.snapshot) + '">' : '<span class="evic">' + icon('cam') + '</span>') +
-          '<span><b>' + esc(EV[e.type] || 'Événement') + '</b><small>' + esc(names[e.camera] || '') + '</small></span>' +
-          '<span class="evt">' + (today ? '' : day.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) + ' ') + hhmm(e.time) + '</span></div>';
+        var tag = e.video ? 'button' : 'div';
+        return '<' + tag + ' class="ev' + (e.video ? ' rec' : '') + '"' + (e.video ? ' data-evplay="' + esc(e.id) + '"' : '') + '>' + (e.snapshot ? '<img alt="" loading="lazy" src="' + esc(e.snapshot) + '">' : '<span class="evic">' + icon('cam') + '</span>') +
+          '<span><b>' + esc(EV[e.type] || 'Événement') + '</b><small>' + esc(names[e.camera] || '') + (e.video ? ' · voir le clip' : '') + '</small></span>' +
+          '<span class="evt">' + (today ? '' : day.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) + ' ') + hhmm(e.time) + '</span></' + tag + '>';
       }).join('') + '</div>' : '<p class="muted">Aucun événement récent.</p>';
     }
     var keep = sheet.scrollTop;
@@ -497,8 +569,20 @@
   sheet.addEventListener('click', function (e) {
     var b;
     if (e.target.closest('[data-close]')) return closeSheet();
-    if ((b = e.target.closest('[data-live]'))) { liveCam = b.dataset.live; liveHd = false; return renderCams(); }
+    if ((b = e.target.closest('[data-live]'))) { liveCam = b.dataset.live; liveHd = true; return renderCams(); }
     if (e.target.closest('[data-hd]')) { liveHd = !liveHd; return renderCams(); }
+    if ((b = e.target.closest('[data-rec]'))) return openRec(b.dataset.rec);
+    if (e.target.closest('[data-recback]')) { REC = null; sheet.dataset.view = 'cams'; sheet.scrollTop = 0; return renderCams(); }
+    if ((b = e.target.closest('[data-recday]'))) { REC.date = b.dataset.recday; REC.list = null; return loadRec(); }
+    if ((b = e.target.closest('[data-evplay]'))) return playEvent(b.dataset.evplay);
+    if ((b = e.target.closest('[data-recplay]'))) {
+      var r = REC && REC.list && REC.list[+b.dataset.recplay]; if (!r) return;
+      var label = r.begin.slice(11, 16) + ' → ' + r.end.slice(11, 16) + ' · ' + new Date(r.begin.replace(' ', 'T')).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+      b.classList.add('busy');
+      return api({ action: 'im.playback', cam: REC.cam, begin: r.begin, end: r.end }).then(function (j) {
+        REC.play = { url: j.url, label: label, key: r.begin }; sheet.scrollTop = 0; renderRec();
+      }).catch(function () { b.classList.remove('busy'); toast('Lecture impossible pour le moment, réessaie', true); });
+    }
     if (e.target.closest('[data-update]')) {
       toast('Recherche de mise à jour…');
       var done = function () { location.reload(); };

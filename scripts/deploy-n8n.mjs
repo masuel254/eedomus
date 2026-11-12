@@ -128,7 +128,7 @@ async function eedomus(kind, query, retry) {
 const SD = $getWorkflowStaticData('global');
 // Nouveau déploiement : on vide les données en cache (formats changés), on garde les jetons d'accès.
 if (SD.deployedAt !== CFG.deployedAt) {
-  ['ntHomes', 'ntHeat', 'ntCams', 'imDev', 'imLive', 'imSnap', 'tuState', 'tuSpec'].forEach((k) => { delete SD[k]; });
+  ['ntHomes', 'ntHeat', 'ntCams', 'imDev', 'imLive', 'imSnap', 'imRec', 'tuState', 'tuSpec'].forEach((k) => { delete SD[k]; });
   SD.deployedAt = CFG.deployedAt;
 }
 function fail(httpStatus, code, detail) { const e = new Error(code); e.httpStatus = httpStatus; e.code = code; e.detail = detail; return e; }
@@ -240,23 +240,27 @@ async function ntHeating(fresh) {
 async function ntCameras(fresh) {
   if (!fresh && SD.ntCams && SD.ntCams.at > Date.now() - 30000) return SD.ntCams.data;
   const H = await ntHomes();
-  const out = [], events = [];
+  const out = [], events = [], vpnBy = {};
   const homeIds = [...new Set(H.cams.map((c) => c.home))];
   for (const hid of homeIds) {
     const st = await nt('GET', 'homestatus', { home_id: hid });
     const mods = {}; ((st.body && st.body.home && st.body.home.modules) || []).forEach((m) => { mods[m.id] = m; });
     H.cams.filter((c) => c.home === hid).forEach((c) => {
       const m = mods[c.id] || {}, vpn = m.vpn_url || null;
+      vpnBy[c.id] = vpn;
       out.push({ id: c.id, name: c.name, type: c.type, on: m.monitoring === 'on', status: m.monitoring || m.status || null,
         light: m.floodlight || null, live: vpn ? vpn + '/live/files/high/index.m3u8' : null, liveLow: vpn ? vpn + '/live/files/low/index.m3u8' : null,
         snapshot: vpn ? vpn + '/live/snapshot_720.jpg' : null });
     });
     try {
-      const ev = await nt('GET', 'getevents', { home_id: hid, size: 15 });
+      const ev = await nt('GET', 'getevents', { home_id: hid, size: 30 });
       ((ev.body && ev.body.home && ev.body.home.events) || []).forEach((e) => {
         const sub = (e.subevents || [])[0] || {};
+        const vpn = vpnBy[e.module_id];
+        // Clip vidéo de l'événement, lu depuis la carte SD de la caméra (tant que la caméra est en ligne)
+        const video = vpn && e.video_id && (!e.video_status || e.video_status === 'available') ? vpn + '/vod/' + e.video_id + '/files/high/index.m3u8' : null;
         events.push({ id: e.id, camera: e.module_id, time: e.time, type: sub.type || e.type, message: e.message || null,
-          snapshot: (sub.snapshot && sub.snapshot.url) || (e.snapshot && e.snapshot.url) || null });
+          snapshot: (sub.snapshot && sub.snapshot.url) || (e.snapshot && e.snapshot.url) || null, video });
       });
     } catch (e) { /* événements facultatifs */ }
   }
@@ -380,6 +384,37 @@ async function imou(b) {
       cams.push(cam);
     }
     return { ok: true, cameras: cams, at: new Date().toISOString() };
+  }
+  // Enregistrements de la carte SD d'une caméra, pour une journée (format AAAA-MM-JJ)
+  if (b.action === 'im.records') {
+    const d = (await imDevices()).find((x) => x.id === b.cam);
+    if (!d || !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(String(b.date))) throw fail(403, 'not_allowed');
+    SD.imRec = SD.imRec || {};
+    const key = d.id + '|' + b.date, c = SD.imRec[key];
+    if (c && c.at > Date.now() - 60000) return c.data;
+    const p = { deviceId: d.deviceId, channelId: d.channelId, beginTime: b.date + ' 00:00:00', endTime: b.date + ' 23:59:59', type: 'All' };
+    const all = [];
+    for (let page = 0; page < 4; page++) {
+      const r = await im('queryLocalRecords', Object.assign({ queryRange: (page * 100 + 1) + '-' + (page * 100 + 100) }, p));
+      if (r.code !== '0') { if (page === 0 && !/not.*exist|no.*record/i.test(r.msg || '')) throw fail(502, 'imou', r.msg); break; }
+      const recs = (r.data && (r.data.records || r.data.recordList)) || [];
+      recs.forEach((x) => all.push({ begin: x.beginTime, end: x.endTime, type: x.type || null, size: x.fileLength || null }));
+      if (recs.length < 100) break;
+    }
+    all.sort((x, y) => (x.begin < y.begin ? 1 : -1));
+    const data = { ok: true, cam: d.id, date: b.date, records: all };
+    SD.imRec[key] = { at: Date.now(), data };
+    Object.keys(SD.imRec).forEach((k) => { if (SD.imRec[k].at < Date.now() - 600000) delete SD.imRec[k]; });
+    return data;
+  }
+  // Lien de lecture HLS d'un enregistrement (valable quelques minutes)
+  if (b.action === 'im.playback') {
+    const d = (await imDevices()).find((x) => x.id === b.cam);
+    const re = /^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}$/;
+    if (!d || !re.test(String(b.begin)) || !re.test(String(b.end)) || String(b.begin).slice(0, 10) !== String(b.end).slice(0, 10)) throw fail(403, 'not_allowed');
+    const r = await im('createDeviceRecordHls', { deviceId: d.deviceId, channelId: d.channelId, beginTime: b.begin, endTime: b.end, recordType: 'localRecord', streamId: b.sd ? 1 : 0 });
+    if (r.code !== '0' || !r.data || !r.data.url) throw fail(502, 'imou', r.msg);
+    return { ok: true, url: r.data.url };
   }
   throw fail(400, 'unknown_action');
 }

@@ -254,3 +254,24 @@ body.noscroll { overflow: hidden; }
 .schedlist button { font-size: 13px; font-weight: 700; padding: 9px 13px; border-radius: 12px; background: var(--s2); border: 1px solid var(--ln); color: var(--mu); }
 .schedlist button.on { background: var(--cool); color: #0B1424; border-color: transparent; }
 .schedlist button.busy { opacity: .5; }
+
+/* ---------- v1.6 : direct HD plein cadre, enregistrements ---------- */
+.camcard video { object-fit: cover; aspect-ratio: 16 / 9; }
+.camcard.player video { object-fit: contain; }
+.camcard.player.empty { aspect-ratio: 16 / 9; display: grid; place-items: center; color: var(--mu); font-size: 14px; }
+.camcard.player.empty span { display: inline-flex; align-items: center; gap: 8px; }
+.cammeta { gap: 10px; }
+.cammeta b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recbtn { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 700; padding: 5px 9px; border-radius: 9px; background: var(--s3); color: var(--cool); white-space: nowrap; }
+.recbtn svg.i { width: 14px; height: 14px; }
+.back2 { display: inline-flex; align-items: center; gap: 4px; font-weight: 700; color: var(--cool); font-size: 15px; }
+.back2 svg.i { transform: rotate(90deg); width: 18px; height: 18px; }
+.rec-title { margin: 0 0 12px; font-size: 22px; font-weight: 700; }
+.days { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 4px 0 12px; }
+.days::-webkit-scrollbar { display: none; }
+.days button { flex: none; font-size: 13px; font-weight: 700; padding: 8px 12px; border-radius: 12px; background: var(--s2); border: 1px solid var(--ln); color: var(--mu); white-space: nowrap; }
+.days button.on { background: var(--tx); color: var(--bg); border-color: transparent; }
+button.ev { width: 100%; text-align: left; }
+.ev.rec .evic { color: var(--cool); }
+.ev.rec.on { background: rgba(124,178,255,.10); }
+.ev.busy { opacity: .5; }
