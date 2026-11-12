@@ -239,3 +239,18 @@ body.noscroll { overflow: hidden; }
 .row.confirming small { color: var(--heat); font-weight: 700; }
 .row.run .ic { background: rgba(244,184,96,.16); color: var(--amber); }
 .mark.heat { background: rgba(255,138,91,.14); color: var(--heat); }
+
+/* ---------- v1.5 : planning Netatmo ---------- */
+.sched { width: 100%; display: grid; grid-template-columns: 36px 1fr auto; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 16px; background: var(--s2); border: 1px solid var(--ln); }
+.sched-ic { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: rgba(124,178,255,.14); color: var(--cool); }
+.sched-ic svg.i { width: 18px; height: 18px; }
+.sched-t { display: grid; gap: 1px; min-width: 0; text-align: left; }
+.sched-t b { font-size: 15px; }
+.sched-t small { color: var(--mu); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sched-ch { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; font-weight: 700; color: var(--cool); }
+.sched-ch svg.i { width: 15px; height: 15px; transition: transform .2s; }
+.sched.open .sched-ch svg.i { transform: rotate(180deg); }
+.schedlist { width: 100%; display: flex; flex-wrap: wrap; gap: 6px; }
+.schedlist button { font-size: 13px; font-weight: 700; padding: 9px 13px; border-radius: 12px; background: var(--s2); border: 1px solid var(--ln); color: var(--mu); }
+.schedlist button.on { background: var(--cool); color: #0B1424; border-color: transparent; }
+.schedlist button.busy { opacity: .5; }

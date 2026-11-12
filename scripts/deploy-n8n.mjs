@@ -84,6 +84,7 @@ const CODE_CFG = {
     // L'empreinte change seulement si on refait l'autorisation : n8n garde sinon son propre jeton (Netatmo le fait tourner).
     seed: createHash('sha256').update(env.NETATMO_REFRESH_TOKEN.split('|')[0]).digest('hex').slice(0, 16),
   } : null,
+  deployedAt: Date.now(),
   im: env.IMOU_APP_ID ? { id: env.IMOU_APP_ID, secret: env.IMOU_APP_SECRET } : null,
   tu: env.TUYA_CLIENT_ID ? {
     id: env.TUYA_CLIENT_ID, secret: env.TUYA_CLIENT_SECRET, base: 'https://openapi.tuyaeu.com',
@@ -103,19 +104,33 @@ const reply = (status, data) => [{ json: { status, data } }];
 if (!body.token || !CFG.tokens.includes(body.token)) return reply(401, { ok: false, error: 'unauthorized' });
 
 const auth = 'api_user=' + encodeURIComponent(CFG.user) + '&api_secret=' + encodeURIComponent(CFG.secret);
-async function eedomus(kind, query) {
-  const raw = await helpers.httpRequest({
-    url: 'https://api.eedomus.com/' + kind + '?' + auth + '&' + query,
-    encoding: 'arraybuffer',
-    json: false,
-    timeout: 15000,
-  });
-  const text = Buffer.from(raw).toString('latin1');
-  return JSON.parse(text);
+async function eedomus(kind, query, retry) {
+  // Lecture : un second essai après 600 ms si eedomus ne répond pas (coupures brèves du cloud eedomus).
+  // Commande (set) : jamais rejouée automatiquement, pour ne pas envoyer deux fois un ordre.
+  try {
+    const raw = await helpers.httpRequest({
+      url: 'https://api.eedomus.com/' + kind + '?' + auth + '&' + query,
+      encoding: 'arraybuffer',
+      json: false,
+      timeout: 15000,
+    });
+    const r = JSON.parse(Buffer.from(raw).toString('latin1'));
+    if (kind === 'get' && r.success !== 1 && !retry) throw new Error('eedomus success=' + r.success);
+    return r;
+  } catch (e) {
+    if (kind !== 'get' || retry) throw e;
+    await new Promise((ok) => setTimeout(ok, 600));
+    return eedomus(kind, query, true);
+  }
 }
 
 // ---------------- Netatmo ----------------
 const SD = $getWorkflowStaticData('global');
+// Nouveau déploiement : on vide les données en cache (formats changés), on garde les jetons d'accès.
+if (SD.deployedAt !== CFG.deployedAt) {
+  ['ntHomes', 'ntHeat', 'ntCams', 'imDev', 'imLive', 'imSnap', 'tuState', 'tuSpec'].forEach((k) => { delete SD[k]; });
+  SD.deployedAt = CFG.deployedAt;
+}
 function fail(httpStatus, code, detail) { const e = new Error(code); e.httpStatus = httpStatus; e.code = code; e.detail = detail; return e; }
 function parse(x) { return typeof x === 'string' ? JSON.parse(x) : x; }
 
@@ -158,11 +173,42 @@ async function ntHomes() {
   homes.forEach((h) => (h.modules || []).forEach((m) => { if (['NOC', 'NACamera', 'NDB', 'NSD'].includes(m.type)) cams.push({ home: h.id, id: m.id, name: m.name, type: m.type }); }));
   SD.ntHomes = {
     at: Date.now(),
-    heat: heat ? { id: heat.id, rooms: heat.rooms.filter((r) => (r.module_ids || []).length).map((r) => ({ id: r.id, name: r.name, type: r.type })),
-      schedules: (heat.schedules || []).filter((s) => !s.type || s.type === 'therm').map((s) => ({ id: s.id, name: s.name, selected: !!s.selected })) } : null,
+    heat: heat ? { id: heat.id, tz: heat.timezone || 'Europe/Paris', rooms: heat.rooms.filter((r) => (r.module_ids || []).length).map((r) => ({ id: r.id, name: r.name, type: r.type })),
+      schedules: (heat.schedules || []).filter((s) => !s.type || s.type === 'therm').map((s) => ({
+        id: s.id, name: s.name, selected: !!s.selected,
+        timetable: (s.timetable || []).map((t) => ({ z: t.zone_id, o: t.m_offset })).sort((a, b) => a.o - b.o),
+        zones: (s.zones || []).map((z) => ({ id: z.id, name: z.name || null, type: z.type })),
+      })) } : null,
     cams,
   };
   return SD.ntHomes;
+}
+// Créneau en cours du planning : nom de la zone et heure du prochain changement (heure locale de la maison).
+const ZONE_TYPE = { 0: 'Confort', 1: 'Nuit', 5: 'Éco', 4: 'Personnalisé', 8: 'Confort+' };
+function ntSlot(sched, tz) {
+  const tt = sched.timetable || [];
+  if (!tt.length) return null;
+  const parts = {};
+  new Intl.DateTimeFormat('en-GB', { timeZone: tz, weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+    .formatToParts(new Date()).forEach((p) => { parts[p.type] = p.value; });
+  const day = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].indexOf(parts.weekday);
+  const now = day * 1440 + Number(parts.hour) * 60 + Number(parts.minute);
+  let cur = tt[tt.length - 1];
+  for (const t of tt) if (t.o <= now) cur = t;
+  let next = null;
+  for (let i = 0; i < tt.length * 2 && !next; i++) {
+    const t = tt[i % tt.length], off = t.o + (i >= tt.length ? 10080 : 0);
+    if (off > now && t.z !== cur.z) next = { z: t.z, o: off };
+  }
+  const zone = (sched.zones || []).find((z) => z.id === cur.z) || {};
+  const out = { zone: zone.name || ZONE_TYPE[zone.type] || null, until: null, untilDay: null };
+  if (next) {
+    const o = next.o % 10080, d = Math.floor(o / 1440), mins = o % 1440;
+    out.until = String(Math.floor(mins / 60)).padStart(2, '0') + ':' + String(mins % 60).padStart(2, '0');
+    const diff = (d - day + 7) % 7;
+    out.untilDay = next.o - now >= 1440 * 6 ? 'week' : diff === 0 ? 'today' : diff === 1 ? 'tomorrow' : ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'][d];
+  }
+  return out;
 }
 async function ntHeating(fresh) {
   if (!fresh && SD.ntHeat && SD.ntHeat.at > Date.now() - 20000) return SD.ntHeat.data;
@@ -171,9 +217,13 @@ async function ntHeating(fresh) {
   const st = await nt('GET', 'homestatus', { home_id: H.heat.id });
   const home = (st.body && st.body.home) || {};
   const byId = {}; (home.rooms || []).forEach((r) => { byId[r.id] = r; });
+  const sel = H.heat.schedules.find((s) => s.selected) || null;
   const data = {
     ok: true, home: H.heat.id,
-    schedule: (H.heat.schedules.find((s) => s.selected) || {}).name || null,
+    schedule: sel ? sel.name : null,
+    scheduleId: sel ? sel.id : null,
+    schedules: H.heat.schedules.map((s) => ({ id: s.id, name: s.name })),
+    slot: sel ? ntSlot(sel, H.heat.tz) : null,
     rooms: H.heat.rooms.map((r) => {
       const s = byId[r.id] || {};
       return { id: r.id, name: r.name, temp: s.therm_measured_temperature ?? null, setpoint: s.therm_setpoint_temperature ?? null,
@@ -462,6 +512,14 @@ async function netatmo(b) {
       const hours = Number(b.hours); if (hours > 0 && hours <= 12) p.endtime = Math.round(Date.now() / 1000 + hours * 3600);
       await nt('POST', 'setroomthermpoint', p);
     }
+    return ntHeating(true);
+  }
+  if (b.action === 'nt.schedule') {
+    const H = await ntHomes();
+    const s = H.heat && H.heat.schedules.find((x) => String(x.id) === String(b.id));
+    if (!s) throw fail(403, 'not_allowed');
+    await nt('POST', 'switchhomeschedule', { home_id: H.heat.id, schedule_id: s.id });
+    SD.ntHomes = null; // le planning « sélectionné » a changé
     return ntHeating(true);
   }
   if (b.action === 'nt.mode') {

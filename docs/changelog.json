@@ -1,7 +1,18 @@
 {
-  "version": "1.4.2",
+  "version": "1.5.0",
   "date": "2026-11-12",
   "releases": [
+    {
+      "version": "1.5.0",
+      "date": "2026-11-12",
+      "time": "17:27",
+      "title": "Planning du chauffage",
+      "changes": [
+        "Planning Netatmo en cours affiché sur l’accueil (ex. Défaut · Semaine Matin · jusqu’à 18:00)",
+        "Bouton « Changer » : Défaut, Absence, Confort, Confort Max, Planning TT",
+        "Connexion plus robuste : nouvel essai automatique si eedomus ne répond pas, « Hors ligne » seulement après 2 échecs"
+      ]
+    },
     {
       "version": "1.4.2",
       "date": "2026-11-12",
@@ -129,5 +140,5 @@
     "Tuya : prolongation demandée le 12/11/2026, en attente de validation (essai actuel jusqu'au 12/12/2026 à 16:47)",
     "Consommation du jour en kWh pour la piscine et le sauna"
   ],
-  "time": "17:20"
+  "time": "17:27"
 }

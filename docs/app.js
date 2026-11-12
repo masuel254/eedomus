@@ -64,14 +64,15 @@
         });
       });
   }
-  var refreshing = false;
+  var refreshing = false, fails = 0;
   function refresh() {
     if (refreshing || !token) return; refreshing = true;
     api({ action: 'state' }).then(function (j) {
-      STATES = j.states; lastOk = Date.now(); offline = false; if (!busy()) render();
+      STATES = j.states; lastOk = Date.now(); fails = 0; offline = false; if (!busy()) render();
     }).catch(function (e) {
       if (e.status === 401) { token = null; return setup(); }
-      offline = true; render();
+      fails++;
+      if (fails >= 2) { offline = true; render(); } else setTimeout(refresh, 3000); // une seule erreur : on réessaie vite, sans alarmer
     }).then(function () { refreshing = false; });
   }
   function refreshHeating() {
@@ -246,6 +247,7 @@
     return '<section class="hero" aria-label="Chauffage">' +
       '<div class="hero-top"><span>Chauffage · ' + esc(r.name) + '</span>' +
       (r.heating ? '<span class="badge heat">' + icon('flame') + 'Chauffe</span>' : '<span class="badge soon">' + icon('flame') + 'Au repos</span>') + '</div>' +
+      schedHTML() +
       '<div class="dial"><button class="step" data-nt-step="-0.5" aria-label="Baisser la consigne">−</button>' +
       ring(r.temp, sp, '<em id="ntsp">Consigne ' + fmt(sp, 1) + '°</em><small>' + esc(modeTxt) + '</small>') +
       '<button class="step" data-nt-step="0.5" aria-label="Monter la consigne">+</button></div>' +
@@ -257,6 +259,28 @@
       '<button class="' + (homeMode === 'hg' ? 'on' : '') + '" data-nt-mode="hg" data-confirm><span>Hors-gel</span></button></div>' +
       row3 + '<span><b>' + heatingRooms + '</b>' + (heatingRooms > 1 ? 'Pièces chauffent' : 'Pièce chauffe') + '</span></div>' +
       '</section>';
+  }
+  // Planning Netatmo en cours (« Défaut · jusqu'à 18:00 ») et choix du planning
+  var schedOpen = false;
+  function schedHTML() {
+    if (!NT || !NT.schedule) return '';
+    var s = NT.slot || {}, when = '';
+    if (NT.mode === 'away') when = 'Mode Absent';
+    else if (NT.mode === 'hg') when = 'Mode Hors-gel';
+    else if (s.until) {
+      var dayTxt = s.untilDay === 'today' || s.untilDay === 'week' ? '' : s.untilDay === 'tomorrow' ? 'demain ' : s.untilDay + ' ';
+      when = (s.zone ? s.zone + ' · ' : '') + "jusqu'à " + dayTxt + s.until;
+    }
+    else if (s.zone) when = s.zone;
+    var h = '<button class="sched' + (schedOpen ? ' open' : '') + '" data-sched-toggle aria-expanded="' + schedOpen + '">' +
+      '<span class="sched-ic">' + icon('cal') + '</span><span class="sched-t"><b>' + esc(NT.schedule) + '</b><small>' + esc(when) + '</small></span>' +
+      '<span class="sched-ch">Changer' + icon('down') + '</span></button>';
+    if (schedOpen) {
+      h += '<div class="schedlist">' + (NT.schedules || []).map(function (x) {
+        return '<button class="' + (String(x.id) === String(NT.scheduleId) ? 'on' : '') + '" data-sched="' + esc(x.id) + '">' + esc(x.name) + '</button>';
+      }).join('') + '</div>';
+    }
+    return h;
   }
   function ring(temp, setpoint, sub) {
     var pct = setpoint != null ? (setpoint - 7) / 23 : temp == null ? 0 : (temp - 10) / 20;
@@ -429,6 +453,14 @@
       var r = ntCurrentRoom();
       return api({ action: 'nt.setpoint', room: r.id, mode: 'home' }).then(function (j) { NT = j; render(); toast(r.name + ' : retour au planning'); })
         .catch(function () { toast('Netatmo ne répond pas, réessaie', true); });
+    }
+    if (e.target.closest('[data-sched-toggle]')) { schedOpen = !schedOpen; return render(); }
+    if ((b = e.target.closest('[data-sched]'))) {
+      var sid = b.dataset.sched, sname = b.textContent;
+      if (NT && String(sid) === String(NT.scheduleId)) { schedOpen = false; return render(); }
+      b.classList.add('busy');
+      return api({ action: 'nt.schedule', id: sid }).then(function (j) { NT = j; schedOpen = false; render(); toast('Planning : ' + sname); })
+        .catch(function () { b.classList.remove('busy'); toast('Netatmo ne répond pas, réessaie', true); });
     }
     if ((b = e.target.closest('[data-nt-mode]'))) {
       if (!confirmed(b)) return;
