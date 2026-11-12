@@ -205,3 +205,11 @@ body.noscroll { overflow: hidden; }
 .new { font-size: 11px; font-weight: 800; color: #1A0F08; background: var(--heat); padding: 2px 8px; border-radius: 999px; }
 .rel p { margin: 6px 0 4px; font-weight: 700; }
 .rel ul { margin: 0; padding-left: 18px; color: var(--mu); font-size: 13.5px; line-height: 1.6; }
+
+/* ---------- v1.3 : caméras Imou ---------- */
+.camstrip.one { grid-template-columns: 1fr; }
+.camimg:disabled { opacity: .6; }
+.cm-r { display: inline-flex; align-items: center; gap: 10px; }
+.hdbtn { font-size: 11.5px; font-weight: 800; padding: 4px 9px; border-radius: 8px; background: var(--s3); color: var(--mu); }
+.hdbtn.on { background: var(--cool); color: #0B1424; }
+.note-q { color: var(--mu); font-size: 12.5px; line-height: 1.5; margin: 2px 4px 6px; }

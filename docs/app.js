@@ -19,7 +19,8 @@
   var CFG = null, LOG = null, STATES = {}, lastOk = 0, offline = false;
   var NT = null, ntErr = false, ntRoom = store.get('maison.ntRoom') || '';
   var ntPend = null;           // { room, temp, timer } : consigne en cours de réglage
-  var CAMS = null, camsAt = 0, camsLoading = false, liveCam = null;
+  var CAMS = null, camsAt = 0, camsLoading = false, liveCam = null, liveHd = false;
+  var IM = null, imAt = 0, imLoading = false;
   var openRoom = store.get('maison.open') || 'salon';
   var newVersion = false;
   var pending = {};            // id -> { value, until } : affichage immédiat avant confirmation
@@ -82,7 +83,29 @@
     camsLoading = true;
     api({ action: 'nt.cameras', fresh: !!force }).then(function (j) { CAMS = j; camsAt = Date.now(); })
       .catch(function () { if (!CAMS) CAMS = { error: true, cameras: [], events: [] }; })
-      .then(function () { camsLoading = false; if (!busy()) render(); if (!sheet.hidden && sheet.dataset.view === 'cams') renderCams(); });
+      .then(function () { camsLoading = false; if (!busy()) render(); if (!sheet.hidden && sheet.dataset.view === 'cams' && !sheet.querySelector('video')) renderCams(); });
+  }
+  // Imou : photos demandées seulement à l'ouverture des caméras (quota gratuit limité)
+  function loadImou(force) {
+    if (imLoading || (!force && IM && Date.now() - imAt < 120000)) return;
+    imLoading = true;
+    api({ action: 'im.cameras', snaps: true }).then(function (j) { IM = j; imAt = Date.now(); })
+      .catch(function () { if (!IM) IM = { error: true, cameras: [] }; })
+      .then(function () { imLoading = false; if (!busy()) render(); if (!sheet.hidden && sheet.dataset.view === 'cams' && !sheet.querySelector('video')) renderCams(); });
+  }
+  function norm(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim(); }
+  function allCams() {
+    var a = [];
+    if (CAMS && CAMS.cameras) CAMS.cameras.forEach(function (c) { a.push(Object.assign({ src: 'netatmo' }, c)); });
+    if (IM && IM.cameras) IM.cameras.forEach(function (c) { a.push(Object.assign({ src: 'imou' }, c)); });
+    return a;
+  }
+  function roomCams(room) {
+    return allCams().filter(function (c) { return (c.src === 'netatmo' && room.camera) || (c.src === 'imou' && norm(c.name) === norm(room.name)); });
+  }
+  function roomHasCam(room) {
+    if (room.camera) return true;
+    return !!(IM && IM.cameras && IM.cameras.some(function (c) { return norm(c.name) === norm(room.name); })) || ['cellier', 'piscine', 'jardin', 'garage', 'salon'].indexOf(norm(room.name)) >= 0;
   }
   function send(id, value, opts) {
     opts = opts || {};
@@ -127,7 +150,8 @@
       var open = doors.filter(function (d) { return doorOpen(d.id); }).length;
       h += open ? '<span class="mark bad">' + icon('door') + 'Porte ouverte</span>' : '<span class="mark d">' + icon('door') + 'Fermée</span>';
     }
-    if (room.camera && CAMS && CAMS.cameras && CAMS.cameras.length) h += '<span class="mark">' + icon('cam') + CAMS.cameras.length + ' caméras</span>';
+    var nc = roomCams(room).length;
+    if (nc) h += '<span class="mark">' + icon('cam') + nc + ' caméra' + (nc > 1 ? 's' : '') + '</span>';
     return '<span class="marks">' + h + '</span>';
   }
 
@@ -224,11 +248,12 @@
       '</div>';
   }
 
-  function camPreviewHTML() {
-    if (!CAMS) return '<div class="cam"><div>' + icon('cam') + '<br>Chargement des caméras…</div></div>';
-    if (!CAMS.cameras || !CAMS.cameras.length) return '<div class="cam"><div>' + icon('cam') + '<br>Caméras indisponibles</div></div>';
-    return '<div class="camstrip">' + CAMS.cameras.map(function (c) {
-      return '<button class="camthumb" data-opencams="' + esc(c.id) + '">' + (c.snapshot ? '<img alt="" src="' + esc(c.snapshot) + '?t=' + camsAt + '">' : '') +
+  function snapUrl(c) { return c.src === 'netatmo' ? c.snapshot + '?t=' + camsAt : c.snapshot; }
+  function camPreviewHTML(room) {
+    var cams = roomCams(room);
+    if (!cams.length) return '<div class="cam"><div>' + icon('cam') + '<br>' + ((room.camera && !CAMS) || (!IM) ? 'Chargement des caméras…' : 'Caméra indisponible') + '</div></div>';
+    return '<div class="camstrip' + (cams.length === 1 ? ' one' : '') + '">' + cams.map(function (c) {
+      return '<button class="camthumb" data-opencams="' + esc(c.id) + '">' + (c.snapshot ? '<img alt="" src="' + esc(snapUrl(c)) + '">' : '') +
         '<span class="cname">' + esc(c.name) + '</span>' + (c.on ? '<span class="pill">LIVE</span>' : '<span class="pill off">Éteinte</span>') + '</button>';
     }).join('') + '</div>';
   }
@@ -237,10 +262,12 @@
     return CFG.groups.map(function (g) {
       return '<div class="sec-hd"><h2>' + esc(g.name) + '</h2></div><div class="acc">' + g.rooms.map(function (r) {
         var o = r.id === openRoom, t = r.temp ? num(r.temp) : null;
+        var hasCam = roomHasCam(r);
         if (o && r.camera) loadCams(false);
+        if (o && hasCam) loadImou(false);
         return '<div class="acc-item' + (o ? ' open' : '') + '" id="room-' + r.id + '"><button class="acc-head" data-room="' + r.id + '" aria-expanded="' + o + '">' +
           '<span><b>' + esc(r.name) + '</b>' + marks(r) + '</span><span class="temp">' + (t == null ? '' : fmt(t, 1) + '°') + '</span><span class="chev">' + icon('down') + '</span></button>' +
-          (o ? '<div class="acc-body">' + (r.camera ? camPreviewHTML() : '') + r.items.map(rowHTML).join('') + '</div>' : '') +
+          (o ? '<div class="acc-body">' + (hasCam ? camPreviewHTML(r) : '') + r.items.map(rowHTML).join('') + '</div>' : '') +
           '</div>';
       }).join('') + '</div>';
     }).join('');
@@ -270,27 +297,35 @@
   // ---------- Panneaux plein écran : caméras et réglages ----------
   function openSheet(view) {
     sheet.dataset.view = view; sheet.hidden = false; document.body.classList.add('noscroll');
-    if (view === 'cams') { loadCams(true); renderCams(); } else renderSettings();
+    if (view === 'cams') { loadCams(true); loadImou(false); renderCams(); } else renderSettings();
   }
   function closeSheet() {
-    sheet.hidden = true; sheet.innerHTML = ''; liveCam = null; document.body.classList.remove('noscroll');
+    sheet.hidden = true; sheet.innerHTML = ''; liveCam = null; liveHd = false; document.body.classList.remove('noscroll');
+  }
+  function camCardHTML(c) {
+    var live = liveCam === c.id && c.live;
+    var src = c.src === 'imou' && liveHd && c.liveHd ? c.liveHd : c.live;
+    return '<div class="camcard" id="cc-' + esc(c.id) + '">' +
+      (live ? '<video id="v-' + esc(c.id) + '" src="' + esc(src) + '" autoplay muted playsinline controls></video>'
+        : '<button class="camimg" data-live="' + esc(c.id) + '"' + (c.live ? '' : ' disabled') + '>' + (c.snapshot ? '<img alt="" src="' + esc(snapUrl(c)) + '">' : '') +
+          '<span class="play">' + icon('play') + (c.live ? 'Voir en direct' : 'Indisponible') + '</span></button>') +
+      '<div class="cammeta"><b>' + esc(c.name) + '</b><span class="cm-r">' +
+      (live && c.src === 'imou' && c.liveHd ? '<button class="hdbtn' + (liveHd ? ' on' : '') + '" data-hd>HD</button>' : '') +
+      '<span class="' + (c.on ? 'ok' : 'bad') + '">' + (c.on ? 'En ligne' : 'Hors ligne') + '</span></span></div></div>';
   }
   var EV = { human: 'Personne', vehicle: 'Véhicule', animal: 'Animal', movement: 'Mouvement', outdoor: 'Mouvement', person: 'Personne' };
   function renderCams() {
     var h = '<div class="sh-hd"><h2>Caméras</h2><button class="close" data-close aria-label="Fermer">×</button></div>';
-    if (!CAMS) h += '<p class="muted">Chargement…</p>';
-    else if (!CAMS.cameras.length) h += '<p class="muted">Aucune caméra disponible pour le moment.</p>';
-    else {
-      h += CAMS.cameras.map(function (c) {
-        var live = liveCam === c.id && c.live;
-        return '<div class="camcard">' +
-          (live ? '<video id="v-' + esc(c.id) + '" src="' + esc(c.live) + '" autoplay muted playsinline controls></video>'
-            : '<button class="camimg" data-live="' + esc(c.id) + '">' + (c.snapshot ? '<img alt="" src="' + esc(c.snapshot) + '?t=' + Date.now() + '">' : '') +
-              '<span class="play">' + icon('play') + 'Voir en direct</span></button>') +
-          '<div class="cammeta"><b>' + esc(c.name) + '</b><span class="' + (c.on ? 'ok' : 'bad') + '">' + (c.on ? 'En ligne' : 'Éteinte') + '</span></div></div>';
-      }).join('');
+    var cams = allCams();
+    var imCams = cams.filter(function (c) { return c.src === 'imou'; }), ntCams = cams.filter(function (c) { return c.src === 'netatmo'; });
+    h += '<h3>Imou · ' + (IM ? imCams.length + ' caméras' : 'chargement…') + '</h3>' + imCams.map(camCardHTML).join('');
+    if (IM && IM.error) h += '<p class="muted">Caméras Imou indisponibles pour le moment.</p>';
+    h += '<p class="note-q">Vidéo Imou en qualité standard pour économiser les 2 Go gratuits. Touche « HD » pendant le direct pour la haute définition.</p>';
+    h += '<h3>Netatmo · ' + (CAMS ? ntCams.length + ' caméras' : 'chargement…') + '</h3>';
+    if (CAMS && CAMS.cameras) {
+      h += ntCams.map(camCardHTML).join('');
       var names = {}; CAMS.cameras.forEach(function (c) { names[c.id] = c.name; });
-      h += '<h3>Derniers événements</h3>';
+      h += '<h3>Derniers événements Netatmo</h3>';
       h += CAMS.events.length ? '<div class="evlist">' + CAMS.events.map(function (e) {
         var day = new Date(e.time * 1000), today = new Date().toDateString() === day.toDateString();
         return '<div class="ev">' + (e.snapshot ? '<img alt="" loading="lazy" src="' + esc(e.snapshot) + '">' : '<span class="evic">' + icon('cam') + '</span>') +
@@ -298,9 +333,12 @@
           '<span class="evt">' + (today ? '' : day.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) + ' ') + hhmm(e.time) + '</span></div>';
       }).join('') + '</div>' : '<p class="muted">Aucun événement récent.</p>';
     }
+    var keep = sheet.scrollTop;
     sheet.innerHTML = '<div class="sh-in">' + h + '</div>';
+    sheet.scrollTop = keep;
     var v = liveCam && document.getElementById('v-' + liveCam);
     if (v) v.addEventListener('error', function () { toast('La vidéo en direct s\'ouvre dans Safari sur iPhone', true); });
+    if (liveCam && sheet.dataset.jump === liveCam) { sheet.dataset.jump = ''; var cc = document.getElementById('cc-' + liveCam); if (cc) cc.scrollIntoView({ block: 'center' }); }
   }
   function renderSettings() {
     var L = LOG || { version: '—', releases: [], works: [], todo: [] };
@@ -351,7 +389,7 @@
   app.addEventListener('click', function (e) {
     var b;
     if ((b = e.target.closest('[data-settings]'))) return openSheet('settings');
-    if ((b = e.target.closest('[data-opencams]'))) { liveCam = b.dataset.opencams; return openSheet('cams'); }
+    if ((b = e.target.closest('[data-opencams]'))) { liveCam = b.dataset.opencams; sheet.dataset.jump = liveCam; return openSheet('cams'); }
     if ((b = e.target.closest('[data-ntroom]'))) { ntRoom = b.dataset.ntroom; store.set('maison.ntRoom', ntRoom); ntPend = null; return render(); }
     if ((b = e.target.closest('[data-nt-step]'))) return stepSetpoint(parseFloat(b.dataset.ntStep));
     if ((b = e.target.closest('[data-nt-home]'))) {
@@ -386,7 +424,8 @@
   sheet.addEventListener('click', function (e) {
     var b;
     if (e.target.closest('[data-close]')) return closeSheet();
-    if ((b = e.target.closest('[data-live]'))) { liveCam = b.dataset.live; return renderCams(); }
+    if ((b = e.target.closest('[data-live]'))) { liveCam = b.dataset.live; liveHd = false; return renderCams(); }
+    if (e.target.closest('[data-hd]')) { liveHd = !liveHd; return renderCams(); }
     if (e.target.closest('[data-update]')) {
       toast('Recherche de mise à jour…');
       var done = function () { location.reload(); };

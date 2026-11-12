@@ -83,6 +83,7 @@ const CODE_CFG = {
     // L'empreinte change seulement si on refait l'autorisation : n8n garde sinon son propre jeton (Netatmo le fait tourner).
     seed: createHash('sha256').update(env.NETATMO_REFRESH_TOKEN.split('|')[0]).digest('hex').slice(0, 16),
   } : null,
+  im: env.IMOU_APP_ID ? { id: env.IMOU_APP_ID, secret: env.IMOU_APP_SECRET } : null,
 };
 
 const code = `
@@ -208,6 +209,125 @@ async function ntCameras(fresh) {
   SD.ntCams = { at: Date.now(), data };
   return data;
 }
+// ---------------- Imou (caméras) ----------------
+// Quotas gratuits : 30 000 requêtes et 2 Go de vidéo. Photos seulement à la demande, tout est mis en cache.
+function md5(str) {
+  // MD5 en JavaScript pur (le module crypto peut être interdit dans le nœud Code de n8n).
+  function rh(n) { let s = ''; for (let j = 0; j <= 3; j++) s += ((n >> (j * 8 + 4)) & 0x0F).toString(16) + ((n >> (j * 8)) & 0x0F).toString(16); return s; }
+  function ad(x, y) { const l = (x & 0xFFFF) + (y & 0xFFFF); return (((x >> 16) + (y >> 16) + (l >> 16)) << 16) | (l & 0xFFFF); }
+  function rl(n, c) { return (n << c) | (n >>> (32 - c)); }
+  function cm(q, a, b, x, s, t) { return ad(rl(ad(ad(a, q), ad(x, t)), s), b); }
+  function ff(a, b, c, d, x, s, t) { return cm((b & c) | (~b & d), a, b, x, s, t); }
+  function gg(a, b, c, d, x, s, t) { return cm((b & d) | (c & ~d), a, b, x, s, t); }
+  function hh(a, b, c, d, x, s, t) { return cm(b ^ c ^ d, a, b, x, s, t); }
+  function ii(a, b, c, d, x, s, t) { return cm(c ^ (b | ~d), a, b, x, s, t); }
+  const u = unescape(encodeURIComponent(str)), nb = ((u.length + 8) >> 6) + 1, x = new Array(nb * 16).fill(0);
+  for (let i = 0; i < u.length; i++) x[i >> 2] |= u.charCodeAt(i) << ((i % 4) * 8);
+  x[u.length >> 2] |= 0x80 << ((u.length % 4) * 8); x[nb * 16 - 2] = u.length * 8;
+  let a = 1732584193, b = -271733879, c = -1732584194, d = 271733878;
+  for (let i = 0; i < x.length; i += 16) {
+    const oa = a, ob = b, oc = c, od = d;
+    a = ff(a, b, c, d, x[i], 7, -680876936); d = ff(d, a, b, c, x[i + 1], 12, -389564586); c = ff(c, d, a, b, x[i + 2], 17, 606105819); b = ff(b, c, d, a, x[i + 3], 22, -1044525330);
+    a = ff(a, b, c, d, x[i + 4], 7, -176418897); d = ff(d, a, b, c, x[i + 5], 12, 1200080426); c = ff(c, d, a, b, x[i + 6], 17, -1473231341); b = ff(b, c, d, a, x[i + 7], 22, -45705983);
+    a = ff(a, b, c, d, x[i + 8], 7, 1770035416); d = ff(d, a, b, c, x[i + 9], 12, -1958414417); c = ff(c, d, a, b, x[i + 10], 17, -42063); b = ff(b, c, d, a, x[i + 11], 22, -1990404162);
+    a = ff(a, b, c, d, x[i + 12], 7, 1804603682); d = ff(d, a, b, c, x[i + 13], 12, -40341101); c = ff(c, d, a, b, x[i + 14], 17, -1502002290); b = ff(b, c, d, a, x[i + 15], 22, 1236535329);
+    a = gg(a, b, c, d, x[i + 1], 5, -165796510); d = gg(d, a, b, c, x[i + 6], 9, -1069501632); c = gg(c, d, a, b, x[i + 11], 14, 643717713); b = gg(b, c, d, a, x[i], 20, -373897302);
+    a = gg(a, b, c, d, x[i + 5], 5, -701558691); d = gg(d, a, b, c, x[i + 10], 9, 38016083); c = gg(c, d, a, b, x[i + 15], 14, -660478335); b = gg(b, c, d, a, x[i + 4], 20, -405537848);
+    a = gg(a, b, c, d, x[i + 9], 5, 568446438); d = gg(d, a, b, c, x[i + 14], 9, -1019803690); c = gg(c, d, a, b, x[i + 3], 14, -187363961); b = gg(b, c, d, a, x[i + 8], 20, 1163531501);
+    a = gg(a, b, c, d, x[i + 13], 5, -1444681467); d = gg(d, a, b, c, x[i + 2], 9, -51403784); c = gg(c, d, a, b, x[i + 7], 14, 1735328473); b = gg(b, c, d, a, x[i + 12], 20, -1926607734);
+    a = hh(a, b, c, d, x[i + 5], 4, -378558); d = hh(d, a, b, c, x[i + 8], 11, -2022574463); c = hh(c, d, a, b, x[i + 11], 16, 1839030562); b = hh(b, c, d, a, x[i + 14], 23, -35309556);
+    a = hh(a, b, c, d, x[i + 1], 4, -1530992060); d = hh(d, a, b, c, x[i + 4], 11, 1272893353); c = hh(c, d, a, b, x[i + 7], 16, -155497632); b = hh(b, c, d, a, x[i + 10], 23, -1094730640);
+    a = hh(a, b, c, d, x[i + 13], 4, 681279174); d = hh(d, a, b, c, x[i], 11, -358537222); c = hh(c, d, a, b, x[i + 3], 16, -722521979); b = hh(b, c, d, a, x[i + 6], 23, 76029189);
+    a = hh(a, b, c, d, x[i + 9], 4, -640364487); d = hh(d, a, b, c, x[i + 12], 11, -421815835); c = hh(c, d, a, b, x[i + 15], 16, 530742520); b = hh(b, c, d, a, x[i + 2], 23, -995338651);
+    a = ii(a, b, c, d, x[i], 6, -198630844); d = ii(d, a, b, c, x[i + 7], 10, 1126891415); c = ii(c, d, a, b, x[i + 14], 15, -1416354905); b = ii(b, c, d, a, x[i + 5], 21, -57434055);
+    a = ii(a, b, c, d, x[i + 12], 6, 1700485571); d = ii(d, a, b, c, x[i + 3], 10, -1894986606); c = ii(c, d, a, b, x[i + 10], 15, -1051523); b = ii(b, c, d, a, x[i + 1], 21, -2054922799);
+    a = ii(a, b, c, d, x[i + 8], 6, 1873313359); d = ii(d, a, b, c, x[i + 15], 10, -30611744); c = ii(c, d, a, b, x[i + 6], 15, -1560198380); b = ii(b, c, d, a, x[i + 13], 21, 1309151649);
+    a = ii(a, b, c, d, x[i + 4], 6, -145523070); d = ii(d, a, b, c, x[i + 11], 10, -1120210379); c = ii(c, d, a, b, x[i + 2], 15, 718787259); b = ii(b, c, d, a, x[i + 9], 21, -343485551);
+    a = ad(a, oa); b = ad(b, ob); c = ad(c, oc); d = ad(d, od);
+  }
+  return rh(a) + rh(b) + rh(c) + rh(d);
+}
+function nonceId() { return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (ch) => { const r = Math.random() * 16 | 0; return (ch === 'x' ? r : (r & 3 | 8)).toString(16); }); }
+async function imCall(method, params) {
+  const time = Math.floor(Date.now() / 1000), nonce = nonceId();
+  const sign = md5('time:' + time + ',nonce:' + nonce + ',appSecret:' + CFG.im.secret);
+  const base = (SD.im && SD.im.domain) || 'https://openapi-fk.easy4ip.com';
+  let r;
+  try {
+    r = parse(await helpers.httpRequest({ method: 'POST', url: base + '/openapi/' + method, headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ system: { ver: '1.0', appId: CFG.im.id, sign, time, nonce }, id: nonce, params }), json: false, timeout: 20000 }));
+  } catch (e) { throw fail(502, 'imou', String(e.message || e)); }
+  return r.result || r;
+}
+async function imToken(force) {
+  if (!SD.im) SD.im = {};
+  if (!force && SD.im.token && SD.im.exp > Date.now() + 600000) return SD.im.token;
+  const r = await imCall('accessToken', {});
+  if (r.code !== '0') throw fail(502, 'imou_auth', r.msg);
+  SD.im.token = r.data.accessToken;
+  SD.im.exp = Date.now() + Math.min(Number(r.data.expireTime || 259200), 259200) * 1000;
+  if (r.data.currentDomain) SD.im.domain = String(r.data.currentDomain).replace(/:443$/, '');
+  return SD.im.token;
+}
+async function im(method, params, retry) {
+  const token = await imToken(false);
+  const r = await imCall(method, Object.assign({ token }, params));
+  if (!retry && (r.code === 'TK1002' || r.code === 'TK1004' || /token/i.test(r.msg || '') && r.code !== '0')) { await imToken(true); return im(method, params, true); }
+  return r;
+}
+async function imDevices() {
+  if (SD.imDev && SD.imDev.at > Date.now() - 600000) return SD.imDev.list;
+  const r = await im('listDeviceDetailsByPage', { page: 1, pageSize: 50 });
+  if (r.code !== '0') throw fail(502, 'imou', r.msg);
+  const list = [];
+  ((r.data && r.data.deviceList) || []).forEach((d) => (d.channelList || d.channels || [{ channelId: '0' }]).forEach((c) => {
+    list.push({ id: d.deviceId + ':' + (c.channelId || '0'), deviceId: d.deviceId, channelId: String(c.channelId || '0'),
+      name: d.deviceName || c.channelName || d.deviceId, model: d.deviceModel || null,
+      online: (c.channelStatus || d.deviceStatus) === 'online' });
+  }));
+  SD.imDev = { at: Date.now(), list };
+  return list;
+}
+async function imLive(d) {
+  SD.imLive = SD.imLive || {};
+  const c = SD.imLive[d.id];
+  if (c && c.at > Date.now() - 1800000) return c;
+  const p = { deviceId: d.deviceId, channelId: d.channelId };
+  let info = await im('getLiveStreamInfo', p);
+  if (info.code !== '0') { await im('bindDeviceLive', Object.assign({ streamId: 1 }, p)); info = await im('getLiveStreamInfo', p); }
+  const streams = (info.data && info.data.streams) || [];
+  const pick = (sid) => { const s = streams.find((x) => Number(x.streamId) === sid && /^https|proto=https/.test(x.hls)); return s ? s.hls : null; };
+  const out = { at: Date.now(), sd: pick(1), hd: pick(0) };
+  SD.imLive[d.id] = out;
+  return out;
+}
+async function imSnap(d) {
+  SD.imSnap = SD.imSnap || {};
+  const c = SD.imSnap[d.id];
+  if (c && c.at > Date.now() - 120000) return c.url;
+  const r = await im('setDeviceSnapEnhanced', { deviceId: d.deviceId, channelId: d.channelId });
+  const url = r.code === '0' && r.data ? r.data.url : null;
+  SD.imSnap[d.id] = { at: Date.now(), url };
+  return url;
+}
+async function imou(b) {
+  if (!CFG.im) throw fail(503, 'imou_not_configured');
+  if (b.action === 'im.cameras') {
+    const devs = await imDevices();
+    const cams = [];
+    for (const d of devs) {
+      const cam = { id: d.id, name: d.name, model: d.model, on: d.online, live: null, liveHd: null, snapshot: null };
+      if (d.online) {
+        try { const l = await imLive(d); cam.live = l.sd; cam.liveHd = l.hd; } catch (e) {}
+        if (b.snaps) { try { cam.snapshot = await imSnap(d); } catch (e) {} }
+      }
+      cams.push(cam);
+    }
+    return { ok: true, cameras: cams, at: new Date().toISOString() };
+  }
+  throw fail(400, 'unknown_action');
+}
+
 async function netatmo(b) {
   if (b.action === 'nt.heating') return ntHeating(false);
   if (b.action === 'nt.cameras') return ntCameras(!!b.fresh);
@@ -261,6 +381,7 @@ try {
     if (!CFG.nt) return reply(503, { ok: false, error: 'netatmo_not_configured' });
     return reply(200, await netatmo(body));
   }
+  if (String(body.action || '').startsWith('im.')) return reply(200, await imou(body));
 
   return reply(400, { ok: false, error: 'unknown_action' });
 } catch (e) {
