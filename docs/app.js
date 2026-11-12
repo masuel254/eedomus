@@ -967,7 +967,7 @@
       setTimeout(function () { refreshIq(true); if (!sheet.hidden && sheet.dataset.view === 'timers' && !TED) renderTimers(); }, 15000);
     }).catch(function (e) { toast(e.status === 403 ? 'Horaire invalide' : 'iAquaLink ne répond pas, réessaie', true); });
   }
-  var autoLive = store.get('maison.autolive') !== '0', camHd = {}, camsSig = '';
+  var autoLive = store.get('maison.autolive') === '1', camHd = {}, camsSig = '';
   function camCardHTML(c) {
     var live = ((autoLive && TAB === 'cams') || liveCam === c.id) && c.live;
     var hd = camHd[c.id] !== undefined ? camHd[c.id] : (!autoLive && liveCam === c.id);
