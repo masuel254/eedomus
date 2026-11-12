@@ -135,6 +135,15 @@
           "temp": 899338,
           "items": [
             {
+              "id": 1895923,
+              "name": "Portail",
+              "type": "action",
+              "value": 100,
+              "label": "Ouvrir / fermer",
+              "icon": "gate",
+              "confirm": true
+            },
+            {
               "id": 3226049,
               "name": "Hue entrée",
               "type": "light"
@@ -262,15 +271,6 @@
               "type": "light",
               "on": "on",
               "off": "off"
-            },
-            {
-              "id": 1895923,
-              "name": "Portail",
-              "type": "action",
-              "value": 100,
-              "label": "Ouvrir",
-              "icon": "gate",
-              "confirm": true
             }
           ]
         },

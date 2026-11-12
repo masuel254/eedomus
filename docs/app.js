@@ -361,14 +361,21 @@
       '<div class="v"><b>' + fmt(temp, 1) + '°</b>' + sub + '</div></div>';
   }
 
+  var garageOpen = false;
   function chipsHTML() {
     var s = CFG.status;
     var armed = alarmArmed();
     var n = s.people.filter(function (id) { var v = val(id); return v !== undefined && v !== '0'; }).length;
+    var g = STATES[CFG.dock.gate], gTxt = g && g.text ? ' · ' + g.text.toLowerCase() : '';
     return '<div class="chips">' +
       '<button class="chip' + (armed ? ' armed' : '') + '" data-alarm data-confirm>' + icon('shield') + '<span>' + (armed ? 'Alarme activée' : 'Alarme désactivée') + '</span></button>' +
       '<span class="chip' + (n ? ' home' : '') + '">' + icon(n ? 'home' : 'leave') + (n ? n + ' personne' + (n > 1 ? 's' : '') + ' à la maison' : 'Personne à la maison') + '</span>' +
-      '</div>';
+      '<button class="chip act2" data-gate data-confirm>' + icon('gate') + '<span>Portail' + esc(gTxt) + '</span></button>' +
+      '<button class="chip act2' + (garageOpen ? ' open' : '') + '" data-garage-toggle aria-expanded="' + garageOpen + '">' + icon('garage') + '<span>Garage</span>' + icon('down') + '</button>' +
+      '</div>' +
+      (garageOpen ? '<div class="chips sub">' +
+        '<button class="chip act2" data-garage="1" data-confirm>' + icon('up') + '<span>Ouvrir le garage</span></button>' +
+        '<button class="chip act2" data-garage="2" data-confirm>' + icon('down') + '<span>Fermer le garage</span></button></div>' : '');
   }
 
   function snapUrl(c) { return c.src === 'netatmo' ? c.snapshot + '?t=' + camsAt : c.snapshot; }
@@ -783,6 +790,16 @@
     if ((b = e.target.closest('[data-action]'))) {
       if (!confirmed(b)) return;
       return send(+b.dataset.action, b.dataset.v, { optimistic: false, msg: b.dataset.msg });
+    }
+    if ((b = e.target.closest('[data-gate]'))) {
+      if (!confirmed(b)) return;
+      return send(CFG.dock.gate, 100, { optimistic: false, msg: 'Portail : commande envoyée' });
+    }
+    if (e.target.closest('[data-garage-toggle]')) { garageOpen = !garageOpen; return render(); }
+    if ((b = e.target.closest('[data-garage]'))) {
+      if (!confirmed(b)) return;
+      var gv = +b.dataset.garage; garageOpen = false;
+      return send(CFG.dock.garage, gv, { optimistic: false, msg: gv === 1 ? 'Garage : ouverture envoyée' : 'Garage : fermeture envoyée' });
     }
     if ((b = e.target.closest('[data-alarm]'))) {
       if (!confirmed(b)) return;

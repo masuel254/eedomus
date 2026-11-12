@@ -351,3 +351,10 @@ button.pool-sched { width: 100%; text-align: left; grid-template-columns: 18px 1
 .ted-row .stp { min-width: 150px; }
 .ted-btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 2px; }
 .act.primary { background: var(--cool); color: #0B1424; }
+
+/* ---------- v1.10 : pastilles Portail et Garage ---------- */
+.chip.act2 svg.i { color: var(--cool); }
+.chip.act2 > svg.i:last-child:not(:first-child) { width: 14px; height: 14px; color: var(--mu); transition: transform .2s; }
+.chip.act2.open > svg.i:last-child { transform: rotate(180deg); }
+.chip.confirming { background: var(--heat); color: #1A0F08; border-color: transparent; }
+.chips.sub { margin-top: -10px; }

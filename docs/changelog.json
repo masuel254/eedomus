@@ -1,7 +1,17 @@
 {
-  "version": "1.9.0",
+  "version": "1.10.0",
   "date": "2026-11-12",
   "releases": [
+    {
+      "version": "1.10.0",
+      "date": "2026-11-12",
+      "time": "18:06",
+      "title": "Portail et garage à portée de main",
+      "changes": [
+        "Portail déplacé dans l’Entrée (Ouvrir / fermer)",
+        "Pastilles de l’accueil : Portail (avec son état) et Garage (Ouvrir / Fermer), confirmation en deux temps"
+      ]
+    },
     {
       "version": "1.9.0",
       "date": "2026-11-12",
@@ -212,5 +222,5 @@
     "Tester les réglages iAquaLink depuis l’appli (chloration, pH, Boost, filtration, programmes)",
     "Pompe à chaleur Zodiac hors ligne depuis le 27/09 : à retester quand elle sera rallumée"
   ],
-  "time": "18:03"
+  "time": "18:06"
 }
