@@ -1,7 +1,17 @@
 {
-  "version": "2.1.1",
+  "version": "2.1.2",
   "date": "2026-11-12",
   "releases": [
+    {
+      "version": "2.1.2",
+      "date": "2026-11-12",
+      "time": "21:07",
+      "title": "Caméras épurées",
+      "changes": [
+        "Liste des derniers événements retirée de l’onglet Caméras",
+        "Clips de Presence accessibles par « Enregistrements », comme les autres caméras"
+      ]
+    },
     {
       "version": "2.1.1",
       "date": "2026-11-12",
@@ -289,5 +299,5 @@
     "Graphiques supplémentaires : température extérieure, consommation sur la semaine",
     "Surveiller le forfait vidéo Imou avec « Tout en direct » activé"
   ],
-  "time": "21:02"
+  "time": "21:07"
 }

@@ -694,17 +694,7 @@
     h += cams.map(camCardHTML).join('');
     if (!CAMS || !IM) h += '<p class="muted">Chargement des caméras…</p>';
     if (IM && IM.error) h += '<p class="muted">Caméras Imou indisponibles pour le moment.</p>';
-    if (CAMS && CAMS.cameras) {
-      var names = {}; cams.forEach(function (c) { if (c.src === 'netatmo') names[c.id] = c.name; });
-      var evs = (CAMS.events || []).filter(function (e) { return names[e.camera]; });
-      h += '<div class="lbl">Derniers événements</div>';
-      h += evs.length ? '<div class="evlist">' + evs.map(function (e) {
-        var day = new Date(e.time * 1000), today = new Date().toDateString() === day.toDateString(), tag = e.video ? 'button' : 'div';
-        return '<' + tag + ' class="ev' + (e.video ? ' rec' : '') + '"' + (e.video ? ' data-evplay="' + esc(e.id) + '"' : '') + '>' + (e.snapshot ? '<img alt="" loading="lazy" src="' + esc(e.snapshot) + '">' : '<span class="evic">' + icon('cam') + '</span>') +
-          '<span><b>' + esc(EV[e.type] || 'Événement') + '</b><small>' + esc(names[e.camera] || '') + (e.video ? ' · voir le clip' : '') + '</small></span>' +
-          '<span class="evt">' + (today ? '' : day.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) + ' ') + hhmm(e.time) + '</span></' + tag + '>';
-      }).join('') + '</div>' : '<p class="muted">Aucun événement récent.</p>';
-    }
+    // Les clips de Presence sont dans « Enregistrements », comme pour les autres caméras
     return h;
   }
 
@@ -1417,7 +1407,7 @@
       return saveTimer(st, en);
     }
     if ((b = e.target.closest('[data-enstep]'))) return stepEnergy(+b.dataset.enstep);
-    if (e.target.closest('[data-recback]')) { REC = null; sheet.dataset.view = 'cams'; sheet.scrollTop = 0; return renderCams(); }
+    if (e.target.closest('[data-recback]')) return closeSheet(); // retour à l'onglet Caméras
     if ((b = e.target.closest('[data-recday]'))) { REC.date = b.dataset.recday; REC.list = null; return loadRec(); }
     if ((b = e.target.closest('[data-evplay]'))) return playEvent(b.dataset.evplay);
     if ((b = e.target.closest('[data-recplay]'))) {
