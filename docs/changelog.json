@@ -1,7 +1,19 @@
 {
-  "version": "2.1.5",
+  "version": "2.2.0",
   "date": "2026-11-12",
   "releases": [
+    {
+      "version": "2.2.0",
+      "date": "2026-11-12",
+      "time": "21:26",
+      "title": "Nouvel onglet Pièces",
+      "changes": [
+        "Pièces en cartes sur deux colonnes, filtrables par étage (Tout, Rez-de-ch., Étage, Extérieur)",
+        "Boutons directs sur chaque carte : toutes les lumières de la pièce, volets ↑ / ↓",
+        "Toucher une carte ouvre le panneau de la pièce : grandes tuiles de lumières, commande de tous les volets puis volet par volet, caméra et autres appareils",
+        "Carte « Volets » : état de tous les volets et Tout ouvrir / Tout fermer"
+      ]
+    },
     {
       "version": "2.1.5",
       "date": "2026-11-12",
@@ -327,5 +339,5 @@
     "Graphiques supplémentaires : température extérieure, consommation sur la semaine",
     "Surveiller le forfait vidéo Imou avec « Tout en direct » activé"
   ],
-  "time": "21:18"
+  "time": "21:26"
 }

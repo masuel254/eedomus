@@ -602,3 +602,50 @@ svg.gsvg { display: block; width: 100%; height: auto; user-select: none; -webkit
 .row.motion.mv .mvdot { background: rgba(244,184,96,.18); color: var(--amber); }
 .row.motion.old { opacity: .7; }
 .row.motion.old .mvdot { color: var(--warn); }
+
+/* =================== v2.2 : onglet Pièces « cartes + panneau » =================== */
+.seg3 { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 0 16px 4px; }
+.seg3::-webkit-scrollbar { display: none; }
+.seg3 button { flex: none; font-size: 13px; font-weight: 700; padding: 8px 13px; border-radius: 999px; background: var(--s1); border: 1px solid var(--ln); color: var(--mu); }
+.seg3 button.on { background: var(--tx); color: var(--bg); border-color: transparent; }
+.rgrid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 0 16px; }
+.rc { background: var(--s1); border: 1px solid var(--ln); border-radius: 20px; padding: 12px; display: grid; gap: 8px; min-height: 124px; align-content: space-between; cursor: pointer; min-width: 0; }
+.rc:active { transform: scale(.985); }
+.rc.lit { border-color: rgba(244,184,96,.42); background: linear-gradient(160deg, rgba(244,184,96,.13), var(--s1) 65%); }
+.rc.warn { border-color: rgba(248,113,113,.45); }
+.rc-hd { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
+.rc-hd b { font-size: 16px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rc-hd span { display: inline-flex; align-items: center; gap: 5px; font-family: var(--f-mono); font-size: 12.5px; color: var(--mu); flex: none; }
+.rc-hd span svg.i { width: 13px; height: 13px; }
+.rc small { color: var(--mu); font-size: 12px; line-height: 1.4; }
+.qa { display: flex; gap: 6px; align-items: center; }
+.qb { width: 40px; height: 40px; border-radius: 13px; display: grid; place-items: center; background: var(--s2); color: var(--mu); }
+.qb svg.i { width: 20px; height: 20px; }
+.qb.l { background: rgba(244,184,96,.22); color: var(--amber); }
+.qb.v { color: var(--cool); }
+.qb:active { background: var(--s3); }
+.qa-more { font-size: 12.5px; font-weight: 700; color: var(--cool); }
+
+/* Panneau d'une pièce */
+.rs-sub { color: var(--mu); font-size: 13.5px; margin: -6px 2px 12px; }
+#sheet .camstrip { padding: 0 0 12px; }
+.ltiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+.lt2 { border-radius: 20px; background: var(--s1); border: 1px solid var(--ln); padding: 12px; display: grid; gap: 6px; text-align: left; min-height: 104px; align-content: space-between; }
+.lt2-hd { display: flex; justify-content: space-between; align-items: center; color: var(--mu); }
+.lt2-hd svg.i { width: 24px; height: 24px; }
+.lt2 b { font-size: 14.5px; }
+.lt2 small { color: var(--mu); font-size: 12px; }
+.lt2.on { background: linear-gradient(160deg, rgba(244,184,96,.24), var(--s1) 75%); border-color: rgba(244,184,96,.5); }
+.lt2.on .lt2-hd { color: var(--amber); }
+.lt2.on .sw { background: var(--amber); }
+.lt2.on .sw::after { transform: translateX(20px); background: #fff; }
+.lt2.busy { opacity: .7; }
+.shblock { background: var(--s1); border: 1px solid var(--ln); border-radius: 20px; margin-bottom: 10px; overflow: hidden; }
+.shb-hd { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 12px 14px; }
+.shb-hd b { display: block; font-size: 15px; }
+.shb-hd small { color: var(--mu); font-size: 12.5px; }
+.shb-hd .tri { grid-template-columns: repeat(3, 44px); gap: 6px; }
+.shb-hd .tri button { height: 42px; border-radius: 12px; }
+.shlist { border-top: 1px solid var(--ln); background: #111418; }
+.rs-list { margin: 0 0 10px; }
+#sheet .pool { margin: 0 0 10px; }
