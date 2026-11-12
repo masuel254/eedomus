@@ -362,6 +362,12 @@
   }
 
   var garageOpen = false;
+  function saunaChip() {
+    if (!CFG.tu && !TU) return '';
+    var d = tuDev('sauna'); if (!d) return '';
+    var on = tuOn('sauna'), txt = on ? 'Sauna allumé' + (d.power > 50 ? ' · ' + watts(d.power) : '') : 'Sauna éteint';
+    return '<button class="chip act2' + (on ? ' heat-on' : '') + '" data-sauna-chip' + (on ? '' : ' data-confirm') + '>' + icon('flame') + '<span>' + esc(txt) + '</span></button>';
+  }
   function chipsHTML() {
     var s = CFG.status;
     var armed = alarmArmed();
@@ -370,6 +376,7 @@
     return '<div class="chips">' +
       '<button class="chip' + (armed ? ' armed' : '') + '" data-alarm data-confirm>' + icon('shield') + '<span>' + (armed ? 'Alarme activée' : 'Alarme désactivée') + '</span></button>' +
       '<span class="chip' + (n ? ' home' : '') + '">' + icon(n ? 'home' : 'leave') + (n ? n + ' personne' + (n > 1 ? 's' : '') + ' à la maison' : 'Personne à la maison') + '</span>' +
+      saunaChip() +
       '<button class="chip act2" data-gate data-confirm>' + icon('gate') + '<span>Portail' + esc(gTxt) + '</span></button>' +
       '<button class="chip act2' + (garageOpen ? ' open' : '') + '" data-garage-toggle aria-expanded="' + garageOpen + '">' + icon('garage') + '<span>Garage</span>' + icon('down') + '</button>' +
       '</div>' +
@@ -790,6 +797,14 @@
     if ((b = e.target.closest('[data-action]'))) {
       if (!confirmed(b)) return;
       return send(+b.dataset.action, b.dataset.v, { optimistic: false, msg: b.dataset.msg });
+    }
+    if ((b = e.target.closest('[data-sauna-chip]'))) {
+      if (!confirmed(b)) return;
+      var want = !tuOn('sauna');
+      tuPend.sauna = { on: want, until: Date.now() + 10000 }; render();
+      return api({ action: 'tu.switch', key: 'sauna', on: want }).then(function () {
+        toast(want ? 'Sauna allumé' : 'Sauna éteint'); setTimeout(function () { refreshTuya(true); }, 2500); setTimeout(function () { refreshTuya(true); }, 8000);
+      }).catch(function () { delete tuPend.sauna; render(); toast('Le sauna ne répond pas, réessaie', true); });
     }
     if ((b = e.target.closest('[data-gate]'))) {
       if (!confirmed(b)) return;

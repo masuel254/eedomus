@@ -358,3 +358,5 @@ button.pool-sched { width: 100%; text-align: left; grid-template-columns: 18px 1
 .chip.act2.open > svg.i:last-child { transform: rotate(180deg); }
 .chip.confirming { background: var(--heat); color: #1A0F08; border-color: transparent; }
 .chips.sub { margin-top: -10px; }
+.chip.heat-on { background: rgba(255,138,91,.14); border-color: rgba(255,138,91,.45); }
+.chip.heat-on svg.i { color: var(--heat); }
