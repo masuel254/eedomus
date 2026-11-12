@@ -285,6 +285,14 @@
       return '<div class="row choice"><span class="ic">' + icon(it.icon || 'gear') + '</span><span><b>' + esc(it.name) + '</b><small>' + esc((it.sub ? it.sub + ' · ' : '') + since(id)) + '</small></span><span></span>' +
         '<div class="chs">' + it.options.map(function (o) { return '<button class="' + (String(o[0]) === cv ? 'on' : '') + '" data-choice="' + id + ':' + o[0] + '">' + esc(o[1]) + '</button>'; }).join('') + '</div></div>';
     }
+    if (it.type === 'motion') {
+      var mv = num(id) > 0, ch = STATES[id] && STATES[id].changed ? new Date(STATES[id].changed.replace(' ', 'T')).getTime() : null;
+      var old = ch && Date.now() - ch > 14 * 86400000;
+      var ago2 = ch ? since(id).replace('depuis ', 'il y a ') : '';
+      return '<div class="row motion' + (mv ? ' mv' : '') + (old ? ' old' : '') + '"><span class="ic">' + icon('walk') + '</span><span><b>' + esc(it.name) + '</b><small>' +
+        esc(mv ? 'Mouvement détecté' : old ? 'Aucune nouvelle depuis longtemps · pile à vérifier ?' : 'Dernier passage ' + ago2) + '</small></span>' +
+        '<span class="mvdot">' + (mv ? 'Mouvement' : old ? 'Inactif ?' : 'Calme') + '</span></div>';
+    }
     if (it.type === 'state') {
       var stx = STATES[id] ? STATES[id].text : '—', act = num(id) > 0;
       return '<div class="row"><span class="ic">' + icon(it.icon || 'shield') + '</span><span><b>' + esc(it.name) + '</b><small>' + esc(since(id)) + '</small></span><span class="' + (act ? 'bad' : 'ok') + '">' + esc(stx) + '</span></div>';
@@ -653,7 +661,7 @@
       var items = A.items.filter(function (it) { return it.group === g; }); if (!items.length) return '';
       return '<div class="lbl">' + title + '</div><div class="card2 flat">' + items.map(rowHTML).join('') + '</div>';
     };
-    h += grp('mode', 'Paramétrage') + grp('zones', 'Zones surveillées') + grp('tempo', 'Temporisations') + grp('sirens', 'Sirènes');
+    h += grp('mode', 'Paramétrage') + grp('zones', 'Zones surveillées') + grp('motion', 'Détecteurs de mouvement');
     h += '<p class="note-q">Les réglages s\'appliquent tout de suite. Seule l\'activation de l\'alarme demande de glisser le bouton.</p>';
     return h;
   }

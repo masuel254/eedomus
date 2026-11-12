@@ -595,3 +595,10 @@ svg.gsvg { display: block; width: 100%; height: auto; user-select: none; -webkit
 .ctl.tog.wide { grid-column: 1 / -1; }
 .ctl.tog small svg.i { width: 14px; height: 14px; vertical-align: -2px; margin-right: 4px; }
 .ctl.tog.is-on.light .sw { background: var(--amber); }
+
+/* v2.1.1 : détecteurs de mouvement */
+.row.motion .mvdot { font-size: 12px; font-weight: 800; padding: 4px 9px; border-radius: 999px; background: var(--s2); color: var(--mu); }
+.row.motion.mv .ic { background: rgba(244,184,96,.18); color: var(--amber); }
+.row.motion.mv .mvdot { background: rgba(244,184,96,.18); color: var(--amber); }
+.row.motion.old { opacity: .7; }
+.row.motion.old .mvdot { color: var(--warn); }

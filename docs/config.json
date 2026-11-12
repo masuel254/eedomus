@@ -454,149 +454,58 @@
         "group": "zones"
       },
       {
-        "id": 2993598,
-        "name": "Mouvement couloir",
-        "type": "yesno",
-        "group": "zones"
+        "id": 3009045,
+        "name": "Salon",
+        "type": "motion",
+        "group": "motion"
       },
       {
-        "id": 1583886,
-        "name": "Temporisation mouvement haut",
-        "type": "yesno",
-        "group": "zones"
+        "id": 976949,
+        "name": "Cuisine",
+        "type": "motion",
+        "group": "motion"
       },
       {
-        "id": 916822,
-        "name": "Activation différée",
-        "sub": "L'alarme s'active automatiquement après",
-        "type": "choice",
-        "group": "tempo",
-        "options": [
-          [
-            0,
-            "Non"
-          ],
-          [
-            11,
-            "2 min"
-          ],
-          [
-            10,
-            "5 min"
-          ],
-          [
-            9,
-            "15 min"
-          ],
-          [
-            8,
-            "30 min"
-          ],
-          [
-            7,
-            "1 h"
-          ],
-          [
-            6,
-            "2 h"
-          ],
-          [
-            5,
-            "3 h"
-          ],
-          [
-            4,
-            "4 h"
-          ],
-          [
-            3,
-            "5 h"
-          ],
-          [
-            2,
-            "6 h"
-          ],
-          [
-            1,
-            "12 h"
-          ]
-        ]
+        "id": 899337,
+        "name": "Couloir",
+        "type": "motion",
+        "group": "motion"
       },
       {
-        "id": 916894,
-        "name": "Remise à zéro de la temporisation",
-        "type": "choice",
-        "group": "tempo",
-        "options": [
-          [
-            0,
-            "Non"
-          ],
-          [
-            1,
-            "2 min"
-          ],
-          [
-            2,
-            "5 min"
-          ],
-          [
-            3,
-            "15 min"
-          ],
-          [
-            4,
-            "30 min"
-          ],
-          [
-            5,
-            "1 h"
-          ],
-          [
-            6,
-            "2 h"
-          ],
-          [
-            7,
-            "3 h"
-          ],
-          [
-            8,
-            "4 h"
-          ],
-          [
-            9,
-            "5 h"
-          ],
-          [
-            10,
-            "6 h"
-          ],
-          [
-            11,
-            "12 h"
-          ]
-        ]
+        "id": 953768,
+        "name": "Cellier",
+        "type": "motion",
+        "group": "motion"
       },
       {
-        "id": 907645,
-        "name": "Macro temporisation",
-        "type": "yesno",
-        "group": "tempo"
+        "id": 961069,
+        "name": "Étage",
+        "type": "motion",
+        "group": "motion"
       },
       {
-        "id": 930339,
-        "name": "Sirène",
-        "type": "state",
-        "group": "sirens",
-        "icon": "shield"
+        "id": 1214679,
+        "name": "Garage",
+        "type": "motion",
+        "group": "motion"
       },
       {
-        "id": 961108,
-        "name": "Sirène 2",
-        "type": "state",
-        "group": "sirens",
-        "icon": "shield"
+        "id": 2999506,
+        "name": "Jardin",
+        "type": "motion",
+        "group": "motion"
+      },
+      {
+        "id": 3227864,
+        "name": "Pergola",
+        "type": "motion",
+        "group": "motion"
+      },
+      {
+        "id": 2999497,
+        "name": "Abri de piscine",
+        "type": "motion",
+        "group": "motion"
       }
     ]
   }

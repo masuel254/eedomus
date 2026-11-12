@@ -1,7 +1,18 @@
 {
-  "version": "2.1.0",
+  "version": "2.1.1",
   "date": "2026-11-12",
   "releases": [
+    {
+      "version": "2.1.1",
+      "date": "2026-11-12",
+      "time": "21:02",
+      "title": "Alarme simplifiée",
+      "changes": [
+        "Retirés : mouvement couloir, temporisation mouvement haut, temporisations et sirènes",
+        "Nouveau bloc « Détecteurs de mouvement » : Salon, Cuisine, Couloir, Cellier, Étage, Garage, Jardin, Pergola, Abri de piscine",
+        "Détecteur sans nouvelles depuis plus de 14 jours signalé « Inactif ? » (pile à vérifier)"
+      ]
+    },
     {
       "version": "2.1.0",
       "date": "2026-11-12",
@@ -278,5 +289,5 @@
     "Graphiques supplémentaires : température extérieure, consommation sur la semaine",
     "Surveiller le forfait vidéo Imou avec « Tout en direct » activé"
   ],
-  "time": "20:52"
+  "time": "21:02"
 }
