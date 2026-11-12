@@ -610,7 +610,7 @@ function iqExo(rep) {
   const sched = [];
   Object.keys(rep.schedules || {}).forEach((k) => {
     const x = rep.schedules[k];
-    if (x && typeof x === 'object' && x.timer) sched.push({ id: x.id, name: x.name, endpoint: x.endpoint, enabled: !!x.enabled, active: !!x.active, start: x.timer.start, end: x.timer.end, rpm: x.rpm || null });
+    if (x && typeof x === 'object' && x.timer) sched.push({ key: k, id: x.id, name: x.name, endpoint: x.endpoint, enabled: !!x.enabled, active: !!x.active, start: x.timer.start, end: x.timer.end, rpm: x.rpm || null });
   });
   sched.sort((a, b) => (a.start < b.start ? -1 : 1));
   return {
@@ -642,6 +642,22 @@ async function iqState(fresh) {
 async function iaqua(b) {
   if (!CFG.iq) throw fail(503, 'iaqua_not_configured');
   if (b.action === 'iq.state') return iqState(!!b.fresh && !(SD.iqState && SD.iqState.at > Date.now() - 5000));
+  // Programmes (timers) de l'eXO : filtration 1-4 (sch5-8, avec vitesse), électrolyseur 1-2 (sch1-2), aux 1-2 (sch9-10)
+  if (b.action === 'iq.sched') {
+    const allowed = ['sch1', 'sch2', 'sch5', 'sch6', 'sch7', 'sch8', 'sch9', 'sch10'];
+    const hm = /^([01][0-9]|2[0-3]):[0-5][0-9]$/;
+    if (!CFG.iq.exo || !allowed.includes(b.sch) || !hm.test(String(b.start)) || !hm.test(String(b.end))) throw fail(403, 'not_allowed');
+    const s = { timer: { start: b.start, end: b.end }, enabled: b.start === b.end ? 0 : 1 };
+    if (['sch5', 'sch6', 'sch7', 'sch8'].includes(b.sch) && b.rpm != null) {
+      const r = Number(b.rpm);
+      if (!(r >= 600 && r <= 3450)) throw fail(403, 'not_allowed');
+      s.rpm = Math.round(r / 50) * 50;
+    }
+    const desired = { schedules: {} }; desired.schedules[b.sch] = s;
+    await iqShadow(CFG.iq.exo, desired);
+    SD.iqState = null;
+    return { ok: true, sch: b.sch, enabled: s.enabled };
+  }
   if (b.action === 'iq.set') {
     // Liste blanche des réglages autorisés, avec bornes
     const v = Number(b.value);

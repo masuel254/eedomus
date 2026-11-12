@@ -331,3 +331,23 @@ svg.bars .lbl { fill: var(--mu); font-size: 10px; font-family: var(--f-mono); }
 .pool-sched { display: grid; grid-template-columns: 18px 1fr; gap: 8px; align-items: start; color: var(--mu); font-size: 12.5px; line-height: 1.5; padding: 2px 2px 0; }
 .pool-sched svg.i { width: 16px; height: 16px; margin-top: 2px; }
 .pool-sched b { color: var(--tx); font-weight: 700; }
+
+/* ---------- v1.9 : programmes (timers) de l'eXO ---------- */
+button.pool-sched { width: 100%; text-align: left; grid-template-columns: 18px 1fr auto; background: var(--s2); border: 1px solid var(--ln); border-radius: 14px; padding: 10px; }
+.pool-edit { display: inline-flex; align-items: center; gap: 3px; color: var(--cool); font-weight: 700; font-size: 12.5px; white-space: nowrap; }
+.pool-edit svg.i { width: 14px; height: 14px; transform: rotate(-90deg); margin: 0; }
+.tm { width: 100%; display: grid; grid-template-columns: 1fr auto 18px; gap: 10px; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--ln); text-align: left; }
+.tm:last-child { border-bottom: 0; }
+.tm b { display: block; font-size: 15px; }
+.tm small { color: var(--mu); font-size: 13px; font-family: var(--f-mono); }
+.tm.on small { color: var(--ok); }
+.tm-rpm { color: var(--mu); font-size: 12.5px; font-family: var(--f-mono); }
+.tm > svg.i { color: var(--mu); width: 16px; height: 16px; transform: rotate(-90deg); transition: transform .2s; }
+.tm.open > svg.i { transform: none; }
+.ted { padding: 12px 14px 14px; background: #111418; border-bottom: 1px solid var(--ln); display: grid; gap: 10px; }
+.ted-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.ted-row label { color: var(--mu); font-size: 14px; font-weight: 600; }
+.ted-row input[type="time"] { font: inherit; font-family: var(--f-mono); font-size: 17px; color: var(--tx); background: var(--s2); border: 1px solid var(--ln); border-radius: 10px; padding: 8px 10px; min-width: 120px; color-scheme: dark; }
+.ted-row .stp { min-width: 150px; }
+.ted-btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 2px; }
+.act.primary { background: var(--cool); color: #0B1424; }

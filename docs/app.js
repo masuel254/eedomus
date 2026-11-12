@@ -92,7 +92,7 @@
   var IQ = null, iqPend = {};
   function refreshIq(fresh) {
     if (!token) return;
-    api({ action: 'iq.state', fresh: fresh === true }).then(function (j) { IQ = j; if (!busy() && !Object.keys(iqPend).some(function (k) { return iqPend[k].timer; })) render(); }).catch(function () { if (!IQ) IQ = { error: true }; });
+    api({ action: 'iq.state', fresh: fresh === true }).then(function (j) { IQ = j; if (!sheet.hidden && sheet.dataset.view === 'timers' && !TED) renderTimers(); if (!busy() && !Object.keys(iqPend).some(function (k) { return iqPend[k].timer; })) render(); }).catch(function () { if (!IQ) IQ = { error: true }; });
   }
   function iqVal(dev, key, base) { var p = iqPend[dev + ':' + key]; return p && p.until > Date.now() ? p.v : base; }
   function iqSend(dev, key, value, msg) {
@@ -121,7 +121,8 @@
       '<button class="ctl tog' + (boost ? ' is-on' : '') + '" data-iq-tog="exo:boost"' + (off ? ' disabled' : '') + '><small>Boost' + (boost && x.boostTime ? ' · ' + esc(x.boostTime) : '') + '</small><span class="sw"></span></button>' +
       '<button class="ctl tog' + (pump ? ' is-on' : '') + '" data-iq-tog="exo:pump"' + (off ? ' disabled' : '') + '><small>Filtration</small><span class="sw"></span></button>' +
       '</div>' +
-      (progs.length ? '<div class="pool-sched">' + icon('cal') + '<span>' + Object.keys(byKind).map(function (k) { return '<b>' + esc(k) + '</b> ' + esc(byKind[k].join(' · ')); }).join('<br>') + '</span></div>' : '') +
+      '<button class="pool-sched" data-timers>' + icon('cal') + '<span>' + (progs.length ? Object.keys(byKind).map(function (k) { return '<b>' + esc(k) + '</b> ' + esc(byKind[k].join(' · ')); }).join('<br>') : 'Aucun programme actif') +
+      '</span><span class="pool-edit">Programmes' + icon('down') + '</span></button>' +
       '</div>';
   }
   function poolHpHTML(it) {
@@ -422,10 +423,56 @@
     if (view === 'cams') { loadCams(true); loadImou(false); renderCams(); }
     else if (view === 'rec') renderRec();
     else if (view === 'energy') renderEnergy();
+    else if (view === 'timers') renderTimers();
     else renderSettings();
   }
   function closeSheet() {
-    sheet.hidden = true; sheet.innerHTML = ''; liveCam = null; liveHd = true; REC = null; ENG = null; document.body.classList.remove('noscroll');
+    sheet.hidden = true; sheet.innerHTML = ''; liveCam = null; liveHd = true; REC = null; ENG = null; TED = null; document.body.classList.remove('noscroll');
+  }
+
+  // ---------- Programmes (timers) de l'électrolyseur eXO, comme dans iAquaLink ----------
+  var TED = null; // timer en cours de modification : { sch, start, end, rpm }
+  var TGROUPS = [['Timers 1', ['sch5', 'sch1']], ['Timers 2', ['sch6', 'sch2']], ['Timers 3', ['sch7']], ['Timers 4', ['sch8']], ['Timer Aux 1', ['sch9']], ['Timer Aux 2', ['sch10']]];
+  var TNAME = { sch5: 'Filtration 1', sch6: 'Filtration 2', sch7: 'Filtration 3', sch8: 'Filtration 4', sch1: 'Électrolyseur 1', sch2: 'Électrolyseur 2', sch9: 'Aux 1', sch10: 'Aux 2' };
+  function tByKey() { var m = {}; ((IQ && IQ.exo && IQ.exo.schedules) || []).forEach(function (s) { m[s.key] = s; }); return m; }
+  function renderTimers() {
+    var S = tByKey(), h = '<div class="sh-hd"><h2>Programmes</h2><button class="close" data-close aria-label="Fermer">×</button></div>';
+    if (!IQ || !IQ.exo) { sheet.innerHTML = '<div class="sh-in">' + h + '<p class="muted">Lecture de l\'électrolyseur…</p></div>'; return; }
+    h += '<p class="note-q">Touche un programme pour le modifier. Mettre la même heure de début et de fin (00:00 – 00:00) le désactive.</p>';
+    TGROUPS.forEach(function (g) {
+      h += '<h3>' + esc(g[0]) + '</h3><div class="evlist">';
+      g[1].forEach(function (k) {
+        var s = S[k]; if (!s) return;
+        var open = TED && TED.sch === k;
+        h += '<button class="tm' + (s.enabled ? ' on' : '') + (open ? ' open' : '') + '" data-tm="' + k + '"><span><b>' + esc(TNAME[k]) + '</b><small>' +
+          (s.enabled ? esc(s.start) + ' – ' + esc(s.end) + (s.active ? ' · en cours' : '') : 'Désactivé') + '</small></span>' +
+          (s.rpm ? '<span class="tm-rpm">' + s.rpm + ' tr/min</span>' : '<span></span>') + icon('down') + '</button>';
+        if (open) {
+          h += '<div class="ted"><div class="ted-row"><label for="ted-start">Début</label><input id="ted-start" type="time" value="' + esc(TED.start) + '"></div>' +
+            '<div class="ted-row"><label for="ted-end">Fin</label><input id="ted-end" type="time" value="' + esc(TED.end) + '"></div>' +
+            (TED.rpm != null ? '<div class="ted-row"><label>Vitesse pompe</label><div class="stp"><button data-ted-rpm="-100" aria-label="Moins">−</button><b id="ted-rpm">' + TED.rpm + '</b><button data-ted-rpm="100" aria-label="Plus">+</button></div></div>' : '') +
+            '<div class="ted-btns"><button class="act" data-ted-off>Désactiver</button><button class="act primary" data-ted-save>Enregistrer</button></div></div>';
+        }
+      });
+      h += '</div>';
+    });
+    var keep = sheet.scrollTop;
+    sheet.innerHTML = '<div class="sh-in">' + h + '</div>';
+    sheet.scrollTop = keep;
+  }
+  function saveTimer(start, end) {
+    var t = TED; if (!t) return;
+    var body = { action: 'iq.sched', sch: t.sch, start: start, end: end };
+    if (t.rpm != null) body.rpm = t.rpm;
+    toast('Envoi du programme…');
+    api(body).then(function () {
+      // affichage immédiat, puis relecture de l'état réel
+      var s = tByKey()[t.sch]; if (s) { s.start = start; s.end = end; s.enabled = start !== end; if (t.rpm != null) s.rpm = t.rpm; }
+      TED = null; renderTimers(); render();
+      toast(TNAME[t.sch] + (start === end ? ' désactivé' : ' : ' + start + ' – ' + end));
+      setTimeout(function () { refreshIq(true); }, 5000);
+      setTimeout(function () { refreshIq(true); if (!sheet.hidden && sheet.dataset.view === 'timers' && !TED) renderTimers(); }, 15000);
+    }).catch(function (e) { toast(e.status === 403 ? 'Horaire invalide' : 'iAquaLink ne répond pas, réessaie', true); });
   }
   function camCardHTML(c) {
     var live = liveCam === c.id && c.live;
@@ -706,6 +753,7 @@
       }); });
       return render();
     }
+    if (e.target.closest('[data-timers]')) { TED = null; sheet.scrollTop = 0; openSheet('timers'); refreshIq(true); return; }
     if ((b = e.target.closest('[data-iq-step]'))) {
       var ps = b.dataset.iqStep.split(':'); return iqStep(ps[0], ps[1], parseFloat(ps[2]));
     }
@@ -749,6 +797,23 @@
     if (e.target.closest('[data-hd]')) { liveHd = !liveHd; return renderCams(); }
     if ((b = e.target.closest('[data-rec]'))) return openRec(b.dataset.rec);
     if ((b = e.target.closest('[data-entab]'))) { ENG.tab = b.dataset.entab; return renderEnergy(); }
+    if ((b = e.target.closest('[data-tm]'))) {
+      var k = b.dataset.tm, s = tByKey()[k];
+      if (TED && TED.sch === k) TED = null;
+      else TED = { sch: k, start: s.enabled ? s.start : '08:00', end: s.enabled ? s.end : '10:00', rpm: s.rpm || null };
+      return renderTimers();
+    }
+    if ((b = e.target.closest('[data-ted-rpm]'))) {
+      TED.rpm = Math.max(600, Math.min(3450, TED.rpm + parseInt(b.dataset.tedRpm, 10)));
+      var rb = document.getElementById('ted-rpm'); if (rb) rb.textContent = TED.rpm; return;
+    }
+    if (e.target.closest('[data-ted-off]')) return saveTimer('00:00', '00:00');
+    if (e.target.closest('[data-ted-save]')) {
+      var st = (document.getElementById('ted-start') || {}).value, en = (document.getElementById('ted-end') || {}).value;
+      if (!/^\d\d:\d\d$/.test(st || '') || !/^\d\d:\d\d$/.test(en || '')) return toast('Choisis une heure de début et de fin', true);
+      if (st === en) return toast('Le début et la fin sont identiques : utilise « Désactiver »', true);
+      return saveTimer(st, en);
+    }
     if ((b = e.target.closest('[data-enstep]'))) return stepEnergy(+b.dataset.enstep);
     if (e.target.closest('[data-recback]')) { REC = null; sheet.dataset.view = 'cams'; sheet.scrollTop = 0; return renderCams(); }
     if ((b = e.target.closest('[data-recday]'))) { REC.date = b.dataset.recday; REC.list = null; return loadRec(); }

@@ -1,7 +1,18 @@
 {
-  "version": "1.8.0",
+  "version": "1.9.0",
   "date": "2026-11-12",
   "releases": [
+    {
+      "version": "1.9.0",
+      "date": "2026-11-12",
+      "time": "18:03",
+      "title": "Programmes de l’électrolyseur",
+      "changes": [
+        "Écran Programmes comme dans iAquaLink : Timers 1 à 4 (Filtration + Électrolyseur), Aux 1 et 2",
+        "Modifier l’heure de début et de fin, la vitesse de la pompe (tr/min), désactiver un programme",
+        "Accès depuis le panneau Électrolyseur eXO (bouton Programmes)"
+      ]
+    },
     {
       "version": "1.8.0",
       "date": "2026-11-12",
@@ -189,7 +200,7 @@
     "Smart Life : sauna (marche/arrêt) et compteurs électrolyseur + pompe à chaleur",
     "Enregistrements : carte SD des caméras Imou (7 jours) et clips des événements Presence",
     "Consommation électrique : électrolyseur, pompe à chaleur et sauna (jour, mois, année)",
-    "iAquaLink : électrolyseur eXO (chloration, pH, Boost, filtration) et pompe à chaleur Zodiac (consigne, marche/arrêt)"
+    "iAquaLink : électrolyseur eXO (chloration, pH, Boost, filtration, programmes) et pompe à chaleur Zodiac (consigne, marche/arrêt)"
   ],
   "todo": [
     "Tester la vidéo en direct sur iPhone (Imou et Netatmo)",
@@ -198,9 +209,8 @@
     "Révoquer les codes d'accès partagés pendant la mise en place (eedomus, n8n, Netatmo, Imou, Tuya, iAquaLink)",
     "Tuya : prolongation demandée le 12/11/2026, en attente de validation (essai actuel jusqu'au 12/12/2026 à 16:47)",
     "Option : demander à Tuya le service « Statistiques » pour récupérer l'historique d'avant le 12/11/2026",
-    "Tester les réglages iAquaLink depuis l’appli (chloration, pH, Boost, filtration)",
-    "Pompe à chaleur Zodiac hors ligne depuis le 27/09 : à retester quand elle sera rallumée",
-    "Option : modifier les programmes de filtration depuis l’appli"
+    "Tester les réglages iAquaLink depuis l’appli (chloration, pH, Boost, filtration, programmes)",
+    "Pompe à chaleur Zodiac hors ligne depuis le 27/09 : à retester quand elle sera rallumée"
   ],
-  "time": "17:58"
+  "time": "18:03"
 }
