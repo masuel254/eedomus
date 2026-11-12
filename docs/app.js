@@ -12,7 +12,6 @@
   if (m) {
     store.set('maison.token', m[1]);
     var nm = location.hash.match(/n=([^&]+)/); if (nm) store.set('maison.name', decodeURIComponent(nm[1]));
-    history.replaceState(null, '', location.pathname);
   }
   var userName = store.get('maison.name') || '';
 
