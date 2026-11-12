@@ -1,7 +1,16 @@
 {
-  "version": "1.4.1",
+  "version": "1.4.2",
   "date": "2026-11-12",
   "releases": [
+    {
+      "version": "1.4.2",
+      "date": "2026-11-12",
+      "time": "17:20",
+      "title": "Suivi Tuya",
+      "changes": [
+        "Rappel mis à jour : prolongation de l’essai Tuya demandée, en attente de validation"
+      ]
+    },
     {
       "version": "1.4.1",
       "date": "2026-11-12",
@@ -117,8 +126,8 @@
     "Surveiller la consommation vidéo Imou (2 Go gratuits)",
     "État réel de la porte de garage (pas de capteur d'ouverture aujourd'hui)",
     "Révoquer les codes d'accès partagés pendant la mise en place (eedomus, n8n, Netatmo, Imou, Tuya)",
-    "Prolonger l'essai gratuit Tuya avant le 12/12/2026 à 16:47 (iot.tuya.com › Cloud › Cloud Services › IoT Core)",
+    "Tuya : prolongation demandée le 12/11/2026, en attente de validation (essai actuel jusqu'au 12/12/2026 à 16:47)",
     "Consommation du jour en kWh pour la piscine et le sauna"
   ],
-  "time": "17:02"
+  "time": "17:20"
 }
