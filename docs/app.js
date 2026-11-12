@@ -1,4 +1,4 @@
-/* Maison — appli de pilotage eedomus (PWA).
+/* Maison — appli de pilotage eedomus + Netatmo (PWA).
    Le jeton d'accès n'est jamais dans le code : il est déposé une fois sur le téléphone
    via le lien d'installation (#k=...) et gardé dans le stockage local de l'iPhone. */
 (function () {
@@ -16,11 +16,16 @@
   var userName = store.get('maison.name') || '';
 
   var token = store.get('maison.token');
-  var CFG = null, STATES = {}, lastOk = 0, offline = false;
+  var CFG = null, LOG = null, STATES = {}, lastOk = 0, offline = false;
+  var NT = null, ntErr = false, ntRoom = store.get('maison.ntRoom') || '';
+  var ntPend = null;           // { room, temp, timer } : consigne en cours de réglage
+  var CAMS = null, camsAt = 0, camsLoading = false, liveCam = null;
   var openRoom = store.get('maison.open') || 'salon';
+  var newVersion = false;
   var pending = {};            // id -> { value, until } : affichage immédiat avant confirmation
   var app = document.getElementById('app');
   var dock = document.getElementById('dock');
+  var sheet = document.getElementById('sheet');
   var toastEl = document.getElementById('toast'), toastT;
 
   // ---------- Outils ----------
@@ -32,16 +37,19 @@
     var s = STATES[id]; return s ? String(s.value) : undefined;
   }
   function num(id) { var v = parseFloat(val(id)); return isNaN(v) ? null : v; }
-  function fmt(n, d) { return n == null ? '—' : n.toFixed(d == null ? 1 : d).replace('.', ','); }
+  function fmt(n, d) { return n == null || isNaN(n) ? '—' : Number(n).toFixed(d == null ? 1 : d).replace('.', ','); }
+  function hhmm(ts) { return new Date(ts * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }); }
+  function dateFr(iso) { var d = new Date(iso + 'T12:00:00'); return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }); }
   function toast(msg, err) {
     toastEl.textContent = msg; toastEl.className = 'toast' + (err ? ' err' : ''); toastEl.hidden = false;
-    clearTimeout(toastT); toastT = setTimeout(function () { toastEl.hidden = true; }, 2200);
+    clearTimeout(toastT); toastT = setTimeout(function () { toastEl.hidden = true; }, 2400);
   }
   function ago(t) {
     var s = Math.round((Date.now() - t) / 1000);
     if (s < 10) return "à l'instant"; if (s < 60) return 'il y a ' + s + ' s';
     return 'il y a ' + Math.round(s / 60) + ' min';
   }
+  function busy() { return document.querySelector('.confirming, .armed-confirm'); }
 
   // ---------- API (n8n) ----------
   function api(body) {
@@ -58,11 +66,23 @@
   function refresh() {
     if (refreshing || !token) return; refreshing = true;
     api({ action: 'state' }).then(function (j) {
-      STATES = j.states; lastOk = Date.now(); offline = false; if (!document.querySelector('.confirming, .armed-confirm')) render();
+      STATES = j.states; lastOk = Date.now(); offline = false; if (!busy()) render();
     }).catch(function (e) {
       if (e.status === 401) { token = null; return setup(); }
       offline = true; render();
     }).then(function () { refreshing = false; });
+  }
+  function refreshHeating() {
+    if (!token) return;
+    api({ action: 'nt.heating' }).then(function (j) { NT = j; ntErr = false; if (!busy()) render(); })
+      .catch(function () { ntErr = true; if (!NT) render(); });
+  }
+  function loadCams(force) {
+    if (camsLoading || (!force && CAMS && Date.now() - camsAt < 60000)) return;
+    camsLoading = true;
+    api({ action: 'nt.cameras', fresh: !!force }).then(function (j) { CAMS = j; camsAt = Date.now(); })
+      .catch(function () { if (!CAMS) CAMS = { error: true, cameras: [], events: [] }; })
+      .then(function () { camsLoading = false; if (!busy()) render(); if (!sheet.hidden && sheet.dataset.view === 'cams') renderCams(); });
   }
   function send(id, value, opts) {
     opts = opts || {};
@@ -82,6 +102,10 @@
   function shutterPos(id) { var v = num(id); if (v == null) return null; if (v === 240) return 'stop'; if (v >= 99) return 'up'; if (v <= 0) return 'down'; return 'part'; }
   function doorOpen(id) { var v = val(id); return v !== undefined && v !== '0'; }
   function alarmArmed() { var v = val(CFG.status.alarm); return v !== undefined && v !== '0'; }
+  function ntCurrentRoom() {
+    if (!NT || !NT.rooms || !NT.rooms.length) return null;
+    return NT.rooms.filter(function (r) { return String(r.id) === String(ntRoom); })[0] || NT.rooms[0];
+  }
 
   function marks(room) {
     var h = '', lights = [], sh = [], doors = [];
@@ -103,10 +127,11 @@
       var open = doors.filter(function (d) { return doorOpen(d.id); }).length;
       h += open ? '<span class="mark bad">' + icon('door') + 'Porte ouverte</span>' : '<span class="mark d">' + icon('door') + 'Fermée</span>';
     }
+    if (room.camera && CAMS && CAMS.cameras && CAMS.cameras.length) h += '<span class="mark">' + icon('cam') + CAMS.cameras.length + ' caméras</span>';
     return '<span class="marks">' + h + '</span>';
   }
 
-  // ---------- Rendu ----------
+  // ---------- Rendu : lignes des pièces ----------
   function rowHTML(it) {
     var id = it.id;
     if (it.type === 'light' || it.type === 'switch') {
@@ -144,25 +169,54 @@
     return '';
   }
 
+  // ---------- Rendu : chauffage (Netatmo) ----------
+  var MODE_LABEL = { schedule: 'Planning', home: 'Planning', manual: 'Manuel', max: 'Boost', away: 'Absent', hg: 'Hors-gel', off: 'Arrêt' };
   function heroHTML() {
-    var h = CFG.heating, t = num(h.roomTemp);
-    var pct = t == null ? 0 : Math.max(0, Math.min(1, (t - 10) / 20));
-    var arc = (pct * 377).toFixed(1);
+    var h = CFG.heating;
+    var row3 = '<div class="row3"><span><b>' + fmt(num(h.outside), 1) + '°</b>Dehors</span><span><b>' + fmt(num(h.humidity), 0) + ' %</b>Humidité</span>';
+    var r = ntCurrentRoom();
+    if (!r) {
+      var t0 = num(h.roomTemp);
+      return '<section class="hero" aria-label="Chauffage"><div class="hero-top"><span>Chauffage</span><span class="badge soon">' + icon('flame') + (ntErr ? 'Netatmo indisponible' : 'Connexion…') + '</span></div>' +
+        ring(t0, null, '<small>Intérieur</small>') + row3 + '<span><b>' + fmt(num(h.upstairs), 1) + '°</b>Étage</span></div></section>';
+    }
+    var sp = ntPend && String(ntPend.room) === String(r.id) ? ntPend.temp : r.setpoint;
+    var heatingRooms = NT.rooms.filter(function (x) { return x.heating; }).length;
+    var modeTxt = (MODE_LABEL[r.mode] || 'Planning') + (r.mode === 'manual' && r.end ? " jusqu'à " + hhmm(r.end) : '');
+    var chips = NT.rooms.map(function (x) {
+      return '<button class="rchip' + (x.id === r.id ? ' on' : '') + (x.heating ? ' heat' : '') + '" data-ntroom="' + esc(x.id) + '">' + esc(x.name) + ' <span>' + fmt(x.temp, 1) + '°</span></button>';
+    }).join('');
+    var homeMode = NT.mode || 'schedule';
     return '<section class="hero" aria-label="Chauffage">' +
-      '<div class="hero-top"><span>Chauffage · ' + esc(h.room) + '</span><span class="badge soon">' + icon('flame') + 'Netatmo bientôt</span></div>' +
-      '<div class="ring"><svg viewBox="0 0 190 190" aria-hidden="true">' +
-      '<circle cx="95" cy="95" r="80" fill="none" stroke="#262B32" stroke-width="11" stroke-linecap="round" stroke-dasharray="377 503"/>' +
-      '<circle cx="95" cy="95" r="80" fill="none" stroke="#FF8A5B" stroke-width="11" stroke-linecap="round" stroke-dasharray="' + arc + ' 503"/></svg>' +
-      '<div class="v"><b>' + fmt(t, 1) + '°</b><small>Intérieur</small></div></div>' +
-      '<div class="row3"><span><b>' + fmt(num(h.outside), 1) + '°</b>Dehors</span><span><b>' + fmt(num(h.humidity), 0) + ' %</b>Humidité</span><span><b>' + fmt(num(h.upstairs), 1) + '°</b>Étage</span></div>' +
+      '<div class="hero-top"><span>Chauffage · ' + esc(r.name) + '</span>' +
+      (r.heating ? '<span class="badge heat">' + icon('flame') + 'Chauffe</span>' : '<span class="badge soon">' + icon('flame') + 'Au repos</span>') + '</div>' +
+      '<div class="dial"><button class="step" data-nt-step="-0.5" aria-label="Baisser la consigne">−</button>' +
+      ring(r.temp, sp, '<em id="ntsp">Consigne ' + fmt(sp, 1) + '°</em><small>' + esc(modeTxt) + '</small>') +
+      '<button class="step" data-nt-step="0.5" aria-label="Monter la consigne">+</button></div>' +
+      (r.mode === 'manual' || r.mode === 'max' ? '<button class="back" data-nt-home>Revenir au planning</button>' : '') +
+      '<div class="rchips">' + chips + '</div>' +
+      '<div class="modes">' +
+      '<button class="' + (homeMode === 'schedule' ? 'on' : '') + '" data-nt-mode="schedule">Planning</button>' +
+      '<button class="' + (homeMode === 'away' ? 'on' : '') + '" data-nt-mode="away" data-confirm><span>Absent</span></button>' +
+      '<button class="' + (homeMode === 'hg' ? 'on' : '') + '" data-nt-mode="hg" data-confirm><span>Hors-gel</span></button></div>' +
+      row3 + '<span><b>' + heatingRooms + '</b>' + (heatingRooms > 1 ? 'Pièces chauffent' : 'Pièce chauffe') + '</span></div>' +
       '</section>';
+  }
+  function ring(temp, setpoint, sub) {
+    var pct = setpoint != null ? (setpoint - 7) / 23 : temp == null ? 0 : (temp - 10) / 20;
+    var arc = (Math.max(0, Math.min(1, pct)) * 377).toFixed(1);
+    return '<div class="ring"><svg viewBox="0 0 190 190" aria-hidden="true">' +
+      '<circle cx="95" cy="95" r="80" fill="none" stroke="#262B32" stroke-width="11" stroke-linecap="round" stroke-dasharray="377 503"/>' +
+      '<circle id="ntarc" cx="95" cy="95" r="80" fill="none" stroke="#FF8A5B" stroke-width="11" stroke-linecap="round" stroke-dasharray="' + arc + ' 503"/></svg>' +
+      '<div class="v"><b>' + fmt(temp, 1) + '°</b>' + sub + '</div></div>';
   }
 
   function chipsHTML() {
     var s = CFG.status;
     var openDoors = s.doors.filter(doorOpen).length;
     var armed = alarmArmed();
-    var home = s.people.filter(function (id) { var v = val(id); return v !== undefined && v !== '0'; }).map(function (id) { return String((STATES[id] && STATES[id].text) || '').replace(/s+(pr[ée]sente?|absente?)$/i, ''); }).filter(Boolean);
+    var home = s.people.filter(function (id) { var v = val(id); return v !== undefined && v !== '0'; })
+      .map(function (id) { return String((STATES[id] && STATES[id].text) || '').replace(/\s+(pr[ée]sente?|absente?)$/i, ''); }).filter(Boolean);
     return '<div class="chips">' +
       '<span class="chip' + (openDoors ? ' bad' : '') + '"><span class="d"></span>' + (openDoors ? openDoors + ' porte' + (openDoors > 1 ? 's' : '') + ' ouverte' + (openDoors > 1 ? 's' : '') : 'Portes fermées') + '</span>' +
       '<button class="chip' + (armed ? ' armed' : '') + '" data-alarm data-confirm>' + icon('shield') + '<span>' + (armed ? 'Alarme activée' : 'Alarme désactivée') + '</span></button>' +
@@ -170,13 +224,23 @@
       '</div>';
   }
 
+  function camPreviewHTML() {
+    if (!CAMS) return '<div class="cam"><div>' + icon('cam') + '<br>Chargement des caméras…</div></div>';
+    if (!CAMS.cameras || !CAMS.cameras.length) return '<div class="cam"><div>' + icon('cam') + '<br>Caméras indisponibles</div></div>';
+    return '<div class="camstrip">' + CAMS.cameras.map(function (c) {
+      return '<button class="camthumb" data-opencams="' + esc(c.id) + '">' + (c.snapshot ? '<img alt="" src="' + esc(c.snapshot) + '?t=' + camsAt + '">' : '') +
+        '<span class="cname">' + esc(c.name) + '</span>' + (c.on ? '<span class="pill">LIVE</span>' : '<span class="pill off">Éteinte</span>') + '</button>';
+    }).join('') + '</div>';
+  }
+
   function roomsHTML() {
     return CFG.groups.map(function (g) {
       return '<div class="sec-hd"><h2>' + esc(g.name) + '</h2></div><div class="acc">' + g.rooms.map(function (r) {
         var o = r.id === openRoom, t = r.temp ? num(r.temp) : null;
+        if (o && r.camera) loadCams(false);
         return '<div class="acc-item' + (o ? ' open' : '') + '" id="room-' + r.id + '"><button class="acc-head" data-room="' + r.id + '" aria-expanded="' + o + '">' +
           '<span><b>' + esc(r.name) + '</b>' + marks(r) + '</span><span class="temp">' + (t == null ? '' : fmt(t, 1) + '°') + '</span><span class="chev">' + icon('down') + '</span></button>' +
-          (o ? '<div class="acc-body">' + (r.camera ? '<div class="cam"><div>' + icon('cam') + '<br>Caméra Netatmo<br>branchement à venir</div></div>' : '') + r.items.map(rowHTML).join('') + '</div>' : '') +
+          (o ? '<div class="acc-body">' + (r.camera ? camPreviewHTML() : '') + r.items.map(rowHTML).join('') + '</div>' : '') +
           '</div>';
       }).join('') + '</div>';
     }).join('');
@@ -185,15 +249,17 @@
   function render() {
     if (!CFG || !token) return;
     var d = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+    var y = window.scrollY;
     app.innerHTML =
       '<header class="hd"><div><small>' + esc(d.charAt(0).toUpperCase() + d.slice(1)) + '</small><h1>Bonjour' + (userName ? ' ' + esc(userName) : '') + '</h1></div>' +
-      '<div class="sync' + (offline ? ' off' : '') + '"><i></i>' + (offline ? 'Hors ligne' : lastOk ? ago(lastOk) : '…') + '</div></header>' +
+      '<div class="hd-r"><div class="sync' + (offline ? ' off' : '') + '"><i></i>' + (offline ? 'Hors ligne' : lastOk ? ago(lastOk) : '…') + '</div>' +
+      '<button class="gear' + (newVersion ? ' dot' : '') + '" data-settings aria-label="Réglages">' + icon('gear') + '</button></div></header>' +
       heroHTML() + chipsHTML() + roomsHTML() +
-      '<div class="foot">Maison · eedomus' + (lastOk ? ' · mis à jour ' + ago(lastOk) : '') + '</div>';
-    var armed = alarmArmed();
+      '<button class="foot" data-settings>Maison v' + esc(LOG ? LOG.version : '…') + (lastOk ? ' · mis à jour ' + ago(lastOk) : '') + '</button>';
+    window.scrollTo(0, y);
     dock.hidden = false;
     var da = dock.querySelector('[data-dock="alarm"]');
-    if (!da.classList.contains('armed-confirm')) da.classList.toggle('armed', armed);
+    if (!da.classList.contains('armed-confirm')) da.classList.toggle('armed', alarmArmed());
   }
 
   function setup() {
@@ -201,7 +267,60 @@
     app.innerHTML = '<div class="setup"><h1>Maison</h1><p>Cette appli n\'est pas encore reliée à ta maison. Ouvre le lien d\'installation (QR code) depuis cet iPhone.</p></div>';
   }
 
-  // ---------- Confirmation en deux temps (portail, garage, alarme) ----------
+  // ---------- Panneaux plein écran : caméras et réglages ----------
+  function openSheet(view) {
+    sheet.dataset.view = view; sheet.hidden = false; document.body.classList.add('noscroll');
+    if (view === 'cams') { loadCams(true); renderCams(); } else renderSettings();
+  }
+  function closeSheet() {
+    sheet.hidden = true; sheet.innerHTML = ''; liveCam = null; document.body.classList.remove('noscroll');
+  }
+  var EV = { human: 'Personne', vehicle: 'Véhicule', animal: 'Animal', movement: 'Mouvement', outdoor: 'Mouvement', person: 'Personne' };
+  function renderCams() {
+    var h = '<div class="sh-hd"><h2>Caméras</h2><button class="close" data-close aria-label="Fermer">×</button></div>';
+    if (!CAMS) h += '<p class="muted">Chargement…</p>';
+    else if (!CAMS.cameras.length) h += '<p class="muted">Aucune caméra disponible pour le moment.</p>';
+    else {
+      h += CAMS.cameras.map(function (c) {
+        var live = liveCam === c.id && c.live;
+        return '<div class="camcard">' +
+          (live ? '<video id="v-' + esc(c.id) + '" src="' + esc(c.live) + '" autoplay muted playsinline controls></video>'
+            : '<button class="camimg" data-live="' + esc(c.id) + '">' + (c.snapshot ? '<img alt="" src="' + esc(c.snapshot) + '?t=' + Date.now() + '">' : '') +
+              '<span class="play">' + icon('play') + 'Voir en direct</span></button>') +
+          '<div class="cammeta"><b>' + esc(c.name) + '</b><span class="' + (c.on ? 'ok' : 'bad') + '">' + (c.on ? 'En ligne' : 'Éteinte') + '</span></div></div>';
+      }).join('');
+      var names = {}; CAMS.cameras.forEach(function (c) { names[c.id] = c.name; });
+      h += '<h3>Derniers événements</h3>';
+      h += CAMS.events.length ? '<div class="evlist">' + CAMS.events.map(function (e) {
+        var day = new Date(e.time * 1000), today = new Date().toDateString() === day.toDateString();
+        return '<div class="ev">' + (e.snapshot ? '<img alt="" loading="lazy" src="' + esc(e.snapshot) + '">' : '<span class="evic">' + icon('cam') + '</span>') +
+          '<span><b>' + esc(EV[e.type] || 'Événement') + '</b><small>' + esc(names[e.camera] || '') + '</small></span>' +
+          '<span class="evt">' + (today ? '' : day.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) + ' ') + hhmm(e.time) + '</span></div>';
+      }).join('') + '</div>' : '<p class="muted">Aucun événement récent.</p>';
+    }
+    sheet.innerHTML = '<div class="sh-in">' + h + '</div>';
+    var v = liveCam && document.getElementById('v-' + liveCam);
+    if (v) v.addEventListener('error', function () { toast('La vidéo en direct s\'ouvre dans Safari sur iPhone', true); });
+  }
+  function renderSettings() {
+    var L = LOG || { version: '—', releases: [], works: [], todo: [] };
+    var h = '<div class="sh-hd"><h2>Réglages</h2><button class="close" data-close aria-label="Fermer">×</button></div>' +
+      '<div class="card ver"><div><b>Maison</b><small>Version ' + esc(L.version) + (L.date ? ' · ' + esc(dateFr(L.date)) : '') + '</small></div>' +
+      '<button class="act" data-update>Vérifier</button></div>' +
+      '<div class="card"><div class="kv"><span>Connecté en tant que</span><b>' + esc(userName || '—') + '</b></div>' +
+      '<div class="kv"><span>Box eedomus</span><b class="' + (offline ? 'bad' : 'ok') + '">' + (offline ? 'Hors ligne' : lastOk ? 'Connectée' : '…') + '</b></div>' +
+      '<div class="kv"><span>Netatmo</span><b class="' + (NT ? 'ok' : ntErr ? 'bad' : '') + '">' + (NT ? 'Connecté' : ntErr ? 'Indisponible' : '…') + '</b></div></div>' +
+      '<h3>Ce qui fonctionne</h3><ul class="lst ok">' + L.works.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' +
+      '<h3>Reste à faire</h3><ul class="lst todo">' + L.todo.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' +
+      '<h3>Historique des versions</h3>' + L.releases.map(function (r, i) {
+        return '<div class="rel"><div class="rel-hd"><b>v' + esc(r.version) + '</b>' + (i === 0 ? '<span class="new">Actuelle</span>' : '') + '<small>' + esc(dateFr(r.date)) + '</small></div>' +
+          '<p>' + esc(r.title) + '</p><ul>' + r.changes.map(function (c) { return '<li>' + esc(c) + '</li>'; }).join('') + '</ul></div>';
+      }).join('');
+    sheet.innerHTML = '<div class="sh-in">' + h + '</div>';
+    if (newVersion) { newVersion = false; store.set('maison.seenVersion', L.version); render(); }
+  }
+
+  // ---------- Confirmation en deux temps (portail, garage, alarme, modes) ----------
   function confirmed(btn) {
     if (!btn.hasAttribute('data-confirm')) return true;
     if (btn._armed) { clearTimeout(btn._armed); btn._armed = null; btn.classList.remove('confirming', 'armed-confirm'); return true; }
@@ -212,9 +331,40 @@
     return false;
   }
 
+  // ---------- Chauffage : réglage de la consigne ----------
+  function stepSetpoint(delta) {
+    var r = ntCurrentRoom(); if (!r) return;
+    var base = ntPend && String(ntPend.room) === String(r.id) ? ntPend.temp : (r.setpoint || 19);
+    var t = Math.max(7, Math.min(30, Math.round((base + delta) * 2) / 2));
+    if (ntPend) clearTimeout(ntPend.timer);
+    ntPend = { room: r.id, temp: t, timer: setTimeout(function () { commitSetpoint(r, t); }, 1200) };
+    var el = document.getElementById('ntsp'); if (el) el.textContent = 'Consigne ' + fmt(t, 1) + '°';
+    var arc = document.getElementById('ntarc'); if (arc) arc.setAttribute('stroke-dasharray', ((t - 7) / 23 * 377).toFixed(1) + ' 503');
+  }
+  function commitSetpoint(r, t) {
+    api({ action: 'nt.setpoint', room: r.id, temp: t }).then(function (j) {
+      NT = j; ntPend = null; render(); toast(r.name + ' : ' + fmt(t, 1) + '° (manuel)');
+    }).catch(function () { ntPend = null; render(); toast('Netatmo ne répond pas, réessaie', true); });
+  }
+
   // ---------- Interactions ----------
   app.addEventListener('click', function (e) {
     var b;
+    if ((b = e.target.closest('[data-settings]'))) return openSheet('settings');
+    if ((b = e.target.closest('[data-opencams]'))) { liveCam = b.dataset.opencams; return openSheet('cams'); }
+    if ((b = e.target.closest('[data-ntroom]'))) { ntRoom = b.dataset.ntroom; store.set('maison.ntRoom', ntRoom); ntPend = null; return render(); }
+    if ((b = e.target.closest('[data-nt-step]'))) return stepSetpoint(parseFloat(b.dataset.ntStep));
+    if ((b = e.target.closest('[data-nt-home]'))) {
+      var r = ntCurrentRoom();
+      return api({ action: 'nt.setpoint', room: r.id, mode: 'home' }).then(function (j) { NT = j; render(); toast(r.name + ' : retour au planning'); })
+        .catch(function () { toast('Netatmo ne répond pas, réessaie', true); });
+    }
+    if ((b = e.target.closest('[data-nt-mode]'))) {
+      if (!confirmed(b)) return;
+      var mode = b.dataset.ntMode;
+      return api({ action: 'nt.mode', mode: mode }).then(function (j) { NT = j; render(); toast('Chauffage : ' + MODE_LABEL[mode]); })
+        .catch(function () { toast('Netatmo ne répond pas, réessaie', true); });
+    }
     if ((b = e.target.closest('[data-room]'))) {
       openRoom = openRoom === b.dataset.room ? '' : b.dataset.room; store.set('maison.open', openRoom); return render();
     }
@@ -233,15 +383,22 @@
       return send(CFG.status.alarm, armed ? 0 : 12, { msg: armed ? 'Alarme désactivée' : 'Alarme activée' });
     }
   });
+  sheet.addEventListener('click', function (e) {
+    var b;
+    if (e.target.closest('[data-close]')) return closeSheet();
+    if ((b = e.target.closest('[data-live]'))) { liveCam = b.dataset.live; return renderCams(); }
+    if (e.target.closest('[data-update]')) {
+      toast('Recherche de mise à jour…');
+      var done = function () { location.reload(); };
+      if (navigator.serviceWorker && navigator.serviceWorker.getRegistration) {
+        navigator.serviceWorker.getRegistration().then(function (reg) { return reg ? reg.update() : null; }).then(done, done);
+      } else done();
+    }
+  });
   dock.addEventListener('click', function (e) {
     var b = e.target.closest('[data-dock]'); if (!b || !CFG) return;
     var k = b.dataset.dock;
-    if (k === 'cam') {
-      var jardin = null;
-      CFG.groups.forEach(function (g) { g.rooms.forEach(function (r) { if (r.camera) jardin = r; }); });
-      if (jardin) { openRoom = jardin.id; render(); var el = document.getElementById('room-' + jardin.id); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
-      return;
-    }
+    if (k === 'cam') { liveCam = null; return openSheet('cams'); }
     if (!confirmed(b)) return;
     if (k === 'gate') return send(CFG.dock.gate, 100, { optimistic: false, msg: 'Portail : ouverture envoyée' });
     if (k === 'garage') return send(CFG.dock.garage, 1, { optimistic: false, msg: 'Garage : ouverture envoyée' });
@@ -254,13 +411,22 @@
   }
 
   // ---------- Démarrage ----------
+  fetch('changelog.json', { cache: 'no-cache' }).then(function (r) { return r.json(); }).then(function (l) {
+    LOG = l;
+    var seen = store.get('maison.seenVersion');
+    if (!seen) store.set('maison.seenVersion', l.version);
+    else if (seen !== l.version) { newVersion = true; setTimeout(function () { toast('Nouvelle version ' + l.version + ' : touche ⚙︎ pour les nouveautés'); }, 1200); }
+    render();
+  }).catch(function () {});
+
   fetch('config.json', { cache: 'no-cache' }).then(function (r) { return r.json(); }).then(function (c) {
     CFG = c;
     if (!token) return setup();
-    render(); refresh();
+    render(); refresh(); refreshHeating();
     setInterval(function () { if (!document.hidden) refresh(); }, 10000);
-    setInterval(function () { if (!document.hidden && lastOk) render(); }, 30000);
-    document.addEventListener('visibilitychange', function () { if (!document.hidden) refresh(); });
+    setInterval(function () { if (!document.hidden && !ntPend) refreshHeating(); }, 30000);
+    setInterval(function () { if (!document.hidden && lastOk && !busy()) render(); }, 30000);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) { refresh(); refreshHeating(); } });
   }).catch(function () { app.innerHTML = '<div class="setup"><h1>Maison</h1><p>Impossible de charger la configuration. Vérifie ta connexion.</p></div>'; });
 
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});

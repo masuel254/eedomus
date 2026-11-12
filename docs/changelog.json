@@ -1,0 +1,53 @@
+{
+  "version": "1.2.0",
+  "date": "2026-11-12",
+  "releases": [
+    {
+      "version": "1.2.0",
+      "date": "2026-11-12",
+      "title": "Chauffage et caméras Netatmo",
+      "changes": [
+        "Chauffage Netatmo réel : 10 pièces, température et consigne en direct",
+        "Réglage de la consigne avec − et + (mode manuel), retour au planning en un geste",
+        "Modes de la maison : Planning, Absent, Hors-gel",
+        "Caméras extérieures Netatmo (Presence et Caméra Extérieure) : photo, vidéo en direct, derniers événements",
+        "Écran Réglages : version, nouveautés et suivi du projet"
+      ]
+    },
+    {
+      "version": "1.1.0",
+      "date": "2026-11-12",
+      "title": "Accès famille",
+      "changes": [
+        "Un QR code d'installation par personne (Sam, Françoise, Adam, Thomas)",
+        "Accueil personnalisé avec le prénom",
+        "Accès révocable personne par personne"
+      ]
+    },
+    {
+      "version": "1.0.0",
+      "date": "2026-11-12",
+      "title": "Première version",
+      "changes": [
+        "Pilotage eedomus : lumières Hue, volets, portail, garage, alarme, sèche-serviettes",
+        "Pièces en liste dépliable, rangées par étage",
+        "État de la maison : portes, alarme, présence",
+        "Températures, piscine (Ondilo) et station météo",
+        "Barre d'icônes : Portail, Garage, Caméra, Alarme (confirmation en deux temps)"
+      ]
+    }
+  ],
+  "works": [
+    "Lumières, volets, portail, garage, alarme et sèche-serviettes (eedomus)",
+    "Températures des pièces, piscine et météo (eedomus)",
+    "Chauffage Netatmo : lecture des 10 pièces, consigne, modes",
+    "Caméras extérieures Netatmo : photo, direct et événements",
+    "Installation sur iPhone pour toute la famille"
+  ],
+  "todo": [
+    "Caméras Imou Life (API officielle Imou à brancher)",
+    "Écran caméras commun Netatmo + Imou",
+    "État réel de la porte de garage (pas de capteur d'ouverture aujourd'hui)",
+    "Révoquer les codes d'accès partagés pendant la mise en place (eedomus, n8n, Netatmo)"
+  ]
+}
