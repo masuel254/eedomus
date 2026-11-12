@@ -240,14 +240,11 @@
 
   function chipsHTML() {
     var s = CFG.status;
-    var openDoors = s.doors.filter(doorOpen).length;
     var armed = alarmArmed();
-    var home = s.people.filter(function (id) { var v = val(id); return v !== undefined && v !== '0'; })
-      .map(function (id) { return String((STATES[id] && STATES[id].text) || '').replace(/\s+(pr[ée]sente?|absente?)$/i, ''); }).filter(Boolean);
+    var n = s.people.filter(function (id) { var v = val(id); return v !== undefined && v !== '0'; }).length;
     return '<div class="chips">' +
-      '<span class="chip' + (openDoors ? ' bad' : '') + '"><span class="d"></span>' + (openDoors ? openDoors + ' porte' + (openDoors > 1 ? 's' : '') + ' ouverte' + (openDoors > 1 ? 's' : '') : 'Portes fermées') + '</span>' +
       '<button class="chip' + (armed ? ' armed' : '') + '" data-alarm data-confirm>' + icon('shield') + '<span>' + (armed ? 'Alarme activée' : 'Alarme désactivée') + '</span></button>' +
-      '<span class="chip">' + icon(home.length ? 'home' : 'leave') + (home.length ? esc(home.join(', ')) + ' à la maison' : 'Personne à la maison') + '</span>' +
+      '<span class="chip' + (n ? ' home' : '') + '">' + icon(n ? 'home' : 'leave') + (n ? n + ' personne' + (n > 1 ? 's' : '') + ' à la maison' : 'Personne à la maison') + '</span>' +
       '</div>';
   }
 
