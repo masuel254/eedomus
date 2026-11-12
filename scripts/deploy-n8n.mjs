@@ -59,6 +59,7 @@ for (const g of cfg.groups) for (const room of g.rooms) {
       case 'garage': allow(it.id, [1, 2]); break;
       case 'action': allow(it.id, [it.value]); break;
       case 'door': case 'sensor': read(it.id); break;
+      case 'tuya-switch': case 'tuya-meter': break; // gérés par la liste blanche Tuya (CFG.tu.switchable)
       default: throw new Error(`Type inconnu: ${it.type}`);
     }
   }
@@ -84,6 +85,11 @@ const CODE_CFG = {
     seed: createHash('sha256').update(env.NETATMO_REFRESH_TOKEN.split('|')[0]).digest('hex').slice(0, 16),
   } : null,
   im: env.IMOU_APP_ID ? { id: env.IMOU_APP_ID, secret: env.IMOU_APP_SECRET } : null,
+  tu: env.TUYA_CLIENT_ID ? {
+    id: env.TUYA_CLIENT_ID, secret: env.TUYA_CLIENT_SECRET, base: 'https://openapi.tuyaeu.com',
+    devices: { sauna: env.TUYA_DEV_SAUNA, pac: env.TUYA_DEV_PAC, elec: env.TUYA_DEV_ELEC },
+    switchable: ['sauna'],
+  } : null,
 };
 
 const code = `
@@ -328,6 +334,118 @@ async function imou(b) {
   throw fail(400, 'unknown_action');
 }
 
+// ---------------- Smart Life / Tuya ----------------
+function sha256Bytes(bytes) {
+  // SHA-256 en JavaScript pur (le module crypto peut être interdit dans le nœud Code de n8n).
+  const K = [0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+  const H = [0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+  const l = bytes.length, withPad = ((l + 9 + 63) >> 6) << 6, m = new Uint8Array(withPad);
+  m.set(bytes); m[l] = 0x80;
+  const bits = l * 8; for (let i = 0; i < 8; i++) m[withPad - 1 - i] = Math.floor(bits / Math.pow(2, 8 * i)) & 0xff;
+  const w = new Array(64);
+  for (let o = 0; o < withPad; o += 64) {
+    for (let i = 0; i < 16; i++) w[i] = (m[o + 4 * i] << 24) | (m[o + 4 * i + 1] << 16) | (m[o + 4 * i + 2] << 8) | m[o + 4 * i + 3];
+    for (let i = 16; i < 64; i++) {
+      const a = w[i - 15], b = w[i - 2];
+      const s0 = ((a >>> 7) | (a << 25)) ^ ((a >>> 18) | (a << 14)) ^ (a >>> 3);
+      const s1 = ((b >>> 17) | (b << 15)) ^ ((b >>> 19) | (b << 13)) ^ (b >>> 10);
+      w[i] = (w[i - 16] + s0 + w[i - 7] + s1) | 0;
+    }
+    let [a, b, c, d, e, f, g, h] = H;
+    for (let i = 0; i < 64; i++) {
+      const S1 = ((e >>> 6) | (e << 26)) ^ ((e >>> 11) | (e << 21)) ^ ((e >>> 25) | (e << 7));
+      const t1 = (h + S1 + ((e & f) ^ (~e & g)) + K[i] + w[i]) | 0;
+      const S0 = ((a >>> 2) | (a << 30)) ^ ((a >>> 13) | (a << 19)) ^ ((a >>> 22) | (a << 10));
+      const t2 = (S0 + ((a & b) ^ (a & c) ^ (b & c))) | 0;
+      h = g; g = f; f = e; e = (d + t1) | 0; d = c; c = b; b = a; a = (t1 + t2) | 0;
+    }
+    H[0] = (H[0] + a) | 0; H[1] = (H[1] + b) | 0; H[2] = (H[2] + c) | 0; H[3] = (H[3] + d) | 0;
+    H[4] = (H[4] + e) | 0; H[5] = (H[5] + f) | 0; H[6] = (H[6] + g) | 0; H[7] = (H[7] + h) | 0;
+  }
+  const out = new Uint8Array(32);
+  H.forEach((v, i) => { out[4 * i] = v >>> 24; out[4 * i + 1] = (v >>> 16) & 0xff; out[4 * i + 2] = (v >>> 8) & 0xff; out[4 * i + 3] = v & 0xff; });
+  return out;
+}
+function utf8(s) { const u = unescape(encodeURIComponent(s)), b = new Uint8Array(u.length); for (let i = 0; i < u.length; i++) b[i] = u.charCodeAt(i); return b; }
+function hex(b) { return Array.from(b).map((x) => x.toString(16).padStart(2, '0')).join(''); }
+function sha256hex(s) { return hex(sha256Bytes(utf8(s))); }
+function hmac256hex(key, msg) {
+  let k = utf8(key); if (k.length > 64) k = sha256Bytes(k);
+  const kp = new Uint8Array(64); kp.set(k);
+  const ip = kp.map((x) => x ^ 0x36), op = kp.map((x) => x ^ 0x5c), mb = utf8(msg);
+  const inner = new Uint8Array(64 + mb.length); inner.set(ip); inner.set(mb, 64);
+  const ih = sha256Bytes(inner), outer = new Uint8Array(96); outer.set(op); outer.set(ih, 64);
+  return hex(sha256Bytes(outer));
+}
+async function tuReq(method, path, token, body) {
+  body = body || '';
+  const t = String(Date.now()), nonce = nonceId();
+  const sts = [method, sha256hex(body), '', path].join(String.fromCharCode(10));
+  const sign = hmac256hex(CFG.tu.secret, CFG.tu.id + (token || '') + t + nonce + sts).toUpperCase();
+  const headers = { client_id: CFG.tu.id, sign, t, nonce, sign_method: 'HMAC-SHA256', 'Content-Type': 'application/json' };
+  if (token) headers.access_token = token;
+  let r;
+  try { r = parse(await helpers.httpRequest({ method, url: CFG.tu.base + path, headers, body: body || undefined, json: false, timeout: 15000 })); }
+  catch (e) { throw fail(502, 'tuya', String(e.message || e)); }
+  return r;
+}
+async function tuToken(force) {
+  SD.tu = SD.tu || {};
+  if (!force && SD.tu.token && SD.tu.exp > Date.now() + 120000) return SD.tu.token;
+  const r = await tuReq('GET', '/v1.0/token?grant_type=1', '', '');
+  if (!r.success) throw fail(502, 'tuya_auth', r.msg);
+  SD.tu.token = r.result.access_token; SD.tu.exp = Date.now() + r.result.expire_time * 1000;
+  return SD.tu.token;
+}
+async function tu(method, path, body, retry) {
+  const r = await tuReq(method, path, await tuToken(false), body);
+  if (!r.success && !retry && (r.code === 1010 || r.code === 1011)) { await tuToken(true); return tu(method, path, body, true); }
+  if (!r.success) throw fail(502, 'tuya', r.code + ' ' + r.msg);
+  return r.result;
+}
+async function tuScales(id) {
+  SD.tuSpec = SD.tuSpec || {};
+  if (SD.tuSpec[id] && SD.tuSpec[id].at > Date.now() - 86400000) return SD.tuSpec[id].s;
+  const spec = await tu('GET', '/v1.0/devices/' + id + '/specifications');
+  const s = {};
+  (spec.status || []).forEach((x) => { try { const v = JSON.parse(x.values); if (v.scale !== undefined) s[x.code] = v.scale; } catch (e) {} });
+  SD.tuSpec[id] = { at: Date.now(), s };
+  return s;
+}
+async function tuState(fresh) {
+  if (!fresh && SD.tuState && SD.tuState.at > Date.now() - 30000) return SD.tuState.data;
+  const keys = Object.keys(CFG.tu.devices).filter((k) => CFG.tu.devices[k]);
+  const ids = keys.map((k) => CFG.tu.devices[k]);
+  const list = await tu('GET', '/v1.0/iot-03/devices/status?device_ids=' + ids.join(','));
+  const devices = {};
+  for (const k of keys) {
+    const id = CFG.tu.devices[k], row = (list || []).find((x) => x.id === id) || { status: [] };
+    const st = {}; (row.status || []).forEach((x) => { st[x.code] = x.value; });
+    const sc = await tuScales(id), sv = (code) => st[code] === undefined ? null : st[code] / Math.pow(10, sc[code] || 0);
+    const d = { on: typeof st.switch === 'boolean' ? st.switch : (typeof st.switch_1 === 'boolean' ? st.switch_1 : null), power: null, voltage: null, current: null, energy: null };
+    if (st.cur_power !== undefined) { d.power = sv('cur_power'); d.voltage = sv('cur_voltage'); d.current = st.cur_current === undefined ? null : sv('cur_current') / 1000; }
+    if (st.phase_a) { try { const p = JSON.parse(st.phase_a); d.power = Math.round(p.power * 1000); d.voltage = p.voltage; d.current = p.electricCurrent; } catch (e) {} }
+    if (st.forward_energy_total !== undefined) d.energy = sv('forward_energy_total');
+    d.countdown = st.countdown_1 || 0;
+    devices[k] = d;
+  }
+  const data = { ok: true, devices, at: new Date().toISOString() };
+  SD.tuState = { at: Date.now(), data };
+  return data;
+}
+async function tuya(b) {
+  if (!CFG.tu) throw fail(503, 'tuya_not_configured');
+  if (b.action === 'tu.state') return tuState(false);
+  if (b.action === 'tu.switch') {
+    if (!CFG.tu.switchable.includes(b.key) || typeof b.on !== 'boolean') throw fail(403, 'not_allowed');
+    const id = CFG.tu.devices[b.key];
+    await tu('POST', '/v1.0/iot-03/devices/' + id + '/commands', JSON.stringify({ commands: [{ code: 'switch', value: b.on }] }));
+    SD.tuState = null;
+    return { ok: true, key: b.key, on: b.on };
+  }
+  throw fail(400, 'unknown_action');
+}
+
 async function netatmo(b) {
   if (b.action === 'nt.heating') return ntHeating(false);
   if (b.action === 'nt.cameras') return ntCameras(!!b.fresh);
@@ -382,6 +500,7 @@ try {
     return reply(200, await netatmo(body));
   }
   if (String(body.action || '').startsWith('im.')) return reply(200, await imou(body));
+  if (String(body.action || '').startsWith('tu.')) return reply(200, await tuya(body));
 
   return reply(400, { ok: false, error: 'unknown_action' });
 } catch (e) {
@@ -389,6 +508,14 @@ try {
   return reply(500, { ok: false, error: 'exception', detail: String(e && e.message || e) });
 }
 `;
+
+// Garde-fou : ne jamais déployer un code qui ne compile pas (sinon toute l'appli tombe).
+try {
+  new Function('$input', '$getWorkflowStaticData', 'Buffer', 'return (async function(){' + code + '\n});');
+} catch (e) {
+  console.error('ARRÊT : le code n8n ne compile pas ->', e.message);
+  process.exit(1);
+}
 
 const NAME = 'Maison · API eedomus';
 const PATH = 'maison';

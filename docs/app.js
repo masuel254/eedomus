@@ -21,6 +21,7 @@
   var ntPend = null;           // { room, temp, timer } : consigne en cours de réglage
   var CAMS = null, camsAt = 0, camsLoading = false, liveCam = null, liveHd = false;
   var IM = null, imAt = 0, imLoading = false;
+  var TU = null, tuPend = {};   // Smart Life : état des appareils, actions en cours
   var openRoom = store.get('maison.open') || 'salon';
   var newVersion = false;
   var pending = {};            // id -> { value, until } : affichage immédiat avant confirmation
@@ -85,6 +86,15 @@
       .catch(function () { if (!CAMS) CAMS = { error: true, cameras: [], events: [] }; })
       .then(function () { camsLoading = false; if (!busy()) render(); if (!sheet.hidden && sheet.dataset.view === 'cams' && !sheet.querySelector('video')) renderCams(); });
   }
+  // Smart Life (Tuya) : sauna et compteurs de la piscine
+  function refreshTuya() {
+    if (!token) return;
+    api({ action: 'tu.state' }).then(function (j) { TU = j; if (!busy()) render(); }).catch(function () {});
+  }
+  function tuDev(key) { return TU && TU.devices ? TU.devices[key] : null; }
+  function tuOn(key) { var p = tuPend[key]; if (p && p.until > Date.now()) return p.on; var d = tuDev(key); return !!(d && d.on); }
+  function watts(w) { return w == null ? '—' : w >= 1000 ? fmt(w / 1000, 2) + ' kW' : fmt(w, 0) + ' W'; }
+
   // Imou : photos demandées seulement à l'ouverture des caméras (quota gratuit limité)
   function loadImou(force) {
     if (imLoading || (!force && IM && Date.now() - imAt < 120000)) return;
@@ -153,6 +163,12 @@
       var open = doors.filter(function (d) { return doorOpen(d.id); }).length;
       h += open ? '<span class="mark bad">' + icon('door') + 'Porte ouverte</span>' : '<span class="mark d">' + icon('door') + 'Fermée</span>';
     }
+    var kw = 0, hasMeter = false;
+    room.items.forEach(function (it) {
+      if (it.type === 'tuya-switch' && tuOn(it.key)) h += '<span class="mark heat">' + icon(it.icon || 'flame') + esc(it.name) + ' allumé</span>';
+      if (it.type === 'tuya-meter' && tuDev(it.key)) { hasMeter = true; kw += tuDev(it.key).power || 0; }
+    });
+    if (hasMeter) h += '<span class="mark' + (kw > 5 ? ' l' : '') + '">' + icon('bolt') + watts(kw) + '</span>';
     var nc = roomCams(room).length;
     if (nc) h += '<span class="mark">' + icon('cam') + nc + ' caméra' + (nc > 1 ? 's' : '') + '</span>';
     return '<span class="marks">' + h + '</span>';
@@ -187,6 +203,19 @@
     if (it.type === 'action') {
       return '<div class="row"><span class="ic">' + icon(it.icon || 'home') + '</span><span><b>' + esc(it.name) + '</b><small>' + (STATES[id] ? esc(STATES[id].text) : '') + '</small></span>' +
         '<button class="act" data-action="' + id + '" data-v="' + esc(it.value) + '"' + (it.confirm ? ' data-confirm' : '') + ' data-msg="' + esc(it.name) + ' : envoyé">' + esc(it.label || 'OK') + '</button></div>';
+    }
+    if (it.type === 'tuya-switch') {
+      var d = tuDev(it.key), son = tuOn(it.key);
+      var sub = !d ? 'Chargement…' : son ? 'Allumé' + (d.power > 5 ? ' · chauffe ' + watts(d.power) : '') : 'Éteint';
+      return '<button class="row' + (son ? ' is-on heat' : '') + (tuPend[it.key] ? ' busy' : '') + '" data-tuya="' + esc(it.key) + '"' + (son ? '' : ' data-confirm') + '>' +
+        '<span class="ic">' + icon(it.icon || 'flame') + '</span><span><b>' + esc(it.name) + '</b><small data-label>' + esc(sub) + '</small></span><span class="sw"></span></button>';
+    }
+    if (it.type === 'tuya-meter') {
+      var m = tuDev(it.key), running = m && m.power > 5;
+      var msub = !m ? 'Chargement…' : m.on === false ? 'Coupé par son compteur' : running ? 'En marche' : "À l'arrêt";
+      if (m && m.energy != null) msub += ' · index ' + fmt(m.energy, 0) + ' kWh';
+      return '<div class="row' + (running ? ' run' : '') + '"><span class="ic">' + icon(it.icon || 'bolt') + '</span><span><b>' + esc(it.name) + '</b><small>' + esc(msub) + '</small></span>' +
+        '<span class="val">' + (m ? watts(m.power) : '—') + '</span></div>';
     }
     if (it.type === 'sensor') {
       var x = num(id); if (x != null && it.scale) x = x * it.scale;
@@ -366,7 +395,7 @@
   function confirmed(btn) {
     if (!btn.hasAttribute('data-confirm')) return true;
     if (btn._armed) { clearTimeout(btn._armed); btn._armed = null; btn.classList.remove('confirming', 'armed-confirm'); return true; }
-    var label = btn.querySelector('span') || btn, old = label.textContent;
+    var label = btn.querySelector('[data-label]') || btn.querySelector('span') || btn, old = label.textContent;
     btn.classList.add(btn.closest('.dock') ? 'armed-confirm' : 'confirming');
     label.textContent = 'Confirmer ?';
     btn._armed = setTimeout(function () { btn._armed = null; btn.classList.remove('confirming', 'armed-confirm'); label.textContent = old; }, 3000);
@@ -409,6 +438,14 @@
     }
     if ((b = e.target.closest('[data-room]'))) {
       openRoom = openRoom === b.dataset.room ? '' : b.dataset.room; store.set('maison.open', openRoom); return render();
+    }
+    if ((b = e.target.closest('[data-tuya]'))) {
+      if (!confirmed(b)) return;
+      var key = b.dataset.tuya, want = !tuOn(key), nameT = b.querySelector('b').textContent;
+      tuPend[key] = { on: want, until: Date.now() + 10000 }; render();
+      return api({ action: 'tu.switch', key: key, on: want }).then(function () {
+        toast(nameT + (want ? ' allumé' : ' éteint')); setTimeout(refreshTuya, 2500); setTimeout(refreshTuya, 8000);
+      }).catch(function () { delete tuPend[key]; render(); toast(nameT + ' ne répond pas, réessaie', true); });
     }
     if ((b = e.target.closest('[data-light]'))) {
       var it = findItem(+b.dataset.light), on = isOn(it);
@@ -465,11 +502,12 @@
   fetch('config.json', { cache: 'no-cache' }).then(function (r) { return r.json(); }).then(function (c) {
     CFG = c;
     if (!token) return setup();
-    render(); refresh(); refreshHeating();
+    render(); refresh(); refreshHeating(); refreshTuya();
     setInterval(function () { if (!document.hidden) refresh(); }, 10000);
     setInterval(function () { if (!document.hidden && !ntPend) refreshHeating(); }, 30000);
+    setInterval(function () { if (!document.hidden) refreshTuya(); }, 30000);
     setInterval(function () { if (!document.hidden && lastOk && !busy()) render(); }, 30000);
-    document.addEventListener('visibilitychange', function () { if (!document.hidden) { refresh(); refreshHeating(); } });
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) { refresh(); refreshHeating(); refreshTuya(); } });
   }).catch(function () { app.innerHTML = '<div class="setup"><h1>Maison</h1><p>Impossible de charger la configuration. Vérifie ta connexion.</p></div>'; });
 
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});

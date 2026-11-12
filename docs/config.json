@@ -202,6 +202,12 @@
           "name": "Salle de bains",
           "items": [
             {
+              "key": "sauna",
+              "name": "Sauna",
+              "type": "tuya-switch",
+              "icon": "flame"
+            },
+            {
               "id": 929535,
               "name": "Sèche-serviettes",
               "type": "switch",
@@ -274,6 +280,18 @@
           "name": "Piscine",
           "temp": 3557562,
           "items": [
+            {
+              "key": "pac",
+              "name": "Pompe à chaleur",
+              "type": "tuya-meter",
+              "icon": "flame"
+            },
+            {
+              "key": "elec",
+              "name": "Électrolyseur",
+              "type": "tuya-meter",
+              "icon": "bolt"
+            },
             {
               "id": 2090770,
               "name": "Spot abri",

@@ -231,3 +231,11 @@ body.noscroll { overflow: hidden; }
 .acc2.rel .new { flex: none; }
 
 .chip.home svg.i { color: var(--cool); }
+
+/* ---------- v1.4 : Smart Life (sauna, compteurs piscine) ---------- */
+.row.is-on.heat .sw { background: var(--heat); }
+.row.is-on.heat .ic { background: rgba(255,138,91,.16); color: var(--heat); }
+.row.confirming { background: rgba(255,138,91,.10); }
+.row.confirming small { color: var(--heat); font-weight: 700; }
+.row.run .ic { background: rgba(244,184,96,.16); color: var(--amber); }
+.mark.heat { background: rgba(255,138,91,.14); color: var(--heat); }

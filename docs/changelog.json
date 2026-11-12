@@ -1,7 +1,18 @@
 {
-  "version": "1.3.3",
+  "version": "1.4.0",
   "date": "2026-11-12",
   "releases": [
+    {
+      "version": "1.4.0",
+      "date": "2026-11-12",
+      "time": "16:56",
+      "title": "Sauna et piscine (Smart Life)",
+      "changes": [
+        "Sauna dans la Salle de bains : allumer / éteindre (confirmation pour allumer), puissance de chauffe",
+        "Piscine : puissance en direct et index de l’électrolyseur et de la pompe à chaleur",
+        "Pastilles : sauna allumé, puissance totale de la piscine"
+      ]
+    },
     {
       "version": "1.3.3",
       "date": "2026-11-12",
@@ -88,13 +99,16 @@
     "Températures des pièces, piscine et météo (eedomus)",
     "Chauffage Netatmo : lecture des 10 pièces, consigne, modes",
     "Installation sur iPhone pour toute la famille",
-    "Caméras : Presence (Netatmo) + 5 Imou, photo, direct et événements Presence"
+    "Caméras : Presence (Netatmo) + 5 Imou, photo, direct et événements Presence",
+    "Smart Life : sauna (marche/arrêt) et compteurs électrolyseur + pompe à chaleur"
   ],
   "todo": [
     "Tester la vidéo en direct sur iPhone (Imou et Netatmo)",
     "Surveiller la consommation vidéo Imou (2 Go gratuits)",
     "État réel de la porte de garage (pas de capteur d'ouverture aujourd'hui)",
-    "Révoquer les codes d'accès partagés pendant la mise en place (eedomus, n8n, Netatmo, Imou)"
+    "Révoquer les codes d'accès partagés pendant la mise en place (eedomus, n8n, Netatmo, Imou, Tuya)",
+    "Renouveler l'essai gratuit Tuya IoT Core (iot.tuya.com › Cloud › Cloud Services)",
+    "Consommation du jour en kWh pour la piscine et le sauna"
   ],
-  "time": "16:38"
+  "time": "16:56"
 }
