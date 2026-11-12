@@ -171,6 +171,62 @@ async function nt(method, path, params, retry) {
     throw fail(502, 'netatmo', String(e.message || e));
   }
 }
+// POST avec un corps JSON (plannings : zones et timetable sont des tableaux)
+async function ntJson(path, obj, retry) {
+  const tok = await ntToken(false);
+  try {
+    return parse(await helpers.httpRequest({ method: 'POST', url: 'https://api.netatmo.com/api/' + path, json: false, timeout: 20000,
+      headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' }, body: JSON.stringify(obj) }));
+  } catch (e) {
+    const st = e.httpCode || (e.response && e.response.status) || (e.cause && e.cause.status);
+    if (!retry && (String(st) === '403' || String(st) === '401')) { SD.nt.access = null; await ntToken(true); return ntJson(path, obj, true); }
+    let detail = String(e.message || e);
+    try { const b = e.response && (e.response.body || e.response.data); if (b) detail += ' ' + (typeof b === 'string' ? b : JSON.stringify(b)); } catch (x) {}
+    throw fail(502, 'netatmo', detail);
+  }
+}
+// Vérifie un planning envoyé par l'appli avant de l'écrire chez Netatmo
+function ntCheckSchedule(H, s) {
+  const roomIds = H.heat.rooms.map((r) => String(r.id));
+  if (!s || typeof s !== 'object') return 'planning manquant';
+  if (typeof s.name !== 'string' || !s.name.trim() || s.name.length > 30) return 'nom invalide';
+  if (!Array.isArray(s.zones) || !s.zones.length || s.zones.length > 12) return 'ambiances invalides';
+  const zoneIds = [];
+  for (const z of s.zones) {
+    if (!Number.isInteger(z.id) || ![0, 1, 4, 5, 8].includes(z.type)) return 'ambiance invalide';
+    if (z.name != null && (typeof z.name !== 'string' || z.name.length > 30)) return "nom d'ambiance invalide";
+    if (!Array.isArray(z.rooms)) return 'pièces invalides';
+    for (const r of z.rooms) {
+      if (!roomIds.includes(String(r.id))) return 'pièce inconnue';
+      const t = Number(r.t);
+      if (!(t >= 5 && t <= 30) || (t * 2) % 1 !== 0) return 'température hors limites (5 à 30 °C)';
+    }
+    zoneIds.push(z.id);
+  }
+  if (!Array.isArray(s.timetable) || !s.timetable.length || s.timetable.length > 300) return 'plages invalides';
+  let prev = -1;
+  for (const t of s.timetable) {
+    if (!Number.isInteger(t.o) || t.o < 0 || t.o > 10079 || t.o <= prev) return 'horaires invalides';
+    if (!zoneIds.includes(t.z)) return 'plage sans ambiance';
+    prev = t.o;
+  }
+  if (s.timetable[0].o !== 0) return 'le planning doit commencer lundi à 00:00';
+  return null;
+}
+function ntScheduleBody(H, s) {
+  return {
+    home_id: H.heat.id, name: s.name.trim(),
+    hg_temp: s.hg != null ? Number(s.hg) : 7, away_temp: s.away != null ? Number(s.away) : 12,
+    zones: s.zones.map((z) => {
+      // Format d'écriture Netatmo : rooms_temp [{ room_id, temp }] (différent du format de lecture)
+      const o = { id: z.id, type: z.type, rooms_temp: z.rooms.map((r) => ({ room_id: String(r.id), temp: Number(r.t) })) };
+      if (z.name) o.name = z.name;
+      return o;
+    }),
+    timetable: s.timetable.map((t) => ({ zone_id: t.z, m_offset: t.o })),
+  };
+}
+
 async function ntHomes() {
   if (SD.ntHomes && SD.ntHomes.at > Date.now() - 3600000) return SD.ntHomes;
   const hd = await nt('GET', 'homesdata', {});
@@ -182,9 +238,11 @@ async function ntHomes() {
     at: Date.now(),
     heat: heat ? { id: heat.id, tz: heat.timezone || 'Europe/Paris', rooms: heat.rooms.filter((r) => (r.module_ids || []).length).map((r) => ({ id: r.id, name: r.name, type: r.type })),
       schedules: (heat.schedules || []).filter((s) => !s.type || s.type === 'therm').map((s) => ({
-        id: s.id, name: s.name, selected: !!s.selected,
+        id: s.id, name: s.name, selected: !!s.selected, isDefault: !!s.default,
+        hg: s.hg_temp ?? null, away: s.away_temp ?? null,
         timetable: (s.timetable || []).map((t) => ({ z: t.zone_id, o: t.m_offset })).sort((a, b) => a.o - b.o),
-        zones: (s.zones || []).map((z) => ({ id: z.id, name: z.name || null, type: z.type })),
+        zones: (s.zones || []).map((z) => ({ id: z.id, name: z.name || null, type: z.type,
+          rooms: (z.rooms || []).map((r) => ({ id: r.id, t: r.therm_setpoint_temperature ?? null })) })),
       })) } : null,
     cams,
   };
@@ -717,6 +775,38 @@ async function netatmo(b) {
       await nt('POST', 'setroomthermpoint', p);
     }
     return ntHeating(true);
+  }
+  // Plannings complets (ambiances avec température par pièce, plages de la semaine)
+  if (b.action === 'nt.schedules') {
+    if (b.fresh) SD.ntHomes = null;
+    const H = await ntHomes();
+    if (!H.heat) throw fail(404, 'no_heating');
+    return { ok: true, rooms: H.heat.rooms, schedules: H.heat.schedules };
+  }
+  // Modifier un planning existant (nom, ambiances, plages)
+  if (b.action === 'nt.syncschedule') {
+    SD.ntHomes = null;
+    const H = await ntHomes();
+    const cur = H.heat && H.heat.schedules.find((x) => String(x.id) === String(b.id));
+    if (!cur) throw fail(403, 'not_allowed');
+    const err = ntCheckSchedule(H, b.schedule);
+    if (err) throw fail(400, 'invalid', err);
+    const body = ntScheduleBody(H, b.schedule); body.schedule_id = cur.id;
+    const r = await ntJson('synchomeschedule', body);
+    if (r && r.status && r.status !== 'ok') throw fail(502, 'netatmo', JSON.stringify(r));
+    SD.ntHomes = null; SD.ntHeat = null;
+    return { ok: true, id: cur.id };
+  }
+  // Créer un nouveau planning (à partir d'une copie préparée par l'appli)
+  if (b.action === 'nt.createschedule') {
+    SD.ntHomes = null;
+    const H = await ntHomes();
+    if (H.heat.schedules.length >= 10) throw fail(400, 'invalid', 'nombre maximum de plannings atteint');
+    const err = ntCheckSchedule(H, b.schedule);
+    if (err) throw fail(400, 'invalid', err);
+    const r = await ntJson('createnewhomeschedule', ntScheduleBody(H, b.schedule));
+    SD.ntHomes = null;
+    return { ok: true, id: (r.body && r.body.schedule_id) || null };
   }
   if (b.action === 'nt.schedule') {
     const H = await ntHomes();

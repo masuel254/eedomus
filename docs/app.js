@@ -348,7 +348,7 @@
     if (schedOpen) {
       h += '<div class="schedlist">' + (NT.schedules || []).map(function (x) {
         return '<button class="' + (String(x.id) === String(NT.scheduleId) ? 'on' : '') + '" data-sched="' + esc(x.id) + '">' + esc(x.name) + '</button>';
-      }).join('') + '</div>';
+      }).join('') + '<button class="manage" data-plans>' + icon('gear') + 'Gérer les plannings</button></div>';
     }
     return h;
   }
@@ -438,11 +438,150 @@
     else if (view === 'rec') renderRec();
     else if (view === 'energy') renderEnergy();
     else if (view === 'timers') renderTimers();
+    else if (view === 'plans') renderPlans();
+    else if (view === 'plan') renderPlan();
     else renderSettings();
   }
   function closeSheet() {
-    sheet.hidden = true; sheet.innerHTML = ''; liveCam = null; liveHd = true; REC = null; ENG = null; TED = null; document.body.classList.remove('noscroll');
+    sheet.hidden = true; sheet.innerHTML = ''; liveCam = null; liveHd = true; REC = null; ENG = null; TED = null; PE = null; document.body.classList.remove('noscroll');
   }
+
+  // ---------- Plannings Netatmo : liste, création, modification (comme l'appli Netatmo) ----------
+  var PLANS = null, PE = null, plansBusy = false;
+  var DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+  var ZTYPE = { 0: 'Confort', 1: 'Nuit', 5: 'Éco', 8: 'Confort+', 4: 'Personnalisée' };
+  var ZCOL = { 0: '#FF8A5B', 1: '#7C83FF', 5: '#4ADE80', 8: '#F4B860' };
+  var ZPAL = ['#38BDF8', '#F472B6', '#A3E635', '#FBBF24', '#C084FC', '#2DD4BF', '#FB7185', '#60A5FA'];
+  function zName(z) { return z.name || ZTYPE[z.type] || 'Ambiance'; }
+  function zColor(z) { return ZCOL[z.type] || ZPAL[z.id % ZPAL.length]; }
+  function hmOf(o) { var m = o % 1440; return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); }
+  function roomName(id) { var r = (PLANS && PLANS.rooms || []).filter(function (x) { return String(x.id) === String(id); })[0]; return r ? r.name : 'Pièce'; }
+  function loadPlans(fresh) {
+    plansBusy = true;
+    return api({ action: 'nt.schedules', fresh: !!fresh }).then(function (j) { PLANS = j; plansBusy = false; })
+      .catch(function () { plansBusy = false; toast('Netatmo ne répond pas, réessaie', true); });
+  }
+  function openPlans() { PE = null; sheet.scrollTop = 0; openSheet('plans'); loadPlans(true).then(function () { if (sheet.dataset.view === 'plans') renderPlans(); }); }
+  function renderPlans() {
+    var h = '<div class="sh-hd"><h2>Plannings</h2><button class="close" data-close aria-label="Fermer">×</button></div>';
+    if (!PLANS) { sheet.innerHTML = '<div class="sh-in">' + h + '<p class="muted">Lecture des plannings Netatmo…</p></div>'; return; }
+    h += '<div class="plist">' + PLANS.schedules.map(function (s) {
+      var zs = s.zones.map(function (z) { return '<i style="background:' + zColor(z) + '"></i>'; }).join('');
+      return '<div class="pcard' + (s.selected ? ' on' : '') + '"><div class="pc-hd"><b>' + esc(s.name) + '</b>' + (s.selected ? '<span class="pill2 ok">Actif</span>' : '') + '</div>' +
+        '<small>' + s.zones.length + ' ambiances · ' + s.timetable.length + ' plages</small><div class="zdots">' + zs + '</div>' +
+        '<div class="pc-btns">' + (s.selected ? '' : '<button class="act" data-pactivate="' + esc(s.id) + '">Activer</button>') +
+        '<button class="act" data-pdup="' + esc(s.id) + '">Dupliquer</button><button class="act primary" data-pedit="' + esc(s.id) + '">Modifier</button></div></div>';
+    }).join('') + '</div>';
+    h += '<button class="act wide" data-pnew>' + icon('cal') + 'Nouveau planning</button>';
+    h += '<p class="note-q">Un nouveau planning part d\'une copie du planning actif, que tu modifies ensuite. Pour supprimer un planning, utilise l\'appli Netatmo.</p>';
+    sheet.innerHTML = '<div class="sh-in">' + h + '</div>';
+  }
+  function clonePlan(s) { return JSON.parse(JSON.stringify({ id: s.id, name: s.name, hg: s.hg, away: s.away, zones: s.zones, timetable: s.timetable })); }
+  function createPlan(from, name) {
+    var c = clonePlan(from); delete c.id; c.name = name.slice(0, 30);
+    toast('Création du planning…');
+    api({ action: 'nt.createschedule', schedule: c }).then(function () {
+      toast('Planning « ' + c.name + ' » créé'); return loadPlans(true);
+    }).then(function () { if (sheet.dataset.view === 'plans') renderPlans(); })
+      .catch(function (e) { toast(e.message === 'invalid' ? 'Planning refusé' : 'Netatmo ne répond pas, réessaie', true); });
+  }
+  // ---- Éditeur ----
+  function openPlan(id) {
+    var s = PLANS.schedules.filter(function (x) { return String(x.id) === String(id); })[0]; if (!s) return;
+    PE = { src: s.id, data: clonePlan(s), tab: 'week', day: (new Date().getDay() + 6) % 7, dirty: false, copy: null, zopen: null };
+    sheet.scrollTop = 0; openSheet('plan');
+  }
+  function peTT() { return PE.data.timetable; }
+  function peSort() {
+    peTT().sort(function (a, b) { return a.o - b.o; });
+    // Netatmo exige une plage le lundi à 00:00 : on la recrée avec l'ambiance en vigueur en fin de semaine
+    if (!peTT().length || peTT()[0].o !== 0) { var last = peTT()[peTT().length - 1]; peTT().unshift({ o: 0, z: last ? last.z : PE.data.zones[0].id }); }
+  }
+  function zoneById(id) { return PE.data.zones.filter(function (z) { return z.id === id; })[0]; }
+  function zoneAt(o) { var cur = peTT()[peTT().length - 1]; peTT().forEach(function (t) { if (t.o <= o) cur = t; }); return cur ? cur.z : null; }
+  function dayBar(d) {
+    var start = d * 1440, end = start + 1440, pts = [{ o: start, z: zoneAt(start) }];
+    peTT().forEach(function (t) { if (t.o > start && t.o < end) pts.push(t); });
+    var h = '<div class="dbar">';
+    pts.forEach(function (p, i) {
+      var to = i + 1 < pts.length ? pts[i + 1].o : end, z = zoneById(p.z) || {};
+      h += '<span style="flex:' + (to - p.o) + ';background:' + zColor(z) + '" title="' + esc(zName(z)) + '"></span>';
+    });
+    return h + '</div><div class="dbar-l"><span>00h</span><span>06h</span><span>12h</span><span>18h</span><span>24h</span></div>';
+  }
+  function zoneOptions(sel) {
+    return PE.data.zones.map(function (z) { return '<option value="' + z.id + '"' + (z.id === sel ? ' selected' : '') + '>' + esc(zName(z)) + '</option>'; }).join('');
+  }
+  function renderPlan() {
+    if (!PE) return;
+    var D = PE.data, h = '';
+    h += '<div class="sh-hd"><button class="back2" data-pback' + (PE.dirty ? ' data-confirm' : '') + '>' + icon('down') + '<span>Plannings</span></button>' +
+      '<button class="act primary' + (PE.dirty ? '' : ' dim') + '" data-psave>Enregistrer</button></div>';
+    h += '<input class="pname" id="pe-name" maxlength="30" value="' + esc(D.name) + '" aria-label="Nom du planning">';
+    h += '<div class="en-tabs"><button class="' + (PE.tab === 'week' ? 'on' : '') + '" data-ptab="week">Semaine</button><button class="' + (PE.tab === 'zones' ? 'on' : '') + '" data-ptab="zones">Ambiances</button></div>';
+    if (PE.tab === 'week') {
+      h += '<div class="days">' + DAYS.map(function (n, i) { return '<button class="' + (i === PE.day ? 'on' : '') + '" data-pday="' + i + '">' + n.slice(0, 3) + '</button>'; }).join('') + '</div>';
+      h += '<div class="en-card">' + dayBar(PE.day);
+      var start = PE.day * 1440, end = start + 1440, rows = '';
+      var first = peTT().filter(function (t) { return t.o === start; })[0];
+      if (!first) {
+        var zc = zoneById(zoneAt(start)) || {};
+        rows += '<div class="slot inh"><span class="sw-c" style="background:' + zColor(zc) + '"></span><span class="slot-t">00:00</span><span class="slot-z">' + esc(zName(zc)) + ' <small>(suite de la veille)</small></span><span></span></div>';
+      }
+      peTT().forEach(function (t, i) {
+        if (t.o < start || t.o >= end) return;
+        var z = zoneById(t.z) || {}, locked = t.o === 0;
+        rows += '<div class="slot"><span class="sw-c" style="background:' + zColor(z) + '"></span>' +
+          (locked ? '<span class="slot-t">00:00</span>' : '<input type="time" step="900" class="slot-time" data-pe-time="' + i + '" value="' + hmOf(t.o) + '" aria-label="Heure">') +
+          '<select class="slot-sel" data-pe-zone="' + i + '" aria-label="Ambiance">' + zoneOptions(t.z) + '</select>' +
+          (locked ? '<span></span>' : '<button class="slot-del" data-pe-del="' + i + '" aria-label="Supprimer la plage">×</button>') + '</div>';
+      });
+      h += '<div class="slots">' + rows + '</div>';
+      h += '<div class="pc-btns"><button class="act" data-pe-add>+ Ajouter une plage</button><button class="act" data-pe-copy>Copier ce jour…</button></div>';
+      if (PE.copy) {
+        h += '<div class="copybox"><small>Copier le ' + DAYS[PE.day].toLowerCase() + ' vers :</small><div class="days">' + DAYS.map(function (n, i) {
+          return i === PE.day ? '' : '<button class="' + (PE.copy.indexOf(i) >= 0 ? 'on' : '') + '" data-pe-cpday="' + i + '">' + n.slice(0, 3) + '</button>';
+        }).join('') + '</div><div class="pc-btns"><button class="act" data-pe-cpall>Tous les jours</button><button class="act primary" data-pe-cpgo>Copier</button></div></div>';
+      }
+      h += '</div><p class="note-q">Chaque plage démarre à l\'heure indiquée et dure jusqu\'à la suivante. Le lundi commence toujours à 00:00.</p>';
+    } else {
+      h += D.zones.map(function (z) {
+        var open = PE.zopen === z.id, used = peTT().some(function (t) { return t.z === z.id; });
+        var temps = z.rooms.map(function (r) { return r.t; }), mn = Math.min.apply(null, temps), mx = Math.max.apply(null, temps);
+        var s = '<div class="zcard"><button class="zhd" data-pe-zopen="' + z.id + '"><span class="sw-c" style="background:' + zColor(z) + '"></span><span><b>' + esc(zName(z)) + '</b><small>' +
+          (temps.length ? (mn === mx ? fmt(mn, 1) + '°' : fmt(mn, 1) + '° à ' + fmt(mx, 1) + '°') : '—') + (used ? '' : ' · non utilisée') + '</small></span>' + icon('down') + '</button>';
+        if (open) {
+          if (z.type === 4) s += '<div class="zname"><label for="pe-zn">Nom</label><input id="pe-zn" maxlength="30" data-pe-zname="' + z.id + '" value="' + esc(z.name || '') + '"></div>';
+          s += '<div class="zrooms">' + z.rooms.map(function (r, ri) {
+            return '<div class="zr"><span>' + esc(roomName(r.id)) + '</span><div class="stp"><button data-pe-t="' + z.id + ':' + ri + ':-0.5" aria-label="Moins">−</button><b>' + fmt(r.t, 1) + '°</b><button data-pe-t="' + z.id + ':' + ri + ':0.5" aria-label="Plus">+</button></div></div>';
+          }).join('') + '</div>';
+          s += '<div class="pc-btns"><button class="act" data-pe-zall="' + z.id + ':-0.5">Toutes −0,5°</button><button class="act" data-pe-zall="' + z.id + ':0.5">Toutes +0,5°</button>' +
+            (z.type === 4 && !used ? '<button class="act danger" data-pe-zdel="' + z.id + '" data-confirm><span>Supprimer</span></button>' : '') + '</div>';
+        }
+        return s + '</div>';
+      }).join('');
+      h += '<button class="act wide" data-pe-zadd>+ Nouvelle ambiance</button>';
+      h += '<div class="zcard"><div class="zrooms">' +
+        '<div class="zr"><span>Hors-gel</span><div class="stp"><button data-pe-hg="-0.5">−</button><b>' + fmt(D.hg, 1) + '°</b><button data-pe-hg="0.5">+</button></div></div>' +
+        '<div class="zr"><span>Absent</span><div class="stp"><button data-pe-away="-0.5">−</button><b>' + fmt(D.away, 1) + '°</b><button data-pe-away="0.5">+</button></div></div></div></div>';
+      h += '<p class="note-q">Une ambiance, c\'est une température pour chaque pièce. Les ambiances Confort, Nuit et Éco ne peuvent pas être supprimées.</p>';
+    }
+    var keep = sheet.scrollTop;
+    sheet.innerHTML = '<div class="sh-in">' + h + '</div>';
+    sheet.scrollTop = keep;
+  }
+  function peChanged() { PE.dirty = true; renderPlan(); }
+  function savePlan() {
+    var nameEl = document.getElementById('pe-name'); if (nameEl) PE.data.name = nameEl.value.trim() || PE.data.name;
+    peSort();
+    var body = { action: 'nt.syncschedule', id: PE.src, schedule: { name: PE.data.name, hg: PE.data.hg, away: PE.data.away, zones: PE.data.zones, timetable: PE.data.timetable } };
+    toast('Enregistrement chez Netatmo…');
+    api(body).then(function () {
+      PE.dirty = false; toast('Planning « ' + PE.data.name + ' » enregistré'); renderPlan();
+      loadPlans(true); setTimeout(refreshHeating, 1500);
+    }).catch(function (e) { toast(e.message === 'invalid' ? 'Planning refusé : vérifie les horaires' : 'Netatmo ne répond pas, réessaie', true); });
+  }
+  function clampT(t) { return Math.max(5, Math.min(30, Math.round(t * 2) / 2)); }
 
   // ---------- Programmes (timers) de l'électrolyseur eXO, comme dans iAquaLink ----------
   var TED = null; // timer en cours de modification : { sch, start, end, rpm }
@@ -744,6 +883,7 @@
       return api({ action: 'nt.setpoint', room: r.id, mode: 'home' }).then(function (j) { NT = j; render(); toast(r.name + ' : retour au planning'); })
         .catch(function () { toast('Netatmo ne répond pas, réessaie', true); });
     }
+    if (e.target.closest('[data-plans]')) { schedOpen = false; render(); return openPlans(); }
     if (e.target.closest('[data-sched-toggle]')) { schedOpen = !schedOpen; return render(); }
     if ((b = e.target.closest('[data-sched]'))) {
       var sid = b.dataset.sched, sname = b.textContent;
@@ -829,6 +969,73 @@
     if (e.target.closest('[data-hd]')) { liveHd = !liveHd; return renderCams(); }
     if ((b = e.target.closest('[data-rec]'))) return openRec(b.dataset.rec);
     if ((b = e.target.closest('[data-entab]'))) { ENG.tab = b.dataset.entab; return renderEnergy(); }
+    // --- Plannings Netatmo ---
+    if ((b = e.target.closest('[data-pactivate]'))) {
+      var pid = b.dataset.pactivate; b.classList.add('busy');
+      return api({ action: 'nt.schedule', id: pid }).then(function (j) { NT = j; render(); toast('Planning activé'); return loadPlans(true); })
+        .then(function () { if (sheet.dataset.view === 'plans') renderPlans(); }).catch(function () { b.classList.remove('busy'); toast('Netatmo ne répond pas, réessaie', true); });
+    }
+    if ((b = e.target.closest('[data-pdup]'))) {
+      var ps = PLANS.schedules.filter(function (x) { return String(x.id) === b.dataset.pdup; })[0];
+      return ps && createPlan(ps, ps.name.slice(0, 22) + ' (copie)');
+    }
+    if (e.target.closest('[data-pnew]')) {
+      var act = PLANS.schedules.filter(function (x) { return x.selected; })[0] || PLANS.schedules[0];
+      return act && createPlan(act, 'Nouveau planning');
+    }
+    if ((b = e.target.closest('[data-pedit]'))) return openPlan(b.dataset.pedit);
+    if ((b = e.target.closest('[data-pback]'))) {
+      if (PE && PE.dirty && !confirmed(b)) { var lb = b.querySelector('span'); if (lb) lb.textContent = 'Quitter sans enregistrer ?'; return; }
+      PE = null; sheet.dataset.view = 'plans'; sheet.scrollTop = 0; return renderPlans();
+    }
+    if (e.target.closest('[data-psave]')) { if (PE && PE.dirty) savePlan(); return; }
+    if ((b = e.target.closest('[data-ptab]'))) { PE.tab = b.dataset.ptab; PE.copy = null; return renderPlan(); }
+    if ((b = e.target.closest('[data-pday]'))) { PE.day = +b.dataset.pday; PE.copy = null; return renderPlan(); }
+    if ((b = e.target.closest('[data-pe-del]'))) { peTT().splice(+b.dataset.peDel, 1); peSort(); return peChanged(); }
+    if (e.target.closest('[data-pe-add]')) {
+      var base = PE.day * 1440, taken = peTT().map(function (t) { return t.o; }), mins = 12 * 60;
+      while (taken.indexOf(base + mins) >= 0 && mins < 1410) mins += 30;
+      if (taken.indexOf(base + mins) >= 0) return toast('Plus de place ce jour-là', true);
+      var conf = PE.data.zones.filter(function (z) { return z.type === 0; })[0] || PE.data.zones[0];
+      peTT().push({ o: base + mins, z: conf.id }); peSort(); return peChanged();
+    }
+    if (e.target.closest('[data-pe-copy]')) { PE.copy = PE.copy ? null : []; return renderPlan(); }
+    if ((b = e.target.closest('[data-pe-cpday]'))) {
+      var cd = +b.dataset.peCpday, ci = PE.copy.indexOf(cd);
+      if (ci >= 0) PE.copy.splice(ci, 1); else PE.copy.push(cd); return renderPlan();
+    }
+    if (e.target.closest('[data-pe-cpall]')) { PE.copy = [0, 1, 2, 3, 4, 5, 6].filter(function (d) { return d !== PE.day; }); return renderPlan(); }
+    if (e.target.closest('[data-pe-cpgo]')) {
+      if (!PE.copy.length) return toast('Choisis au moins un jour', true);
+      var s0 = PE.day * 1440, src = peTT().filter(function (t) { return t.o >= s0 && t.o < s0 + 1440; }).map(function (t) { return { r: t.o - s0, z: t.z }; });
+      if (!src.some(function (t) { return t.r === 0; })) src.unshift({ r: 0, z: zoneAt(s0) });
+      var targets = PE.copy.slice();
+      PE.data.timetable = peTT().filter(function (t) { return targets.indexOf(Math.floor(t.o / 1440)) < 0; });
+      targets.forEach(function (d) { src.forEach(function (t) { peTT().push({ o: d * 1440 + t.r, z: t.z }); }); });
+      peSort(); PE.copy = null; toast('Copié vers ' + targets.length + ' jour' + (targets.length > 1 ? 's' : '')); return peChanged();
+    }
+    if ((b = e.target.closest('[data-pe-zopen]'))) { var zid = +b.dataset.peZopen; PE.zopen = PE.zopen === zid ? null : zid; return renderPlan(); }
+    if ((b = e.target.closest('[data-pe-t]'))) {
+      var pt = b.dataset.peT.split(':'), zz = zoneById(+pt[0]); if (!zz) return;
+      zz.rooms[+pt[1]].t = clampT(zz.rooms[+pt[1]].t + parseFloat(pt[2])); return peChanged();
+    }
+    if ((b = e.target.closest('[data-pe-zall]'))) {
+      var pa = b.dataset.peZall.split(':'), za = zoneById(+pa[0]); if (!za) return;
+      za.rooms.forEach(function (r) { r.t = clampT(r.t + parseFloat(pa[1])); }); return peChanged();
+    }
+    if ((b = e.target.closest('[data-pe-zdel]'))) {
+      if (!confirmed(b)) return;
+      var zd = +b.dataset.peZdel; PE.data.zones = PE.data.zones.filter(function (z) { return z.id !== zd; }); PE.zopen = null; return peChanged();
+    }
+    if (e.target.closest('[data-pe-zadd]')) {
+      if (PE.data.zones.length >= 12) return toast('12 ambiances au maximum', true);
+      var nid = Math.max.apply(null, PE.data.zones.map(function (z) { return z.id; })) + 1;
+      var ref = PE.data.zones.filter(function (z) { return z.type === 0; })[0] || PE.data.zones[0];
+      PE.data.zones.push({ id: nid, name: 'Nouvelle ambiance', type: 4, rooms: JSON.parse(JSON.stringify(ref.rooms)) });
+      PE.zopen = nid; return peChanged();
+    }
+    if ((b = e.target.closest('[data-pe-hg]'))) { PE.data.hg = Math.max(5, Math.min(15, Math.round((PE.data.hg + parseFloat(b.dataset.peHg)) * 2) / 2)); return peChanged(); }
+    if ((b = e.target.closest('[data-pe-away]'))) { PE.data.away = Math.max(10, Math.min(25, Math.round((PE.data.away + parseFloat(b.dataset.peAway)) * 2) / 2)); return peChanged(); }
     if ((b = e.target.closest('[data-tm]'))) {
       var k = b.dataset.tm, s = tByKey()[k];
       if (TED && TED.sch === k) TED = null;
@@ -864,6 +1071,20 @@
       if (navigator.serviceWorker && navigator.serviceWorker.getRegistration) {
         navigator.serviceWorker.getRegistration().then(function (reg) { return reg ? reg.update() : null; }).then(done, done);
       } else done();
+    }
+  });
+  // Champs de saisie de l'éditeur de planning (heure, ambiance, noms)
+  sheet.addEventListener('change', function (e) {
+    if (!PE) return;
+    var t = e.target;
+    if (t.id === 'pe-name') { var nv = t.value.trim().slice(0, 30); if (nv && nv !== PE.data.name) { PE.data.name = nv; peChanged(); } return; }
+    if (t.hasAttribute('data-pe-zname')) { var zn = zoneById(+t.dataset.peZname); if (zn && t.value.trim()) { zn.name = t.value.trim().slice(0, 30); peChanged(); } return; }
+    if (t.hasAttribute('data-pe-zone')) { peTT()[+t.dataset.peZone].z = +t.value; return peChanged(); }
+    if (t.hasAttribute('data-pe-time')) {
+      var m = /^(dd):(dd)$/.exec(t.value || ''); if (!m) return renderPlan();
+      var o = PE.day * 1440 + (+m[1]) * 60 + (+m[2]), i = +t.dataset.peTime;
+      if (o === 0 || peTT().some(function (x, j) { return j !== i && x.o === o; })) { toast('Une plage existe déjà à cette heure', true); return renderPlan(); }
+      peTT()[i].o = o; peSort(); return peChanged();
     }
   });
   dock.addEventListener('click', function (e) {

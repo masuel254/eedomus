@@ -1,7 +1,18 @@
 {
-  "version": "1.10.1",
+  "version": "1.11.0",
   "date": "2026-11-12",
   "releases": [
+    {
+      "version": "1.11.0",
+      "date": "2026-11-12",
+      "time": "18:16",
+      "title": "Plannings du chauffage",
+      "changes": [
+        "Écran Plannings (Changer › Gérer les plannings) : activer, modifier, dupliquer, créer",
+        "Semaine : plages horaires de chaque jour avec barre colorée, ajouter / supprimer / changer l’heure ou l’ambiance, copier un jour vers d’autres",
+        "Ambiances : température de chaque pièce (−/+ ou toutes d’un coup), nouvelle ambiance personnalisée, hors-gel et absent"
+      ]
+    },
     {
       "version": "1.10.1",
       "date": "2026-11-12",
@@ -213,7 +224,7 @@
   "works": [
     "Lumières, volets, portail, garage, alarme et sèche-serviettes (eedomus)",
     "Températures des pièces, piscine et météo (eedomus)",
-    "Chauffage Netatmo : lecture des 10 pièces, consigne, modes",
+    "Chauffage Netatmo : 10 pièces, consigne, modes, plannings (choix, création, modification des plages et ambiances)",
     "Installation sur iPhone pour toute la famille",
     "Caméras : Presence (Netatmo) + 5 Imou, photo, direct et événements Presence",
     "Smart Life : sauna (marche/arrêt) et compteurs électrolyseur + pompe à chaleur",
@@ -229,7 +240,8 @@
     "Tuya : prolongation demandée le 12/11/2026, en attente de validation (essai actuel jusqu'au 12/12/2026 à 16:47)",
     "Option : demander à Tuya le service « Statistiques » pour récupérer l'historique d'avant le 12/11/2026",
     "Tester les réglages iAquaLink depuis l’appli (chloration, pH, Boost, filtration, programmes)",
-    "Pompe à chaleur Zodiac hors ligne depuis le 27/09 : à retester quand elle sera rallumée"
+    "Pompe à chaleur Zodiac hors ligne depuis le 27/09 : à retester quand elle sera rallumée",
+    "Tester la modification d’un planning (de préférence sur une copie d’abord)"
   ],
-  "time": "18:07"
+  "time": "18:16"
 }
