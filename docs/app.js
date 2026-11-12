@@ -52,7 +52,7 @@
     if (s < 10) return "à l'instant"; if (s < 60) return 'il y a ' + s + ' s';
     return 'il y a ' + Math.round(s / 60) + ' min';
   }
-  function busy() { return document.querySelector('.confirming, .armed-confirm, .slide.dragging') || (TAB === 'cams' && liveCam && document.querySelector('#app video')); }
+  function busy() { return document.querySelector('.confirming, .armed-confirm, .slide.dragging') || (TAB === 'cams' && document.querySelector('#app video') && allCams().map(function (c) { return c.id; }).join(',') === camsSig); }
 
   // ---------- API (n8n) ----------
   function api(body) {
@@ -121,6 +121,7 @@
       '<div class="ctl"><small>Consigne pH</small><div class="stp"><button data-iq-step="exo:ph_sp:-0.1"' + (off ? ' disabled' : '') + ' aria-label="Moins">−</button><b id="iq-exo-ph_sp">' + (ph == null ? '—' : fmt(ph, 1)) + '</b><button data-iq-step="exo:ph_sp:0.1"' + (off ? ' disabled' : '') + ' aria-label="Plus">+</button></div></div>' +
       '<button class="ctl tog' + (boost ? ' is-on' : '') + '" data-iq-tog="exo:boost"' + (off ? ' disabled' : '') + '><small>Boost' + (boost && x.boostTime ? ' · ' + esc(x.boostTime) : '') + '</small><span class="sw"></span></button>' +
       '<button class="ctl tog' + (pump ? ' is-on' : '') + '" data-iq-tog="exo:pump"' + (off ? ' disabled' : '') + '><small>Filtration</small><span class="sw"></span></button>' +
+      (x.aux1 != null ? '<button class="ctl tog wide' + (iqVal('exo', 'aux1', x.aux1) ? ' is-on light' : '') + '" data-iq-tog="exo:aux1"' + (off ? ' disabled' : '') + '><small>' + icon('bulb') + 'Éclairage piscine</small><span class="sw"></span></button>' : '') +
       '</div>' +
       '<button class="pool-sched" data-timers>' + icon('cal') + '<span>' + (progs.length ? Object.keys(byKind).map(function (k) { return '<b>' + esc(k) + '</b> ' + esc(byKind[k].join(' · ')); }).join('<br>') : 'Aucun programme actif') +
       '</span><span class="pool-edit">Programmes' + icon('down') + '</span></button>' +
@@ -274,6 +275,20 @@
         (it.confirm ? '<button class="act" data-slideopen="gate:item-' + id + '">' + esc(it.label || 'OK') + '</button></div>' + slideHTML('item-' + id)
           : '<button class="act" data-action="' + id + '" data-v="' + esc(it.value) + '" data-msg="' + esc(it.name) + ' : envoyé">' + esc(it.label || 'OK') + '</button></div>');
     }
+    if (it.type === 'yesno') {
+      var yes = num(id) === 1;
+      return '<button class="row' + (yes ? ' is-on yes' : '') + (pending[id] ? ' busy' : '') + '" data-yesno="' + id + '"><span class="ic">' + icon(it.icon || (CFG.alarm && CFG.alarm.items.indexOf(it) >= 0 ? 'shield' : 'blind')) + '</span>' +
+        '<span><b>' + esc(it.name) + '</b><small>' + esc((yes ? 'Oui' : 'Non') + (it.sub ? ' · ' + it.sub : '') + (since(id) ? ' · ' + since(id) : '')) + '</small></span><span class="sw"></span></button>';
+    }
+    if (it.type === 'choice') {
+      var cv = val(id);
+      return '<div class="row choice"><span class="ic">' + icon(it.icon || 'gear') + '</span><span><b>' + esc(it.name) + '</b><small>' + esc((it.sub ? it.sub + ' · ' : '') + since(id)) + '</small></span><span></span>' +
+        '<div class="chs">' + it.options.map(function (o) { return '<button class="' + (String(o[0]) === cv ? 'on' : '') + '" data-choice="' + id + ':' + o[0] + '">' + esc(o[1]) + '</button>'; }).join('') + '</div></div>';
+    }
+    if (it.type === 'state') {
+      var stx = STATES[id] ? STATES[id].text : '—', act = num(id) > 0;
+      return '<div class="row"><span class="ic">' + icon(it.icon || 'shield') + '</span><span><b>' + esc(it.name) + '</b><small>' + esc(since(id)) + '</small></span><span class="' + (act ? 'bad' : 'ok') + '">' + esc(stx) + '</span></div>';
+    }
     if (it.type === 'iaqua-exo') return poolExoHTML(it);
     if (it.type === 'iaqua-hp') return poolHpHTML(it);
     if (it.type === 'tuya-switch') {
@@ -323,7 +338,7 @@
       '<div class="dial"><button class="step" data-nt-step="-0.5" aria-label="Baisser la consigne">−</button>' +
       ring(r.temp, sp, '<em id="ntsp">Consigne ' + fmt(sp, 1) + '°</em><small>' + esc(modeTxt) + '</small>') +
       '<button class="step" data-nt-step="0.5" aria-label="Monter la consigne">+</button></div>' +
-      (r.mode === 'manual' || r.mode === 'max' ? '<button class="back" data-nt-home>Revenir au planning</button>' : '') +
+
       '<div class="rchips">' + chips + '</div>' +
       '<div class="modes">' +
       '<button class="' + (homeMode === 'schedule' ? 'on' : '') + '" data-nt-mode="schedule">Planning</button>' +
@@ -480,9 +495,9 @@
     if (r) {
       loadRoomHist(r.id);
       var sp = ntPend && String(ntPend.room) === String(r.id) ? ntPend.temp : r.setpoint, hp = HISTN[r.id];
-      h += '<div class="hcard"><button class="hc-top" data-goto="climate"><span>Chauffage · ' + esc(r.name) + '</span><span class="' + (r.heating ? 'heat' : 'mu') + '">' + icon('flame') + (r.heating ? 'Chauffe' : 'Au repos') + '</span></button>' +
-        '<div class="hc-mid"><div class="big">' + fmt(r.temp, 1) + '°<em id="ntsp">Consigne ' + fmt(sp, 1) + '°</em></div>' +
-        '<div class="hc-sp">' + spark(hp && hp.points ? hp.points : null, { w: 180, h: 60, ref: sp }) + '</div></div>' +
+      h += '<div class="hcard"><button class="hc-top" data-graph="' + esc(r.id) + '"><span>Chauffage · ' + esc(r.name) + '</span><span class="' + (r.heating ? 'heat' : 'mu') + '">' + icon('flame') + (r.heating ? 'Chauffe' : NT.boiler ? 'Chaudière en marche' : 'Au repos') + '</span></button>' +
+        '<button class="hc-mid" data-graph="' + esc(r.id) + '"><div class="big">' + fmt(r.temp, 1) + '°<em id="ntsp">Consigne ' + fmt(sp, 1) + '°</em></div>' +
+        '<div class="hc-sp">' + spark(hp && hp.points ? hp.points : null, { w: 180, h: 60, ref: sp }) + '</div></button>' + manualHTML(r) +
         '<div class="hc-plan"><span><b>' + esc(NT.schedule || 'Planning') + '</b> · ' + esc(schedWhen()) + '</span>' +
         '<span class="stp2"><button data-nt-step="-0.5" aria-label="Baisser">−</button><button data-nt-step="0.5" aria-label="Monter">+</button></span></div></div>';
     } else {
@@ -520,6 +535,129 @@
   }
   function findRoom(id) { var f = null; CFG.groups.forEach(function (g) { g.rooms.forEach(function (r) { if (r.id === id) f = r; }); }); return f; }
 
+  // Consigne manuelle : bien visible, avec un bouton pour revenir au planning
+  function manualHTML(r) {
+    if (!r || (r.mode !== 'manual' && r.mode !== 'max')) return '';
+    return '<div class="manual"><span>' + icon('hand') + '<b>' + (r.mode === 'max' ? 'Boost' : 'Manuel') + ' ' + fmt(r.setpoint, 1) + '°</b>' +
+      (r.end ? " jusqu'à " + hhmm(r.end) : '') + '</span><button data-nt-homeroom="' + esc(r.id) + '">' + icon('x') + 'Retirer</button></div>';
+  }
+  function resetRoom(id) {
+    var rm = (NT.rooms || []).filter(function (x) { return String(x.id) === String(id); })[0];
+    toast('Retour au planning…');
+    return api({ action: 'nt.setpoint', room: id, mode: 'home' }).then(function (j) { NT = j; render(); toast((rm ? rm.name : 'Pièce') + ' : retour au planning'); })
+      .catch(function () { toast('Netatmo ne répond pas, réessaie', true); });
+  }
+
+  // ---------- Graphique détaillé d'une pièce (comme l'appli Netatmo) ----------
+  var GR = null; // { room, range, end, data, idx, loading }
+  var GR_RANGES = [['6h', '6H', 6 * 3600], ['1d', '1J', 86400], ['1w', '1S', 7 * 86400], ['1m', '1M', 30 * 86400], ['1y', '1A', 365 * 86400]];
+  function openGraph(room) { GR = { room: String(room), range: '1d', end: null, data: null, idx: null }; sheet.scrollTop = 0; openSheet('graph'); loadGraph(); }
+  function loadGraph() {
+    if (!GR) return; var g = GR, want = g.room + '|' + g.range + '|' + g.end;
+    g.loading = true; renderGraph();
+    api({ action: 'nt.roomgraph', room: g.room, range: g.range, end: g.end || undefined }).then(function (j) {
+      if (!GR || GR.room + '|' + GR.range + '|' + GR.end !== want) return;
+      GR.data = j; GR.idx = null; GR.loading = false; renderGraph();
+    }).catch(function () { if (GR) { GR.loading = false; GR.error = true; renderGraph(); } });
+  }
+  function graphSVG(d, idx) {
+    if (!d) return '<p class="muted">Chargement…</p>';
+    var rows = (d.rows || []).filter(function (r) { return r[1] != null; });
+    if (rows.length < 2) return '<div class="spark-empty">Pas de mesures sur cette période.</div>';
+    var W = 340, H = 300, L = 30, R = 8, T = 18, B = 22, x0 = d.begin, x1 = d.end;
+    var temps = [], sps = [];
+    rows.forEach(function (r) { temps.push(r[1]); if (r[2] != null) sps.push(r[2]); });
+    var lo = Math.floor(Math.min.apply(null, temps.concat(sps)) - 0.5), hi = Math.ceil(Math.max.apply(null, temps.concat(sps)) + 0.5);
+    if (hi - lo < 4) { hi = lo + 4; }
+    var bandH = (H - T - B) * 0.28, X = function (t) { return L + (t - x0) / (x1 - x0) * (W - L - R); }, Y = function (v) { return T + (1 - (v - lo) / (hi - lo)) * (H - T - B); };
+    var s = '<svg class="gsvg" viewBox="0 0 ' + W + ' ' + H + '" data-gsvg>';
+    for (var v = lo; v <= hi; v++) s += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + Y(v).toFixed(1) + '" y2="' + Y(v).toFixed(1) + '" class="g-grid"/><text x="' + (L - 6) + '" y="' + (Y(v) + 3).toFixed(1) + '" class="g-yl" text-anchor="end">' + v + '</text>';
+    // % de chauffe (barres orange en bas)
+    var step = rows.length > 1 ? (X(rows[1][0]) - X(rows[0][0])) : 6, bw = Math.max(1.5, step * 0.6);
+    rows.forEach(function (r) { if (r[3] > 0) { var hh = r[3] / 100 * bandH; s += '<rect x="' + (X(r[0]) - bw / 2).toFixed(1) + '" y="' + (H - B - hh).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + hh.toFixed(1) + '" rx="1" class="g-heat"/>'; } });
+    // consigne (escalier rouge)
+    var sp = rows.filter(function (r) { return r[2] != null; });
+    if (sp.length) {
+      var dp = 'M' + X(sp[0][0]).toFixed(1) + ' ' + Y(sp[0][2]).toFixed(1);
+      for (var i = 1; i < sp.length; i++) dp += ' H' + X(sp[i][0]).toFixed(1) + ' V' + Y(sp[i][2]).toFixed(1);
+      s += '<path d="' + dp + '" class="g-sp"/>';
+    }
+    // température (courbe bleue)
+    var dt = rows.map(function (r, i) { return (i ? 'L' : 'M') + X(r[0]).toFixed(1) + ' ' + Y(r[1]).toFixed(1); }).join(' ');
+    s += '<path d="' + dt + '" class="g-t"/>';
+    // axe des temps
+    var span = x1 - x0, ticks = span <= 6 * 3600 ? 6 : span <= 86400 ? 6 : span <= 8 * 86400 ? 7 : span <= 31 * 86400 ? 5 : 6;
+    for (var k = 0; k <= ticks; k++) {
+      var t = x0 + span * k / ticks, dd = new Date(t * 1000), lab;
+      if (span <= 86400) lab = String(dd.getHours()).padStart(2, '0') + 'h';
+      else if (span <= 8 * 86400) lab = dd.toLocaleDateString('fr-FR', { weekday: 'short' }).replace('.', '');
+      else if (span <= 31 * 86400) lab = dd.getDate() + '/' + (dd.getMonth() + 1);
+      else lab = dd.toLocaleDateString('fr-FR', { month: 'short' }).replace('.', '');
+      s += '<text x="' + X(t).toFixed(1) + '" y="' + (H - 6) + '" class="g-xl" text-anchor="' + (k === 0 ? 'start' : k === ticks ? 'end' : 'middle') + '">' + lab + '</text>';
+    }
+    // curseur
+    var c = rows[idx == null ? rows.length - 1 : idx];
+    if (c) {
+      s += '<line x1="' + X(c[0]).toFixed(1) + '" x2="' + X(c[0]).toFixed(1) + '" y1="' + (T - 10) + '" y2="' + (H - B) + '" class="g-cur"/>';
+      s += '<text x="' + X(c[0]).toFixed(1) + '" y="' + (T - 10) + '" class="g-xl" text-anchor="' + (X(c[0]) > W - 40 ? 'end' : 'middle') + '">' + new Date(c[0] * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) + '</text>';
+      if (c[2] != null) s += '<circle cx="' + X(c[0]).toFixed(1) + '" cy="' + Y(c[2]).toFixed(1) + '" r="5" class="g-dsp"/>';
+      s += '<circle cx="' + X(c[0]).toFixed(1) + '" cy="' + Y(c[1]).toFixed(1) + '" r="5" class="g-dt"/>';
+    }
+    return s + '</svg>';
+  }
+  function renderGraph() {
+    if (!GR) return;
+    var rm = NT && (NT.rooms || []).filter(function (x) { return String(x.id) === GR.room; })[0];
+    var h = '<div class="sh-hd"><h2>' + esc(rm ? rm.name : 'Pièce') + '</h2><button class="close" data-close aria-label="Fermer">×</button></div>';
+    h += '<div class="en-tabs g5">' + GR_RANGES.map(function (r) { return '<button class="' + (GR.range === r[0] ? 'on' : '') + '" data-grange="' + r[0] + '">' + r[1] + '</button>'; }).join('') + '</div>';
+    var span = GR_RANGES.filter(function (r) { return r[0] === GR.range; })[0][2], endT = GR.end || Math.floor(Date.now() / 1000), begT = endT - span;
+    var fmtD = function (t) { return new Date(t * 1000).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: span > 86400 * 40 ? 'numeric' : undefined }); };
+    h += '<div class="gnav"><button data-gstep="-1" aria-label="Période précédente">' + icon('down') + '</button><span>' + (span <= 86400 ? fmtD(endT) : fmtD(begT) + ' – ' + fmtD(endT)) + '</span>' +
+      '<button data-gstep="1" aria-label="Période suivante"' + (GR.end ? '' : ' disabled') + '>' + icon('down') + '</button></div>';
+    var d = GR.data, rows = d ? (d.rows || []).filter(function (r) { return r[1] != null; }) : [], c = rows.length ? rows[GR.idx == null ? rows.length - 1 : GR.idx] : null;
+    h += '<div class="glegend"><div class="gl t"><b>' + (c ? fmt(c[1], 1) + ' °C' : '—') + '</b><small>Température</small></div>' +
+      '<div class="gl s"><b>' + (c && c[2] != null ? fmt(c[2], 1) + ' °C' : '—') + '</b><small>Consigne</small></div>' +
+      '<div class="gl c"><b>' + (c && c[3] != null ? c[3] + ' %' : '—') + '</b><small>Chauffage</small></div></div>';
+    h += '<div class="gwrap">' + (GR.loading && !d ? '<p class="muted">Chargement…</p>' : GR.error && !d ? '<p class="muted">Netatmo ne répond pas, réessaie.</p>' : graphSVG(d, GR.idx)) + '</div>';
+    h += '<p class="note-q">Touche ou fais glisser ton doigt sur le graphique pour lire les valeurs à un moment précis.</p>';
+    if (NT && NT.rooms) h += '<div class="rchips gch">' + NT.rooms.map(function (x) { return '<button class="rchip' + (String(x.id) === GR.room ? ' on' : '') + '" data-groom="' + esc(x.id) + '">' + esc(x.name) + '</button>'; }).join('') + '</div>';
+    var keep = sheet.scrollTop; sheet.innerHTML = '<div class="sh-in">' + h + '</div>'; sheet.scrollTop = keep;
+  }
+  function graphPick(e) {
+    var svg = e.target.closest('[data-gsvg]'); if (!svg || !GR || !GR.data) return;
+    var rows = (GR.data.rows || []).filter(function (r) { return r[1] != null; }); if (!rows.length) return;
+    var rc = svg.getBoundingClientRect(), x = (e.clientX - rc.left) / rc.width * 340, L = 30, R = 8;
+    var t = GR.data.begin + (x - L) / (340 - L - R) * (GR.data.end - GR.data.begin), best = 0, bd = Infinity;
+    rows.forEach(function (r, i) { var dd = Math.abs(r[0] - t); if (dd < bd) { bd = dd; best = i; } });
+    if (best !== GR.idx) { GR.idx = best; renderGraph(); }
+  }
+  sheet.addEventListener('pointerdown', function (e) { if (e.target.closest('[data-gsvg]')) { graphPick(e); sheet._gdrag = true; } });
+  sheet.addEventListener('pointermove', function (e) { if (sheet._gdrag) graphPick(e); });
+  sheet.addEventListener('pointerup', function () { sheet._gdrag = false; });
+
+  // ---------- Onglet Alarme ----------
+  var ALARM_STATE = { 0: ['Désactivée', ''], 12: ['Activée', 'ok'], 13: ['Intrusion détectée', 'bad'], 14: ['Sirène en cours', 'bad'], 5: ['Activation temporisée', 'warnc'] };
+  function since(id) {
+    var s = STATES[id]; if (!s || !s.changed) return '';
+    var t = new Date(s.changed.replace(' ', 'T')).getTime(), m = Math.max(0, Math.round((Date.now() - t) / 60000));
+    if (m < 60) return 'depuis ' + m + ' min'; var hh = Math.round(m / 60); if (hh < 48) return 'depuis ' + hh + ' h';
+    var dd = Math.round(hh / 24); if (dd < 60) return 'depuis ' + dd + ' jours'; return 'depuis ' + Math.round(dd / 30) + ' mois';
+  }
+  function alarmHTML() {
+    var A = CFG.alarm || { items: [] }, v = num(A.status), st = ALARM_STATE[v] || [(STATES[A.status] || {}).text || '—', ''], armed = v != null && v !== 0;
+    var h = '<div class="acard ' + st[1] + '"><span class="aic">' + icon('shield') + '</span><span><b>Alarme ' + esc(st[0].toLowerCase()) + '</b><small>' + esc(since(A.status)) + '</small></span></div>';
+    SLIDE = SLIDE && SLIDE.where === 'alarmtab' ? SLIDE : { key: armed ? 'alarm-off' : 'alarm-on', where: 'alarmtab' };
+    SLIDE.key = armed ? 'alarm-off' : 'alarm-on';
+    h += slideHTML('alarmtab').replace('<button class="sl-x" data-slidex>Annuler</button>', '');
+    var grp = function (g, title) {
+      var items = A.items.filter(function (it) { return it.group === g; }); if (!items.length) return '';
+      return '<div class="lbl">' + title + '</div><div class="card2 flat">' + items.map(rowHTML).join('') + '</div>';
+    };
+    h += grp('mode', 'Paramétrage') + grp('zones', 'Zones surveillées') + grp('tempo', 'Temporisations') + grp('sirens', 'Sirènes');
+    h += '<p class="note-q">Les réglages s\'appliquent tout de suite. Seule l\'activation de l\'alarme demande de glisser le bouton.</p>';
+    return h;
+  }
+
   // ---------- Onglet Climat ----------
   function climateHTML() {
     var h = heroHTML();
@@ -527,11 +665,14 @@
     if (r) {
       loadRoomHist(r.id);
       var hp = HISTN[r.id], sp = ntPend && String(ntPend.room) === String(r.id) ? ntPend.temp : r.setpoint;
-      h += '<div class="lbl">Température · ' + esc(r.name) + ' · 24 h</div><div class="card2">' +
+      h += manualHTML(r).replace('class="manual"', 'class="manual big"');
+      h += '<div class="lbl">Température · ' + esc(r.name) + ' · 24 h</div><button class="card2 gtap" data-graph="' + esc(r.id) + '">' +
         spark(hp && hp.points ? hp.points : null, { w: 320, h: 90, ref: sp, labels: ['−24 h', '−18 h', '−12 h', '−6 h', 'maint.'] }) +
-        '<div class="legend"><span><i style="background:#FF8A5B"></i>Mesurée</span><span><i class="dash"></i>Consigne ' + fmt(sp, 1) + '°</span></div></div>';
+        '<div class="legend"><span><i style="background:#FF8A5B"></i>Mesurée</span><span><i class="dash"></i>Consigne ' + fmt(sp, 1) + '°</span><span class="more">Détails ›</span></div></button>';
       h += '<div class="lbl">Toutes les pièces</div><div class="card2 rooms2">' + NT.rooms.map(function (x) {
-        return '<button class="r2' + (x.id === r.id ? ' on' : '') + '" data-ntroom="' + esc(x.id) + '"><span>' + (x.heating ? icon('flame') : '') + esc(x.name) + '</span><span class="mono">' + fmt(x.temp, 1) + '° <small>→ ' + fmt(x.setpoint, 1) + '°</small></span></button>';
+        var man = x.mode === 'manual' || x.mode === 'max';
+        return '<div class="r2' + (x.id === r.id ? ' on' : '') + '"><button class="r2-b" data-ntroom="' + esc(x.id) + '"><span>' + (x.heating ? icon('flame') : '') + esc(x.name) + (man ? '<i class="mtag">manuel</i>' : '') + '</span>' +
+          '<span class="mono">' + fmt(x.temp, 1) + '° <small>→ ' + fmt(x.setpoint, 1) + '°</small></span></button>' + (man ? '<button class="r2-x" data-nt-homeroom="' + esc(x.id) + '" aria-label="Retirer la consigne manuelle">' + icon('x') + '</button>' : '') + '</div>';
       }).join('') + '</div>';
     }
     return h;
@@ -540,6 +681,8 @@
   // ---------- Onglet Caméras ----------
   function camsTabHTML() {
     var cams = allCams(), h = '';
+    camsSig = cams.map(function (c) { return c.id; }).join(',');
+    h += '<button class="autolive' + (autoLive ? ' on' : '') + '" data-autolive><span><b>Tout en direct</b><small>' + (autoLive ? 'Les caméras démarrent seules (Imou en SD pour économiser le forfait)' : 'Touche une caméra pour la voir en direct') + '</small></span><span class="sw"></span></button>';
     h += cams.map(camCardHTML).join('');
     if (!CAMS || !IM) h += '<p class="muted">Chargement des caméras…</p>';
     if (IM && IM.error) h += '<p class="muted">Caméras Imou indisponibles pour le moment.</p>';
@@ -600,7 +743,7 @@
     }).join('');
   }
 
-  var TITLES = { home: 'Accueil', rooms: 'Pièces', climate: 'Climat', cams: 'Caméras', more: 'Plus' };
+  var TITLES = { home: 'Accueil', rooms: 'Pièces', climate: 'Climat', cams: 'Caméras', alarm: 'Alarme', more: 'Plus' };
   function render() {
     if (!CFG || !token) return;
     var y = window.scrollY, body;
@@ -608,6 +751,7 @@
     else if (TAB === 'climate') body = climateHTML();
     else if (TAB === 'cams') body = camsTabHTML();
     else if (TAB === 'more') body = moreHTML();
+    else if (TAB === 'alarm') body = alarmHTML();
     else body = homeHTML();
     var d = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
     app.innerHTML =
@@ -636,11 +780,12 @@
     else if (view === 'energy') renderEnergy();
     else if (view === 'timers') renderTimers();
     else if (view === 'plans') renderPlans();
+    else if (view === 'graph') renderGraph();
     else if (view === 'plan') renderPlan();
     else renderSettings();
   }
   function closeSheet() {
-    sheet.hidden = true; sheet.innerHTML = ''; liveCam = null; liveHd = true; REC = null; ENG = null; TED = null; PE = null; document.body.classList.remove('noscroll');
+    sheet.hidden = true; sheet.innerHTML = ''; liveCam = null; liveHd = true; REC = null; ENG = null; TED = null; PE = null; GR = null; document.body.classList.remove('noscroll');
   }
 
   // ---------- Plannings Netatmo : liste, création, modification (comme l'appli Netatmo) ----------
@@ -824,15 +969,17 @@
       setTimeout(function () { refreshIq(true); if (!sheet.hidden && sheet.dataset.view === 'timers' && !TED) renderTimers(); }, 15000);
     }).catch(function (e) { toast(e.status === 403 ? 'Horaire invalide' : 'iAquaLink ne répond pas, réessaie', true); });
   }
+  var autoLive = store.get('maison.autolive') !== '0', camHd = {}, camsSig = '';
   function camCardHTML(c) {
-    var live = liveCam === c.id && c.live;
-    var src = c.src === 'imou' && liveHd && c.liveHd ? c.liveHd : c.live;
+    var live = ((autoLive && TAB === 'cams') || liveCam === c.id) && c.live;
+    var hd = camHd[c.id] !== undefined ? camHd[c.id] : (!autoLive && liveCam === c.id);
+    var src = c.src === 'imou' && hd && c.liveHd ? c.liveHd : c.live;
     return '<div class="camcard" id="cc-' + esc(c.id) + '">' +
       (live ? '<video id="v-' + esc(c.id) + '" src="' + esc(src) + '" autoplay muted playsinline controls></video>'
         : '<button class="camimg" data-live="' + esc(c.id) + '"' + (c.live ? '' : ' disabled') + '>' + (c.snapshot ? '<img alt="" src="' + esc(snapUrl(c)) + '">' : '') +
           '<span class="play">' + icon('play') + (c.live ? 'Voir en direct' : 'Indisponible') + '</span></button>') +
       '<div class="cammeta"><b>' + esc(c.name) + '</b><span class="cm-r">' +
-      (live && c.src === 'imou' && c.liveHd ? '<button class="hdbtn' + (liveHd ? ' on' : '') + '" data-hd>' + (liveHd ? 'HD' : 'SD') + '</button>' : '') +
+      (live && c.src === 'imou' && c.liveHd ? '<button class="hdbtn' + (hd ? ' on' : '') + '" data-hd="' + esc(c.id) + '">' + (hd ? 'HD' : 'SD') + '</button>' : '') +
       '<button class="recbtn" data-rec="' + esc(c.id) + '">' + icon('rec') + 'Enregistrements</button>' +
       '<span class="' + (c.on ? 'ok' : 'bad') + '">' + (c.on ? 'En ligne' : 'Hors ligne') + '</span></span></div></div>';
   }
@@ -1031,12 +1178,13 @@
       '<ul class="lst ok">' + L.works.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></details>' +
       '<details class="acc2"><summary><span>Reste à faire</span><span class="cnt todo">' + L.todo.length + '</span>' + icon('down') + '</summary>' +
       '<ul class="lst todo">' + L.todo.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></details>' +
-      '<h3>Historique des versions</h3>' + L.releases.map(function (r, i) {
+      '<h3>Dernières versions</h3>' + L.releases.slice(0, 3).map(function (r, i) {
         return '<details class="acc2 rel"><summary><span class="rel-v">v' + esc(r.version) + '</span>' +
           '<span class="rel-t"><b>' + esc(r.title) + '</b><small>' + esc(dateFr(r.date)) + (r.time ? ' à ' + esc(r.time) : '') + '</small></span>' +
           (i === 0 ? '<span class="new">Actuelle</span>' : '') + icon('down') + '</summary>' +
           '<ul>' + r.changes.map(function (c) { return '<li>' + esc(c) + '</li>'; }).join('') + '</ul></details>';
-      }).join('');
+      }).join('') + (L.releases.length > 3 ? '<p class="note-q">' + (L.releases.length - 3) + ' versions plus anciennes ne sont pas affichées.</p>' : '') +
+      '<p class="note-q">Les mises à jour s\'installent toutes seules à l\'ouverture de l\'appli.</p>';
     sheet.innerHTML = '<div class="sh-in">' + h + '</div>';
     if (newVersion) { newVersion = false; store.set('maison.seenVersion', L.version); render(); }
   }
@@ -1075,6 +1223,10 @@
     if ((b = e.target.closest('[data-opencams]'))) { liveCam = b.dataset.opencams; liveHd = true; TAB = 'cams'; store.set('maison.tab', TAB); loadCams(false); loadImou(false); render();
       var cc = document.getElementById('cc-' + liveCam); if (cc) cc.scrollIntoView({ block: 'center' }); return; }
     // Accès rapide de l'accueil
+    if ((b = e.target.closest('[data-yesno]'))) { var yid = +b.dataset.yesno; return send(yid, num(yid) === 1 ? 0 : 1); }
+    if ((b = e.target.closest('[data-choice]'))) { var cp = b.dataset.choice.split(':'); return send(+cp[0], +cp[1]); }
+    if ((b = e.target.closest('[data-graph]'))) return openGraph(b.dataset.graph);
+    if ((b = e.target.closest('[data-nt-homeroom]'))) return resetRoom(b.dataset.ntHomeroom);
     if ((b = e.target.closest('[data-qa]'))) {
       var qa = b.dataset.qa;
       if (qa === 'gate') return openSlide('gate', 'home');
@@ -1092,7 +1244,8 @@
     }
     // Caméras (onglet)
     if ((b = e.target.closest('[data-live]'))) { liveCam = b.dataset.live; liveHd = true; return render(); }
-    if (e.target.closest('[data-hd]')) { liveHd = !liveHd; return render(); }
+    if ((b = e.target.closest('[data-hd]'))) { var hid = b.dataset.hd; camHd[hid] = !(camHd[hid] !== undefined ? camHd[hid] : (!autoLive && liveCam === hid)); return render(); }
+    if (e.target.closest('[data-autolive]')) { autoLive = !autoLive; store.set('maison.autolive', autoLive ? '1' : '0'); liveCam = null; return render(); }
     if ((b = e.target.closest('[data-rec]'))) return openRec(b.dataset.rec);
     if ((b = e.target.closest('[data-evplay]'))) return playEvent(b.dataset.evplay);
     if ((b = e.target.closest('[data-ntroom]'))) { ntRoom = b.dataset.ntroom; store.set('maison.ntRoom', ntRoom); ntPend = null; loadRoomHist(ntRoom); return render(); }
@@ -1135,7 +1288,7 @@
       var pt = b.dataset.iqTog.split(':'), dv = pt[0], ky = pt[1];
       var curV = dv === 'exo' ? iqVal('exo', ky, IQ.exo[ky]) : iqVal('hp', 'on', IQ.hp.on ? 1 : 0);
       var nv = curV ? 0 : 1;
-      var names = { 'exo:boost': 'Boost', 'exo:pump': 'Filtration', 'hp:on': 'Pompe à chaleur' };
+      var names = { 'exo:boost': 'Boost', 'exo:pump': 'Filtration', 'exo:aux1': 'Éclairage piscine', 'hp:on': 'Pompe à chaleur' };
       iqPend[dv + ':' + ky] = { v: nv, until: Date.now() + 20000 }; render();
       return iqSend(dv, ky, nv, names[dv + ':' + ky] + (nv ? ' : marche' : ' : arrêt'));
     }
@@ -1165,6 +1318,12 @@
     if (e.target.closest('[data-hd]')) { liveHd = !liveHd; return renderCams(); }
     if ((b = e.target.closest('[data-rec]'))) return openRec(b.dataset.rec);
     if ((b = e.target.closest('[data-entab]'))) { ENG.tab = b.dataset.entab; return renderEnergy(); }
+    if ((b = e.target.closest('[data-grange]'))) { GR.range = b.dataset.grange; GR.end = null; return loadGraph(); }
+    if ((b = e.target.closest('[data-groom]'))) { GR.room = b.dataset.groom; GR.end = null; return loadGraph(); }
+    if ((b = e.target.closest('[data-gstep]'))) {
+      var span = GR_RANGES.filter(function (r) { return r[0] === GR.range; })[0][2], now = Math.floor(Date.now() / 1000);
+      var ne = (GR.end || now) + (+b.dataset.gstep) * span; GR.end = ne >= now ? null : ne; return loadGraph();
+    }
     // --- Plannings Netatmo ---
     if ((b = e.target.closest('[data-pactivate]'))) {
       var pid = b.dataset.pactivate; b.classList.add('busy');
@@ -1293,6 +1452,7 @@
     if (t === 'cams') { loadCams(false); loadImou(false); }
     if (t === 'more') { refreshIq(true); refreshTuya(true); loadEnergyToday(); loadHistE(3557564, 168); }
     if (t === 'climate') { var r = ntCurrentRoom(); if (r) loadRoomHist(r.id); }
+    if (t === 'alarm') refresh();
     render();
   });
 
@@ -1326,12 +1486,30 @@
     return f;
   }
 
+  // ---------- Mise à jour automatique ----------
+  var updating = false;
+  function checkUpdate() {
+    if (updating || !LOG) return;
+    fetch('changelog.json', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (l) {
+      if (!l || !l.version || l.version === LOG.version) return;
+      // pas de rechargement pendant une saisie (éditeur de planning, glissement, vidéo)
+      if ((PE && PE.dirty) || document.querySelector('.slide.dragging') || TED) return;
+      updating = true; toast('Mise à jour vers la version ' + l.version + '…');
+      var go = function () { location.reload(); };
+      if (navigator.serviceWorker && navigator.serviceWorker.getRegistration) {
+        navigator.serviceWorker.getRegistration().then(function (reg) { return reg ? reg.update() : null; }).then(function () { setTimeout(go, 900); }, function () { setTimeout(go, 900); });
+      } else setTimeout(go, 900);
+    }).catch(function () {});
+  }
+  setInterval(function () { if (!document.hidden) checkUpdate(); }, 180000);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) checkUpdate(); });
+
   // ---------- Démarrage ----------
   fetch('changelog.json', { cache: 'no-cache' }).then(function (r) { return r.json(); }).then(function (l) {
     LOG = l;
     var seen = store.get('maison.seenVersion');
     if (!seen) store.set('maison.seenVersion', l.version);
-    else if (seen !== l.version) { newVersion = true; setTimeout(function () { toast('Nouvelle version ' + l.version + ' : touche ⚙︎ pour les nouveautés'); }, 1200); }
+    else if (seen !== l.version) { newVersion = true; setTimeout(function () { toast('Appli mise à jour : version ' + l.version); }, 1200); }
     render();
   }).catch(function () {});
 

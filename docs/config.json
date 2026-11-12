@@ -44,7 +44,7 @@
       "rooms": [
         {
           "id": "volets",
-          "name": "Tous les volets",
+          "name": "Volets",
           "items": [
             {
               "id": 835741,
@@ -61,6 +61,22 @@
               "value": 1,
               "label": "Fermer",
               "icon": "down"
+            },
+            {
+              "id": 3532306,
+              "name": "Quelqu'un dort dans la chambre d'amis",
+              "sub": "Chambre du bas",
+              "type": "yesno"
+            },
+            {
+              "id": 3432548,
+              "name": "Ouvrir les volets de la chambre le matin",
+              "type": "yesno"
+            },
+            {
+              "id": 3082639,
+              "name": "Lever les volets le matin sur mouvement",
+              "type": "yesno"
             }
           ]
         }
@@ -314,11 +330,6 @@
               "label": "Électrolyseur"
             },
             {
-              "id": 2090770,
-              "name": "Spot abri",
-              "type": "light"
-            },
-            {
               "id": 3557562,
               "name": "Eau",
               "type": "sensor",
@@ -401,5 +412,192 @@
         }
       ]
     }
-  ]
+  ],
+  "alarm": {
+    "status": 881876,
+    "items": [
+      {
+        "id": 922325,
+        "name": "Paramétrage",
+        "type": "choice",
+        "group": "mode",
+        "options": [
+          [
+            100,
+            "Manuel"
+          ],
+          [
+            0,
+            "Automatique"
+          ]
+        ]
+      },
+      {
+        "id": 1029080,
+        "name": "Ouvertures",
+        "sub": "Portes et fenêtres",
+        "type": "yesno",
+        "group": "zones"
+      },
+      {
+        "id": 1029099,
+        "name": "Volumétrique rez-de-chaussée",
+        "sub": "Détecteurs de mouvement du RDC",
+        "type": "yesno",
+        "group": "zones"
+      },
+      {
+        "id": 1029098,
+        "name": "Volumétrique étage",
+        "sub": "Détecteurs de mouvement de l'étage",
+        "type": "yesno",
+        "group": "zones"
+      },
+      {
+        "id": 2993598,
+        "name": "Mouvement couloir",
+        "type": "yesno",
+        "group": "zones"
+      },
+      {
+        "id": 1583886,
+        "name": "Temporisation mouvement haut",
+        "type": "yesno",
+        "group": "zones"
+      },
+      {
+        "id": 916822,
+        "name": "Activation différée",
+        "sub": "L'alarme s'active automatiquement après",
+        "type": "choice",
+        "group": "tempo",
+        "options": [
+          [
+            0,
+            "Non"
+          ],
+          [
+            11,
+            "2 min"
+          ],
+          [
+            10,
+            "5 min"
+          ],
+          [
+            9,
+            "15 min"
+          ],
+          [
+            8,
+            "30 min"
+          ],
+          [
+            7,
+            "1 h"
+          ],
+          [
+            6,
+            "2 h"
+          ],
+          [
+            5,
+            "3 h"
+          ],
+          [
+            4,
+            "4 h"
+          ],
+          [
+            3,
+            "5 h"
+          ],
+          [
+            2,
+            "6 h"
+          ],
+          [
+            1,
+            "12 h"
+          ]
+        ]
+      },
+      {
+        "id": 916894,
+        "name": "Remise à zéro de la temporisation",
+        "type": "choice",
+        "group": "tempo",
+        "options": [
+          [
+            0,
+            "Non"
+          ],
+          [
+            1,
+            "2 min"
+          ],
+          [
+            2,
+            "5 min"
+          ],
+          [
+            3,
+            "15 min"
+          ],
+          [
+            4,
+            "30 min"
+          ],
+          [
+            5,
+            "1 h"
+          ],
+          [
+            6,
+            "2 h"
+          ],
+          [
+            7,
+            "3 h"
+          ],
+          [
+            8,
+            "4 h"
+          ],
+          [
+            9,
+            "5 h"
+          ],
+          [
+            10,
+            "6 h"
+          ],
+          [
+            11,
+            "12 h"
+          ]
+        ]
+      },
+      {
+        "id": 907645,
+        "name": "Macro temporisation",
+        "type": "yesno",
+        "group": "tempo"
+      },
+      {
+        "id": 930339,
+        "name": "Sirène",
+        "type": "state",
+        "group": "sirens",
+        "icon": "shield"
+      },
+      {
+        "id": 961108,
+        "name": "Sirène 2",
+        "type": "state",
+        "group": "sirens",
+        "icon": "shield"
+      }
+    ]
+  }
 }

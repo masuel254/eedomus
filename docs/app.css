@@ -517,3 +517,81 @@ svg.spark { display: block; width: 100%; height: auto; overflow: visible; }
 #app > .foot { padding: 18px 16px 10px; }
 
 .fv-big { font-family: var(--f-mono); font-size: 22px; font-weight: 500; }
+
+/* =================== v2.1 =================== */
+.tabs { grid-template-columns: repeat(6, 1fr); }
+.tabs button { font-size: 10px; }
+.tabs button svg.i { width: 23px; height: 23px; }
+
+/* Accueil : carte chauffage cliquable, consigne manuelle */
+button.hc-mid { width: 100%; text-align: left; }
+.manual { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 9px 10px 9px 12px; border-radius: 14px;
+  background: rgba(124,178,255,.12); border: 1px solid rgba(124,178,255,.35); color: var(--tx); font-size: 13px; }
+.manual span { display: inline-flex; align-items: center; gap: 6px; }
+.manual span svg.i { width: 16px; height: 16px; color: var(--cool); }
+.manual button { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; font-weight: 800; padding: 7px 11px; border-radius: 10px; background: var(--cool); color: #0B1424; }
+.manual button svg.i { width: 14px; height: 14px; stroke-width: 2.6; }
+.manual.big { margin: 12px 16px 0; }
+.r2 { display: grid; grid-template-columns: 1fr auto; align-items: center; padding: 0; }
+.r2-b { width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; font-size: 14px; font-weight: 600; }
+.r2-x { width: 30px; height: 30px; margin-right: 10px; border-radius: 50%; background: rgba(124,178,255,.18); color: var(--cool); display: grid; place-items: center; }
+.r2-x svg.i { width: 14px; height: 14px; margin: 0; color: var(--cool); stroke-width: 2.6; }
+.mtag { font-style: normal; font-size: 10.5px; font-weight: 800; color: var(--cool); background: rgba(124,178,255,.14); padding: 2px 6px; border-radius: 6px; margin-left: 6px; }
+button.card2.gtap { display: block; width: calc(100% - 32px); text-align: left; }
+.legend .more { margin-left: auto; color: var(--cool); font-weight: 700; }
+
+/* Graphique détaillé (comme l'appli Netatmo) */
+.en-tabs.g5 { grid-template-columns: repeat(5, 1fr); }
+.en-tabs.g5 button.on { background: #3B82F6; color: #fff; }
+.gnav { display: grid; grid-template-columns: 36px 1fr 36px; align-items: center; text-align: center; font-weight: 700; margin: 6px 0 10px; }
+.gnav button { width: 36px; height: 36px; border-radius: 50%; background: var(--s2); display: grid; place-items: center; color: var(--mu); }
+.gnav button:first-child svg.i { transform: rotate(90deg); }
+.gnav button:last-child svg.i { transform: rotate(-90deg); }
+.gnav button:disabled { opacity: .3; }
+.glegend { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin-bottom: 8px; }
+.gl { border-radius: 12px; padding: 8px 10px; display: grid; gap: 2px; background: var(--s1); border-left: 4px solid; }
+.gl b { font-family: var(--f-mono); font-size: 15px; font-weight: 500; }
+.gl small { color: var(--mu); font-size: 11.5px; }
+.gl.t { border-color: #5B8CFF; } .gl.s { border-color: #FF7A7A; } .gl.c { border-color: #FFB37A; }
+.gwrap { background: var(--s1); border: 1px solid var(--ln); border-radius: 18px; padding: 8px 6px 4px; touch-action: none; }
+svg.gsvg { display: block; width: 100%; height: auto; user-select: none; -webkit-user-select: none; }
+.g-grid { stroke: #22272E; stroke-width: 1; }
+.g-yl, .g-xl { fill: var(--mu); font-size: 10px; font-family: var(--f-mono); }
+.g-heat { fill: #FFB37A; opacity: .9; }
+.g-sp { fill: none; stroke: #FF7A7A; stroke-width: 1.8; }
+.g-t { fill: none; stroke: #5B8CFF; stroke-width: 2.2; stroke-linejoin: round; stroke-linecap: round; }
+.g-cur { stroke: #8B94A1; stroke-width: 1; }
+.g-dt { fill: #5B8CFF; stroke: #fff; stroke-width: 1.5; }
+.g-dsp { fill: #FF7A7A; stroke: #fff; stroke-width: 1.5; }
+.rchips.gch { width: 100%; margin: 12px 0 0; padding: 0; flex-wrap: wrap; overflow: visible; }
+
+/* Caméras : tout en direct */
+.autolive { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; width: calc(100% - 32px); margin: 0 16px 12px; padding: 12px 14px; border-radius: 18px; background: var(--s1); border: 1px solid var(--ln); text-align: left; }
+.autolive b { display: block; font-size: 15px; }
+.autolive small { color: var(--mu); font-size: 12px; }
+.autolive.on .sw { background: var(--ok); }
+.autolive.on .sw::after { transform: translateX(20px); background: #fff; }
+
+/* Alarme */
+.acard { margin: 0 16px; display: grid; grid-template-columns: 56px 1fr; gap: 14px; align-items: center; padding: 16px; border-radius: 22px; background: var(--s1); border: 1px solid var(--ln); }
+.acard .aic { width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; background: var(--s2); color: var(--mu); }
+.acard .aic svg.i { width: 28px; height: 28px; }
+.acard b { display: block; font-size: 20px; }
+.acard small { color: var(--mu); font-size: 13px; }
+.acard.ok { border-color: rgba(74,222,128,.45); background: linear-gradient(160deg, rgba(74,222,128,.12), var(--s1) 70%); }
+.acard.ok .aic { background: rgba(74,222,128,.18); color: var(--ok); }
+.acard.bad { border-color: rgba(248,113,113,.5); background: linear-gradient(160deg, rgba(248,113,113,.16), var(--s1) 70%); }
+.acard.bad .aic { background: rgba(248,113,113,.2); color: var(--warn); }
+.acard.warnc .aic { background: rgba(244,184,96,.18); color: var(--amber); }
+.row.yes .sw { background: var(--ok); }
+.row.yes .sw::after { transform: translateX(20px); background: #fff; }
+.row.yes .ic { background: rgba(74,222,128,.14); color: var(--ok); }
+.row.choice { grid-template-columns: 38px 1fr auto; row-gap: 8px; }
+.row.choice .chs { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
+.chs button { font-size: 12.5px; font-weight: 700; padding: 7px 11px; border-radius: 10px; background: var(--s2); border: 1px solid var(--ln); color: var(--mu); }
+.chs button.on { background: var(--cool); color: #0B1424; border-color: transparent; }
+
+/* Piscine : éclairage (Aux 1) */
+.ctl.tog.wide { grid-column: 1 / -1; }
+.ctl.tog small svg.i { width: 14px; height: 14px; vertical-align: -2px; margin-right: 4px; }
+.ctl.tog.is-on.light .sw { background: var(--amber); }

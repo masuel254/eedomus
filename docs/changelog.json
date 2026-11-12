@@ -1,7 +1,23 @@
 {
-  "version": "2.0.0",
+  "version": "2.1.0",
   "date": "2026-11-12",
   "releases": [
+    {
+      "version": "2.1.0",
+      "date": "2026-11-12",
+      "time": "20:52",
+      "title": "Alarme, graphiques Netatmo et mises à jour automatiques",
+      "changes": [
+        "Nouvel onglet Alarme : activation en glissant, paramétrage Manuel / Automatique, ouvertures, volumétriques RDC et étage, temporisations, sirènes",
+        "Chauffage : état réel de la chaudière (fini le « Au repos » quand elle tourne)",
+        "Consigne manuelle bien visible avec bouton « Retirer », aussi dans la liste des pièces",
+        "Toucher le chauffage ouvre le graphique détaillé : température, consigne et % de chauffe sur 6 h, 1 jour, 1 semaine, 1 mois, 1 an",
+        "Caméras : toutes en direct automatiquement (réglable), HD caméra par caméra",
+        "Volets : chambre d’amis occupée, ouverture des volets de la chambre le matin, lever sur mouvement",
+        "Piscine : éclairage (Aux 1 de l’électrolyseur) ; spot abri retiré",
+        "Mises à jour installées automatiquement, seules les 3 dernières versions affichées"
+      ]
+    },
     {
       "version": "2.0.0",
       "date": "2026-11-12",
@@ -246,7 +262,8 @@
     "Smart Life : sauna (marche/arrêt) et compteurs électrolyseur + pompe à chaleur",
     "Enregistrements : carte SD des caméras Imou (7 jours) et clips des événements Presence",
     "Consommation électrique : électrolyseur, pompe à chaleur et sauna (jour, mois, année)",
-    "iAquaLink : électrolyseur eXO (chloration, pH, Boost, filtration, programmes) et pompe à chaleur Zodiac (consigne, marche/arrêt)"
+    "iAquaLink : électrolyseur eXO (chloration, pH, Boost, filtration, programmes) et pompe à chaleur Zodiac (consigne, marche/arrêt)",
+    "Alarme : activation et paramétrage complet (zones, temporisations, mode manuel/automatique)"
   ],
   "todo": [
     "Tester la vidéo en direct sur iPhone (Imou et Netatmo)",
@@ -258,7 +275,8 @@
     "Tester les réglages iAquaLink depuis l’appli (chloration, pH, Boost, filtration, programmes)",
     "Pompe à chaleur Zodiac hors ligne depuis le 27/09 : à retester quand elle sera rallumée",
     "Tester la modification d’un planning (de préférence sur une copie d’abord)",
-    "Graphiques supplémentaires : température extérieure, consommation sur la semaine"
+    "Graphiques supplémentaires : température extérieure, consommation sur la semaine",
+    "Surveiller le forfait vidéo Imou avec « Tout en direct » activé"
   ],
-  "time": "18:36"
+  "time": "20:52"
 }

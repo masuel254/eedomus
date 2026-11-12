@@ -61,9 +61,18 @@ for (const g of cfg.groups) for (const room of g.rooms) {
       case 'door': case 'sensor': read(it.id); break;
       case 'tuya-switch': case 'tuya-meter': break; // gérés par la liste blanche Tuya (CFG.tu.switchable)
       case 'iaqua-exo': case 'iaqua-hp': break;     // gérés par la liste blanche iAquaLink (action iq.set)
+      case 'yesno': allow(it.id, [0, 1]); break;
+      case 'choice': allow(it.id, it.options.map((o) => o[0])); break;
+      case 'state': read(it.id); break;
       default: throw new Error(`Type inconnu: ${it.type}`);
     }
   }
+}
+// Onglet Alarme : réglages (oui/non, choix) et états (sirènes)
+for (const it of (cfg.alarm && cfg.alarm.items) || []) {
+  if (it.type === 'yesno') allow(it.id, [0, 1]);
+  else if (it.type === 'choice') allow(it.id, it.options.map((o) => o[0]));
+  else read(it.id);
 }
 Object.values(cfg.heating).forEach((v) => typeof v === 'number' && read(v));
 cfg.status.doors.forEach(read);
@@ -135,7 +144,7 @@ async function eedomus(kind, query, attempt) {
 const SD = $getWorkflowStaticData('global');
 // Nouveau déploiement : on vide les données en cache (formats changés), on garde les jetons d'accès.
 if (SD.deployedAt !== CFG.deployedAt) {
-  ['ntHomes', 'ntHeat', 'ntCams', 'imDev', 'imLive', 'imSnap', 'imRec', 'tuState', 'tuSpec', 'iqState', 'ntHist', 'hist'].forEach((k) => { delete SD[k]; });
+  ['ntHomes', 'ntHeat', 'ntCams', 'imDev', 'imLive', 'imSnap', 'imRec', 'tuState', 'tuSpec', 'iqState', 'ntHist', 'ntGraph', 'hist'].forEach((k) => { delete SD[k]; });
   SD.deployedAt = CFG.deployedAt;
 }
 function fail(httpStatus, code, detail) { const e = new Error(code); e.httpStatus = httpStatus; e.code = code; e.detail = detail; return e; }
@@ -237,6 +246,9 @@ async function ntHomes() {
   SD.ntHomes = {
     at: Date.now(),
     heat: heat ? { id: heat.id, tz: heat.timezone || 'Europe/Paris', rooms: heat.rooms.filter((r) => (r.module_ids || []).length).map((r) => ({ id: r.id, name: r.name, type: r.type })),
+      // pièces équipées du thermostat (la chaudière y chauffe directement)
+      thermRooms: (heat.modules || []).filter((m) => m.type === 'NATherm1' && m.room_id).map((m) => m.room_id),
+      therm: (heat.modules || []).filter((m) => m.type === 'NATherm1').map((m) => ({ id: m.id, room: m.room_id, bridge: m.bridge || null })),
       schedules: (heat.schedules || []).filter((s) => !s.type || s.type === 'therm').map((s) => ({
         id: s.id, name: s.name, selected: !!s.selected, isDefault: !!s.default,
         hg: s.hg_temp ?? null, away: s.away_temp ?? null,
@@ -282,6 +294,11 @@ async function ntHeating(fresh) {
   const st = await nt('GET', 'homestatus', { home_id: H.heat.id });
   const home = (st.body && st.body.home) || {};
   const byId = {}; (home.rooms || []).forEach((r) => { byId[r.id] = r; });
+  // Chaudière : le thermostat (NATherm1) indique si la chaudière est en marche (boiler_status)
+  const mods = home.modules || [];
+  const boiler = mods.some((m) => m.boiler_status === true);
+  const boilerKnown = mods.some((m) => Object.prototype.hasOwnProperty.call(m, 'boiler_status'));
+  const thermRooms = (H.heat.thermRooms || []).map(String);
   const sel = H.heat.schedules.find((s) => s.selected) || null;
   const data = {
     ok: true, home: H.heat.id,
@@ -291,9 +308,12 @@ async function ntHeating(fresh) {
     slot: sel ? ntSlot(sel, H.heat.tz) : null,
     rooms: H.heat.rooms.map((r) => {
       const s = byId[r.id] || {};
+      const power = s.heating_power_request ?? null;
       return { id: r.id, name: r.name, temp: s.therm_measured_temperature ?? null, setpoint: s.therm_setpoint_temperature ?? null,
-        mode: s.therm_setpoint_mode || null, end: s.therm_setpoint_end_time || null, heating: (s.heating_power_request || 0) > 0, open_window: !!s.open_window };
+        mode: s.therm_setpoint_mode || null, end: s.therm_setpoint_end_time || null, power,
+        heating: (power || 0) > 0 || (boiler && thermRooms.includes(String(r.id))), open_window: !!s.open_window };
     }),
+    boiler, boilerKnown,
     at: new Date().toISOString(),
   };
   // Mode général de la maison : déduit des pièces (away / hg / schedule)
@@ -679,6 +699,8 @@ function iqExo(rep) {
     ph: sens.ph && sens.ph.state ? sens.ph.value / 10 : null, orp: sens.orp && sens.orp.state ? sens.orp.value : null,
     water: sens['water temp'] && sens['water temp'].state ? sens['water temp'].value : null,
     pump: s.filter_pump ? s.filter_pump.state : null, error: s.error_code || 0, schedules: sched,
+    // Aux 1 : éclairage de la piscine (spots), branché sur l'électrolyseur
+    aux1: s.aux_1 ? s.aux_1.state : null, aux1Type: s.aux_1 ? s.aux_1.type : null,
   };
 }
 function iqHp(rep) {
@@ -726,6 +748,7 @@ async function iaqua(b) {
       else if (b.key === 'swc' && v >= 0 && v <= 100 && v % 5 === 0) desired = { equipment: { swc_0: { swc: v } } };
       else if (b.key === 'ph_sp' && v >= 6.8 && v <= 7.6) desired = { equipment: { swc_0: { ph_sp: Math.round(v * 10) } } };
       else if (b.key === 'pump' && (v === 0 || v === 1)) desired = { equipment: { swc_0: { filter_pump: { state: v } } } };
+      else if (b.key === 'aux1' && (v === 0 || v === 1)) desired = { equipment: { swc_0: { aux_1: { state: v } } } };
     } else if (b.dev === 'hp' && CFG.iq.hpm) {
       sn = CFG.iq.hpm;
       if (b.key === 'on' && (v === 0 || v === 1)) desired = { equipment: { hp_0: { state: v } } };
@@ -775,6 +798,53 @@ async function netatmo(b) {
       await nt('POST', 'setroomthermpoint', p);
     }
     return ntHeating(true);
+  }
+  // Graphique détaillé d'une pièce : température, consigne et % de chauffe, sur 6 h / 1 j / 1 sem / 1 mois / 1 an
+  if (b.action === 'nt.roomgraph') {
+    const H = await ntHomes();
+    const room = H.heat && H.heat.rooms.find((r) => String(r.id) === String(b.room));
+    const R = { '6h': [6 * 3600, '30min'], '1d': [86400, '30min'], '1w': [7 * 86400, '3hours'], '1m': [30 * 86400, '1day'], '1y': [365 * 86400, '1week'] }[b.range];
+    if (!room || !R) throw fail(403, 'not_allowed');
+    const end = Math.min(Math.floor(Date.now() / 1000), Number(b.end) || Math.floor(Date.now() / 1000));
+    const begin = end - R[0];
+    SD.ntGraph = SD.ntGraph || {};
+    const key = room.id + '|' + b.range + '|' + Math.floor(end / 600), c = SD.ntGraph[key];
+    if (c && c.at > Date.now() - 300000) return c.data;
+    const read = async (types) => {
+      const r = await nt('GET', 'getroommeasure', { home_id: H.heat.id, room_id: room.id, scale: R[1], type: types, date_begin: begin, date_end: end, optimize: 'false', real_time: 'true' });
+      const rows = [], bd = r.body;
+      if (Array.isArray(bd)) bd.forEach((blk) => (blk.value || []).forEach((v, i) => rows.push([blk.beg_time + i * (blk.step_time || 1800)].concat(v))));
+      else if (bd && typeof bd === 'object') Object.keys(bd).forEach((ts) => rows.push([Number(ts)].concat(bd[ts])));
+      return rows.sort((x, y) => x[0] - y[0]);
+    };
+    let rows, types = ['temperature', 'sp_temperature', 'heating_power_request'];
+    try { rows = await read(types.join(',')); }
+    catch (e) { types = ['temperature']; rows = await read('temperature'); }
+    // Pièce du thermostat : % de chauffe = temps de marche de la chaudière (sum_boiler_on, en secondes par intervalle)
+    const th = (H.heat.therm || []).find((t) => String(t.room) === String(room.id));
+    let heatSrc = 'room';
+    if (th && th.bridge) {
+      try {
+        const g = await nt('GET', 'getmeasure', { device_id: th.bridge, module_id: th.id, scale: R[1], type: 'sum_boiler_on', date_begin: begin, date_end: end, optimize: 'false', real_time: 'true' });
+        const step = { '30min': 1800, '3hours': 10800, '1day': 86400, '1week': 604800 }[R[1]] || 1800;
+        const on = {}; const bd = g.body;
+        if (Array.isArray(bd)) bd.forEach((blk) => (blk.value || []).forEach((v, i) => { on[blk.beg_time + i * (blk.step_time || step)] = v[0]; }));
+        else if (bd && typeof bd === 'object') Object.keys(bd).forEach((ts) => { on[Number(ts)] = bd[ts][0]; });
+        const keys = Object.keys(on).map(Number);
+        if (keys.length) {
+          heatSrc = 'boiler';
+          rows.forEach((r) => {
+            // valeur la plus proche dans le temps (les horodatages des deux mesures ne tombent pas exactement pareil)
+            let best = null, bd2 = Infinity; keys.forEach((k) => { const d = Math.abs(k - r[0]); if (d < bd2) { bd2 = d; best = k; } });
+            r[3] = best != null && bd2 <= step ? Math.min(100, Math.round((on[best] || 0) / step * 100)) : null;
+          });
+        }
+      } catch (e) { /* mesure chaudière indisponible */ }
+    }
+    const data = { ok: true, room: room.id, range: b.range, begin, end, types, heatSrc, rows };
+    SD.ntGraph[key] = { at: Date.now(), data };
+    Object.keys(SD.ntGraph).forEach((k) => { if (SD.ntGraph[k].at < Date.now() - 1800000) delete SD.ntGraph[k]; });
+    return data;
   }
   // Historique de température d'une pièce Netatmo (pour les courbes), mis en cache 10 min
   if (b.action === 'nt.roomhist') {
