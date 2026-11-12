@@ -1,7 +1,17 @@
 {
-  "version": "2.2.1",
+  "version": "2.2.2",
   "date": "2026-11-12",
   "releases": [
+    {
+      "version": "2.2.2",
+      "date": "2026-11-12",
+      "time": "21:45",
+      "title": "Tous les volets réunis",
+      "changes": [
+        "Tuile Volets (accueil) et carte Volets (Pièces) : tous les volets de la maison sur un seul écran, rangés par pièce",
+        "Commandes Tout ouvrir / Stop / Tout fermer, par pièce et volet par volet ; réglage de la chambre d’amis en bas"
+      ]
+    },
     {
       "version": "2.2.1",
       "date": "2026-11-12",
@@ -348,5 +358,5 @@
     "Graphiques supplémentaires : température extérieure, consommation sur la semaine",
     "Surveiller le forfait vidéo Imou avec « Tout en direct » activé"
   ],
-  "time": "21:42"
+  "time": "21:45"
 }

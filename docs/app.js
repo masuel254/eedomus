@@ -780,8 +780,30 @@
     if (r.items.some(function (it) { return /^iaqua-/.test(it.type); })) refreshIq(true);
     if (r.camera) loadCams(false); if (roomHasCam(r)) loadImou(false);
   }
+  function allShutters() {
+    var list = []; CFG.groups.forEach(function (g) { g.rooms.forEach(function (rm) { var sh = rm.items.filter(function (it) { return it.type === 'shutter'; }); if (sh.length) list.push({ room: rm, sh: sh }); }); });
+    return list;
+  }
+  function renderShuttersSheet(r) {
+    var groups = allShutters(), all = []; groups.forEach(function (g) { all = all.concat(g.sh); });
+    var up = all.filter(function (i) { return shutterPos(i.id) === 'up'; }).length, down = all.filter(function (i) { return shutterPos(i.id) === 'down'; }).length;
+    var h = '<div class="sh-hd"><h2>Volets</h2><button class="close" data-close aria-label="Fermer">×</button></div>';
+    h += '<div class="rs-sub">' + (up === 0 ? 'Tous fermés' : up === all.length ? 'Tous ouverts' : up + ' ouverts sur ' + all.length) + '</div>';
+    h += '<div class="shblock"><div class="shb-hd"><span><b>Toute la maison</b><small>' + all.length + ' volets</small></span>' +
+      '<span class="tri"><button data-shutall="*:100" class="' + (up === all.length ? 'on' : '') + '" aria-label="Tout ouvrir">' + icon('up') + '</button><button data-shutall="*:240" aria-label="Tout arrêter">' + icon('stop') + '</button><button data-shutall="*:0" class="' + (down === all.length ? 'on' : '') + '" aria-label="Tout fermer">' + icon('down') + '</button></span></div></div>';
+    groups.forEach(function (g) {
+      var gu = g.sh.filter(function (i) { return shutterPos(i.id) === 'up'; }).length;
+      h += '<div class="shblock"><div class="shb-hd"><span><b>' + esc(g.room.name) + '</b><small>' + (g.sh.length > 1 ? (gu === 0 ? 'fermés' : gu === g.sh.length ? 'ouverts' : gu + ' / ' + g.sh.length + ' ouverts') : (gu ? 'ouvert' : 'fermé')) + '</small></span>' +
+        (g.sh.length > 1 ? '<span class="tri"><button data-shutall="' + g.room.id + ':100" aria-label="Ouvrir">' + icon('up') + '</button><button data-shutall="' + g.room.id + ':240" aria-label="Stop">' + icon('stop') + '</button><button data-shutall="' + g.room.id + ':0" aria-label="Fermer">' + icon('down') + '</button></span>' : '') + '</div>' +
+        '<div class="shlist">' + g.sh.map(rowHTML).join('') + '</div></div>';
+    });
+    var settings = r.items.filter(function (it) { return it.type === 'yesno'; });
+    if (settings.length) h += '<div class="lbl" style="margin-left:4px">Réglages</div><div class="card2 flat rs-list">' + settings.map(rowHTML).join('') + '</div>';
+    var keep = sheet.scrollTop; sheet.innerHTML = '<div class="sh-in">' + h + '</div>'; sheet.scrollTop = keep;
+  }
   function renderRoomSheet() {
     var r = findRoom(roomSheet); if (!r) return;
+    if (r.id === 'volets') return renderShuttersSheet(r);
     var s = roomStats(r), t = r.temp ? num(r.temp) : null, h = '';
     h += '<div class="sh-hd"><h2>' + esc(r.name) + '</h2><button class="close" data-close aria-label="Fermer">×</button></div>';
     h += '<div class="rs-sub">' + esc([t == null ? null : fmt(t, 1) + '°', s.text].filter(Boolean).join(' · ')) + '</div>';
@@ -1323,9 +1345,11 @@
       toast(lr.name + (anyOn ? ' : lumières éteintes' : ' : lumières allumées')); return;
     }
     if ((b = e.target.closest('[data-shutall]'))) {
-      var sp = b.dataset.shutall.split(':'), sr = findRoom(sp[0]), sv = +sp[1];
-      sr.items.filter(function (it) { return it.type === 'shutter'; }).forEach(function (it) { send(it.id, sv); });
-      toast(sr.name + ' : ' + (sv === 100 ? 'ouverture des volets' : sv === 0 ? 'fermeture des volets' : 'volets arrêtés')); return;
+      var sp = b.dataset.shutall.split(':'), sv = +sp[1], list, label;
+      if (sp[0] === '*') { list = []; allShutters().forEach(function (g) { list = list.concat(g.sh); }); label = 'Tous les volets'; }
+      else { var sr = findRoom(sp[0]); list = sr.items.filter(function (it) { return it.type === 'shutter'; }); label = sr.name; }
+      list.forEach(function (it) { send(it.id, sv); });
+      toast(label + ' : ' + (sv === 100 ? 'ouverture' : sv === 0 ? 'fermeture' : 'arrêt')); return;
     }
     if ((b = e.target.closest('[data-roomopen]'))) return openRoomSheet(b.dataset.roomopen);
     if ((b = e.target.closest('[data-goroom]'))) {
