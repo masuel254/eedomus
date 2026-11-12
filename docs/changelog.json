@@ -1,7 +1,16 @@
 {
-  "version": "2.2.0",
+  "version": "2.2.1",
   "date": "2026-11-12",
   "releases": [
+    {
+      "version": "2.2.1",
+      "date": "2026-11-12",
+      "time": "21:42",
+      "title": "Détecteur du garage retiré",
+      "changes": [
+        "Alarme : détecteur de mouvement du garage retiré (il n’existe plus)"
+      ]
+    },
     {
       "version": "2.2.0",
       "date": "2026-11-12",
@@ -339,5 +348,5 @@
     "Graphiques supplémentaires : température extérieure, consommation sur la semaine",
     "Surveiller le forfait vidéo Imou avec « Tout en direct » activé"
   ],
-  "time": "21:26"
+  "time": "21:42"
 }

@@ -473,12 +473,6 @@
         "group": "motion"
       },
       {
-        "id": 1214679,
-        "name": "Garage",
-        "type": "motion",
-        "group": "motion"
-      },
-      {
         "id": 2999506,
         "name": "Jardin",
         "type": "motion",
