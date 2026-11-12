@@ -1,7 +1,22 @@
 {
-  "version": "1.11.0",
+  "version": "2.0.0",
   "date": "2026-11-12",
   "releases": [
+    {
+      "version": "2.0.0",
+      "date": "2026-11-12",
+      "time": "18:36",
+      "title": "Nouvelle interface « Onglets »",
+      "changes": [
+        "Barre d’onglets fixe et opaque : Accueil, Pièces, Climat, Caméras, Plus",
+        "Accueil épuré : état de la maison, chauffage avec courbe 24 h, accès rapide (portail, garage, sauna, alarme), favoris",
+        "Fini les « Confirmer ? » : portail, garage, alarme et allumage du sauna se font en glissant le bouton ; tout le reste est immédiat",
+        "Climat : chauffage complet, courbe de température 24 h de la pièce, liste de toutes les pièces",
+        "Caméras : onglet dédié (direct, enregistrements, événements)",
+        "Plus : piscine (eXO, pompe à chaleur, pH sur 7 jours), énergie, météo, réglages",
+        "Correction : changer l’heure d’une plage dans l’éditeur de planning fonctionne"
+      ]
+    },
     {
       "version": "1.11.0",
       "date": "2026-11-12",
@@ -222,6 +237,7 @@
     }
   ],
   "works": [
+    "Interface à onglets (Accueil, Pièces, Climat, Caméras, Plus) avec glisser pour confirmer et graphiques",
     "Lumières, volets, portail, garage, alarme et sèche-serviettes (eedomus)",
     "Températures des pièces, piscine et météo (eedomus)",
     "Chauffage Netatmo : 10 pièces, consigne, modes, plannings (choix, création, modification des plages et ambiances)",
@@ -241,7 +257,8 @@
     "Option : demander à Tuya le service « Statistiques » pour récupérer l'historique d'avant le 12/11/2026",
     "Tester les réglages iAquaLink depuis l’appli (chloration, pH, Boost, filtration, programmes)",
     "Pompe à chaleur Zodiac hors ligne depuis le 27/09 : à retester quand elle sera rallumée",
-    "Tester la modification d’un planning (de préférence sur une copie d’abord)"
+    "Tester la modification d’un planning (de préférence sur une copie d’abord)",
+    "Graphiques supplémentaires : température extérieure, consommation sur la semaine"
   ],
-  "time": "18:16"
+  "time": "18:36"
 }

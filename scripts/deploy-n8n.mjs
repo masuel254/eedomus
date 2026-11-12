@@ -135,7 +135,7 @@ async function eedomus(kind, query, attempt) {
 const SD = $getWorkflowStaticData('global');
 // Nouveau déploiement : on vide les données en cache (formats changés), on garde les jetons d'accès.
 if (SD.deployedAt !== CFG.deployedAt) {
-  ['ntHomes', 'ntHeat', 'ntCams', 'imDev', 'imLive', 'imSnap', 'imRec', 'tuState', 'tuSpec', 'iqState'].forEach((k) => { delete SD[k]; });
+  ['ntHomes', 'ntHeat', 'ntCams', 'imDev', 'imLive', 'imSnap', 'imRec', 'tuState', 'tuSpec', 'iqState', 'ntHist', 'hist'].forEach((k) => { delete SD[k]; });
   SD.deployedAt = CFG.deployedAt;
 }
 function fail(httpStatus, code, detail) { const e = new Error(code); e.httpStatus = httpStatus; e.code = code; e.detail = detail; return e; }
@@ -776,6 +776,26 @@ async function netatmo(b) {
     }
     return ntHeating(true);
   }
+  // Historique de température d'une pièce Netatmo (pour les courbes), mis en cache 10 min
+  if (b.action === 'nt.roomhist') {
+    const H = await ntHomes();
+    const room = H.heat && H.heat.rooms.find((r) => String(r.id) === String(b.room));
+    if (!room) throw fail(403, 'not_allowed');
+    const hours = Math.max(1, Math.min(168, Number(b.hours) || 24));
+    SD.ntHist = SD.ntHist || {};
+    const key = room.id + '|' + hours, c = SD.ntHist[key];
+    if (c && c.at > Date.now() - 600000) return c.data;
+    const end = Math.floor(Date.now() / 1000), begin = end - hours * 3600;
+    const r = await nt('GET', 'getroommeasure', { home_id: H.heat.id, room_id: room.id, scale: hours > 48 ? '1hour' : '30min', type: 'temperature', date_begin: begin, date_end: end, optimize: 'false', real_time: 'true' });
+    const pts = [];
+    const bd = r.body;
+    if (Array.isArray(bd)) bd.forEach((blk) => (blk.value || []).forEach((v, i) => pts.push([blk.beg_time + i * (blk.step_time || 1800), v[0]])));
+    else if (bd && typeof bd === 'object') Object.keys(bd).forEach((ts) => pts.push([Number(ts), bd[ts][0]]));
+    pts.sort((a, b2) => a[0] - b2[0]);
+    const data = { ok: true, room: room.id, points: pts.filter((p) => p[1] != null) };
+    SD.ntHist[key] = { at: Date.now(), data };
+    return data;
+  }
   // Plannings complets (ambiances avec température par pièce, plages de la semaine)
   if (b.action === 'nt.schedules') {
     if (b.fresh) SD.ntHomes = null;
@@ -829,6 +849,25 @@ try {
   if (isCron) { await enSample(); return []; } // aucune réponse HTTP à envoyer
   if (body.action === 'ping') return reply(200, { ok: true });
 
+  // Historique d'un capteur eedomus (liste blanche « readable »), mis en cache 10 min
+  if (body.action === 'hist') {
+    const id = String(body.id);
+    if (!CFG.readable.includes(id)) return reply(403, { ok: false, error: 'not_allowed' });
+    const hours = Math.max(1, Math.min(24 * 31, Number(body.hours) || 24));
+    SD.hist = SD.hist || {};
+    const key = id + '|' + hours, c = SD.hist[key];
+    if (c && c.at > Date.now() - 600000) return reply(200, c.data);
+    const fmtD = (d) => { const p = {}; new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).formatToParts(d).forEach((x) => { p[x.type] = x.value; }); return p.year + '-' + p.month + '-' + p.day + ' ' + p.hour + ':' + p.minute + ':' + p.second; };
+    const r = await eedomus('get', 'action=periph.history&periph_id=' + encodeURIComponent(id) + '&start_date=' + encodeURIComponent(fmtD(new Date(Date.now() - hours * 3600000))) + '&end_date=' + encodeURIComponent(fmtD(new Date())));
+    if (r.success !== 1) return reply(502, { ok: false, error: 'eedomus', detail: r.body });
+    const list = (r.body && (r.body.history || r.body)) || [];
+    const points = (Array.isArray(list) ? list : []).map((x) => Array.isArray(x) ? [x[1], Number(x[0])] : [x.date || x[1], Number(x.value != null ? x.value : x[0])])
+      .filter((p) => p[0] && !isNaN(p[1])).sort((a, b2) => (a[0] < b2[0] ? -1 : 1));
+    const data = { ok: true, id, points };
+    SD.hist[key] = { at: Date.now(), data };
+    Object.keys(SD.hist).forEach((k) => { if (SD.hist[k].at < Date.now() - 3600000) delete SD.hist[k]; });
+    return reply(200, data);
+  }
   if (body.action === 'state') {
     const r = await eedomus('get', 'action=periph.caract&periph_id=' + CFG.readable.join(','));
     if (r.success !== 1) return reply(502, { ok: false, error: 'eedomus', detail: r.body });

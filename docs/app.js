@@ -26,7 +26,8 @@
   var newVersion = false;
   var pending = {};            // id -> { value, until } : affichage immédiat avant confirmation
   var app = document.getElementById('app');
-  var dock = document.getElementById('dock');
+  var tabsEl = document.getElementById('tabs');
+  var TAB = store.get('maison.tab') || 'home';
   var sheet = document.getElementById('sheet');
   var toastEl = document.getElementById('toast'), toastT;
 
@@ -51,7 +52,7 @@
     if (s < 10) return "à l'instant"; if (s < 60) return 'il y a ' + s + ' s';
     return 'il y a ' + Math.round(s / 60) + ' min';
   }
-  function busy() { return document.querySelector('.confirming, .armed-confirm'); }
+  function busy() { return document.querySelector('.confirming, .armed-confirm, .slide.dragging') || (TAB === 'cams' && liveCam && document.querySelector('#app video')); }
 
   // ---------- API (n8n) ----------
   function api(body) {
@@ -136,7 +137,7 @@
       '<span class="pill2 ' + (off ? 'bad' : on ? 'heat' : '') + '">' + esc(pill) + '</span></div>' +
       '<div class="pool-grid">' +
       '<div class="ctl"><small>Consigne eau</small><div class="stp"><button data-iq-step="hp:tsp:-0.5"' + (off ? ' disabled' : '') + ' aria-label="Moins">−</button><b id="iq-hp-tsp">' + (tsp == null ? '—' : fmt(tsp, 1) + '°') + '</b><button data-iq-step="hp:tsp:0.5"' + (off ? ' disabled' : '') + ' aria-label="Plus">+</button></div></div>' +
-      '<button class="ctl tog' + (on ? ' is-on heat' : '') + '" data-iq-tog="hp:on"' + (off ? ' disabled' : ' data-confirm') + '><small data-label>' + (off ? 'Dernier état : ' + (on ? 'marche' : 'arrêt') : on ? 'En marche' : 'Arrêtée') + '</small><span class="sw"></span></button>' +
+      '<button class="ctl tog' + (on ? ' is-on heat' : '') + '" data-iq-tog="hp:on"' + (off ? ' disabled' : '') + '><small data-label>' + (off ? 'Dernier état : ' + (on ? 'marche' : 'arrêt') : on ? 'En marche' : 'Arrêtée') + '</small><span class="sw"></span></button>' +
       '</div>' +
       (off ? '<p class="note-q">La pompe à chaleur ne communique plus avec le cloud Zodiac. Rallume-la (ou vérifie son Wi-Fi) pour la piloter.</p>' : '') +
       '</div>';
@@ -265,20 +266,21 @@
     if (it.type === 'garage') {
       var st = STATES[id] ? STATES[id].text : '';
       return '<div class="row"><span class="ic">' + icon('garage') + '</span><span><b>' + esc(it.name) + '</b><small>' + esc(st || '—') + '</small></span><span class="btns">' +
-        '<button class="act" data-action="' + id + '" data-v="1" data-confirm data-msg="Garage : ouverture envoyée">Ouvrir</button>' +
-        '<button class="act" data-action="' + id + '" data-v="2" data-confirm data-msg="Garage : fermeture envoyée">Fermer</button></span></div>';
+        '<button class="act" data-slideopen="garage-1:item-garage">Ouvrir</button>' +
+        '<button class="act" data-slideopen="garage-2:item-garage">Fermer</button></span></div>' + slideHTML('item-garage');
     }
     if (it.type === 'action') {
       return '<div class="row"><span class="ic">' + icon(it.icon || 'home') + '</span><span><b>' + esc(it.name) + '</b><small>' + (STATES[id] ? esc(STATES[id].text) : '') + '</small></span>' +
-        '<button class="act" data-action="' + id + '" data-v="' + esc(it.value) + '"' + (it.confirm ? ' data-confirm' : '') + ' data-msg="' + esc(it.name) + ' : envoyé">' + esc(it.label || 'OK') + '</button></div>';
+        (it.confirm ? '<button class="act" data-slideopen="gate:item-' + id + '">' + esc(it.label || 'OK') + '</button></div>' + slideHTML('item-' + id)
+          : '<button class="act" data-action="' + id + '" data-v="' + esc(it.value) + '" data-msg="' + esc(it.name) + ' : envoyé">' + esc(it.label || 'OK') + '</button></div>');
     }
     if (it.type === 'iaqua-exo') return poolExoHTML(it);
     if (it.type === 'iaqua-hp') return poolHpHTML(it);
     if (it.type === 'tuya-switch') {
       var d = tuDev(it.key), son = tuOn(it.key);
       var sub = !d ? 'Chargement…' : son ? 'Allumé' + (d.power > 5 ? ' · chauffe ' + watts(d.power) : '') : 'Éteint';
-      return '<button class="row' + (son ? ' is-on heat' : '') + (tuPend[it.key] ? ' busy' : '') + '" data-tuya="' + esc(it.key) + '"' + (son ? '' : ' data-confirm') + '>' +
-        '<span class="ic">' + icon(it.icon || 'flame') + '</span><span><b>' + esc(it.name) + '</b><small data-label>' + esc(sub) + '</small></span><span class="sw"></span></button>';
+      return '<button class="row' + (son ? ' is-on heat' : '') + (tuPend[it.key] ? ' busy' : '') + '"' + (son ? ' data-tuya="' + esc(it.key) + '"' : ' data-slideopen="sauna-on:item-' + esc(it.key) + '"') + '>' +
+        '<span class="ic">' + icon(it.icon || 'flame') + '</span><span><b>' + esc(it.name) + '</b><small data-label>' + esc(sub) + '</small></span><span class="sw"></span></button>' + slideHTML('item-' + it.key);
     }
     if (it.type === 'tuya-meter') {
       var m = tuDev(it.key), running = m && m.power > 5;
@@ -325,8 +327,8 @@
       '<div class="rchips">' + chips + '</div>' +
       '<div class="modes">' +
       '<button class="' + (homeMode === 'schedule' ? 'on' : '') + '" data-nt-mode="schedule">Planning</button>' +
-      '<button class="' + (homeMode === 'away' ? 'on' : '') + '" data-nt-mode="away" data-confirm><span>Absent</span></button>' +
-      '<button class="' + (homeMode === 'hg' ? 'on' : '') + '" data-nt-mode="hg" data-confirm><span>Hors-gel</span></button></div>' +
+      '<button class="' + (homeMode === 'away' ? 'on' : '') + '" data-nt-mode="away"><span>Absent</span></button>' +
+      '<button class="' + (homeMode === 'hg' ? 'on' : '') + '" data-nt-mode="hg"><span>Hors-gel</span></button></div>' +
       row3 + '<span><b>' + heatingRooms + '</b>' + (heatingRooms > 1 ? 'Pièces chauffent' : 'Pièce chauffe') + '</span></div>' +
       '</section>';
   }
@@ -361,28 +363,216 @@
       '<div class="v"><b>' + fmt(temp, 1) + '°</b>' + sub + '</div></div>';
   }
 
-  var garageOpen = false;
-  function saunaChip() {
-    if (!CFG.tu && !TU) return '';
-    var d = tuDev('sauna'); if (!d) return '';
-    var on = tuOn('sauna'), txt = on ? 'Sauna allumé' + (d.power > 50 ? ' · ' + watts(d.power) : '') : 'Sauna éteint';
-    return '<button class="chip act2' + (on ? ' heat-on' : '') + '" data-sauna-chip' + (on ? '' : ' data-confirm') + '>' + icon('flame') + '<span>' + esc(txt) + '</span></button>';
+  // ---------- Glisser pour confirmer ----------
+  // SLIDE = { key, where } : curseur affiché sous une tuile ou une ligne. Clés : gate, garage-1, garage-2, alarm-on, alarm-off, sauna-on
+  var SLIDE = null, slideT = null;
+  var SLIDE_LABEL = {
+    gate: 'Glisser pour actionner le portail', 'garage-1': 'Glisser pour ouvrir le garage', 'garage-2': 'Glisser pour fermer le garage',
+    'alarm-on': "Glisser pour activer l'alarme", 'alarm-off': "Glisser pour désactiver l'alarme", 'sauna-on': 'Glisser pour allumer le sauna'
+  };
+  function openSlide(key, where) {
+    SLIDE = SLIDE && SLIDE.key === key && SLIDE.where === where ? null : { key: key, where: where };
+    clearTimeout(slideT); if (SLIDE) slideT = setTimeout(function () { SLIDE = null; if (!busy()) render(); }, 15000);
+    render();
   }
-  function chipsHTML() {
-    var s = CFG.status;
-    var armed = alarmArmed();
+  function slideHTML(where) {
+    if (!SLIDE || SLIDE.where !== where) return '';
+    var k = SLIDE.key, garage = /^garage-/.test(k);
+    return '<div class="slidebox">' +
+      (garage ? '<div class="seg2"><button class="' + (k === 'garage-1' ? 'on' : '') + '" data-slidekey="garage-1">Ouvrir</button><button class="' + (k === 'garage-2' ? 'on' : '') + '" data-slidekey="garage-2">Fermer</button></div>' : '') +
+      '<div class="slide' + (/alarm|sauna/.test(k) ? ' warm' : '') + '" data-slide="' + k + '"><span class="fill"></span><span class="knob">' + icon('chev') + '</span><span class="sl-t">' + esc(SLIDE_LABEL[k]) + '</span></div>' +
+      '<button class="sl-x" data-slidex>Annuler</button></div>';
+  }
+  function doSlide(key) {
+    SLIDE = null; clearTimeout(slideT);
+    if (key === 'gate') send(CFG.dock.gate, 100, { optimistic: false, msg: 'Portail : commande envoyée' });
+    else if (key === 'garage-1' || key === 'garage-2') send(CFG.dock.garage, key === 'garage-1' ? 1 : 2, { optimistic: false, msg: key === 'garage-1' ? 'Garage : ouverture envoyée' : 'Garage : fermeture envoyée' });
+    else if (key === 'alarm-on' || key === 'alarm-off') send(CFG.status.alarm, key === 'alarm-on' ? 12 : 0, { msg: key === 'alarm-on' ? 'Alarme activée' : 'Alarme désactivée' });
+    else if (key === 'sauna-on') saunaSet(true);
+    setTimeout(render, 600);
+  }
+  function saunaSet(want) {
+    tuPend.sauna = { on: want, until: Date.now() + 10000 }; render();
+    return api({ action: 'tu.switch', key: 'sauna', on: want }).then(function () {
+      toast(want ? 'Sauna allumé' : 'Sauna éteint'); setTimeout(function () { refreshTuya(true); }, 2500); setTimeout(function () { refreshTuya(true); }, 8000);
+    }).catch(function () { delete tuPend.sauna; render(); toast('Le sauna ne répond pas, réessaie', true); });
+  }
+
+  // ---------- Graphiques (historique réel) ----------
+  var HISTN = {}, HISTE = {}, ENGT = null, engtAt = 0;
+  function loadRoomHist(room) {
+    var c = HISTN[room]; if (c && (c.loading || Date.now() - c.at < 600000)) return;
+    HISTN[room] = { loading: true, at: Date.now(), points: c ? c.points : null };
+    api({ action: 'nt.roomhist', room: room, hours: 24 }).then(function (j) { HISTN[room] = { at: Date.now(), points: j.points }; if (!busy()) render(); })
+      .catch(function () { HISTN[room] = { at: Date.now() - 540000, points: c ? c.points : null }; });
+  }
+  function loadHistE(id, hours) {
+    var key = id + '|' + hours, c = HISTE[key]; if (c && (c.loading || Date.now() - c.at < 600000)) return;
+    HISTE[key] = { loading: true, at: Date.now(), points: c ? c.points : null };
+    api({ action: 'hist', id: id, hours: hours }).then(function (j) { HISTE[key] = { at: Date.now(), points: j.points }; if (!busy()) render(); })
+      .catch(function () { HISTE[key] = { at: Date.now() - 540000, points: c ? c.points : null }; });
+  }
+  function loadEnergyToday() {
+    if (Date.now() - engtAt < 300000) return; engtAt = Date.now();
+    var keys = ['elec', 'pac', 'sauna'], out = {};
+    Promise.all(keys.map(function (k) { return api({ action: 'tu.energy', key: k }).then(function (j) { out[k] = j; }).catch(function () {}); }))
+      .then(function () { ENGT = out; if (!busy()) render(); });
+  }
+  function energyToday() {
+    // Somme des 3 appareils, heure par heure, pour aujourd'hui
+    if (!ENGT) return null;
+    var today = ymd(new Date()).replace(/-/g, ''), hours = [], total = 0, any = false;
+    for (var i = 0; i < 24; i++) hours.push(null);
+    Object.keys(ENGT).forEach(function (k) {
+      (ENGT[k].hours || []).forEach(function (x) { if (x.k.slice(0, 8) === today) { var h = +x.k.slice(8, 10); hours[h] = (hours[h] || 0) + x.kwh; any = true; } });
+      (ENGT[k].days || []).forEach(function (x) { if (x.k === today) total += x.kwh; });
+    });
+    var sumH = hours.reduce(function (s, v) { return s + (v || 0); }, 0);
+    return { hours: hours, total: Math.max(total, sumH) };
+  }
+  function spark(points, o) {
+    // points : [[x, y], ...] (x croissant). o : { w, h, ref, color, labels, area }
+    o = o || {}; var W = o.w || 300, H = o.h || 70, pad = 4, c = o.color || '#FF8A5B';
+    if (!points || points.length < 2) return '<div class="spark-empty">' + (points ? 'Pas encore assez de mesures' : 'Chargement de l\'historique…') + '</div>';
+    var xs = points.map(function (p) { return p[0]; }), ys = points.map(function (p) { return p[1]; });
+    var x0 = Math.min.apply(null, xs), x1 = Math.max.apply(null, xs);
+    var all = ys.concat(o.ref != null ? [o.ref] : []), y0 = Math.min.apply(null, all), y1 = Math.max.apply(null, all);
+    if (y1 - y0 < 0.6) { var mid = (y0 + y1) / 2; y0 = mid - 0.3; y1 = mid + 0.3; }
+    var X = function (v) { return pad + (v - x0) / Math.max(1, x1 - x0) * (W - 2 * pad); }, Y = function (v) { return pad + (1 - (v - y0) / (y1 - y0)) * (H - 2 * pad - 6) + 3; };
+    var d = points.map(function (p, i) { return (i ? 'L' : 'M') + X(p[0]).toFixed(1) + ' ' + Y(p[1]).toFixed(1); }).join(' ');
+    var gid = 'g' + Math.random().toString(36).slice(2, 8), hl = o.labels ? 14 : 0;
+    var s = '<svg class="spark" viewBox="0 0 ' + W + ' ' + (H + hl) + '" preserveAspectRatio="none"><defs><linearGradient id="' + gid + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + c + '" stop-opacity=".32"/><stop offset="1" stop-color="' + c + '" stop-opacity="0"/></linearGradient></defs>';
+    if (o.ref != null) s += '<line x1="0" x2="' + W + '" y1="' + Y(o.ref).toFixed(1) + '" y2="' + Y(o.ref).toFixed(1) + '" class="sp-ref"/>';
+    s += '<path d="' + d + ' L' + X(x1).toFixed(1) + ' ' + H + ' L' + X(x0).toFixed(1) + ' ' + H + ' Z" fill="url(#' + gid + ')"/>';
+    s += '<path d="' + d + '" fill="none" stroke="' + c + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>';
+    var last = points[points.length - 1]; s += '<circle cx="' + X(last[0]).toFixed(1) + '" cy="' + Y(last[1]).toFixed(1) + '" r="3.5" fill="' + c + '"/>';
+    if (o.labels) o.labels.forEach(function (t, i) { s += '<text x="' + (i / (o.labels.length - 1) * W).toFixed(1) + '" y="' + (H + 11) + '" class="sp-l" text-anchor="' + (i === 0 ? 'start' : i === o.labels.length - 1 ? 'end' : 'middle') + '">' + t + '</text>'; });
+    return s + '</svg>';
+  }
+  function miniBars(vals, o) {
+    o = o || {}; var W = o.w || 160, H = o.h || 34, n = vals.length, g = 2, bw = (W - g * (n - 1)) / n;
+    var mx = Math.max.apply(null, vals.map(function (v) { return v || 0; }).concat([0.001])), hi = o.hi;
+    var s = '<svg class="spark" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none">';
+    vals.forEach(function (v, i) { var h = v == null ? 1.5 : Math.max(2, v / mx * (H - 2)); s += '<rect x="' + (i * (bw + g)).toFixed(1) + '" y="' + (H - h).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="1.5" class="' + (v == null ? 'mb-e' : i === hi ? 'mb-h' : 'mb') + '"/>'; });
+    return s + '</svg>';
+  }
+  function schedWhen() {
+    if (!NT) return '';
+    var s = NT.slot || {};
+    if (NT.mode === 'away') return 'Mode Absent';
+    if (NT.mode === 'hg') return 'Mode Hors-gel';
+    if (s.until) { var dayTxt = s.untilDay === 'today' || s.untilDay === 'week' ? '' : s.untilDay === 'tomorrow' ? 'demain ' : s.untilDay + ' '; return (s.zone ? s.zone + ' ' : '') + "jusqu'à " + dayTxt + s.until; }
+    return s.zone || '';
+  }
+
+  // ---------- Onglet Accueil ----------
+  function homeHTML() {
+    var s = CFG.status, armed = alarmArmed();
     var n = s.people.filter(function (id) { var v = val(id); return v !== undefined && v !== '0'; }).length;
-    var g = STATES[CFG.dock.gate], gTxt = g && g.text ? ' · ' + g.text.toLowerCase() : '';
-    return '<div class="chips">' +
-      '<button class="chip' + (armed ? ' armed' : '') + '" data-alarm data-confirm>' + icon('shield') + '<span>' + (armed ? 'Alarme activée' : 'Alarme désactivée') + '</span></button>' +
-      '<span class="chip' + (n ? ' home' : '') + '">' + icon(n ? 'home' : 'leave') + (n ? n + ' personne' + (n > 1 ? 's' : '') + ' à la maison' : 'Personne à la maison') + '</span>' +
-      saunaChip() +
-      '<button class="chip act2" data-gate data-confirm>' + icon('gate') + '<span>Portail' + esc(gTxt) + '</span></button>' +
-      '<button class="chip act2' + (garageOpen ? ' open' : '') + '" data-garage-toggle aria-expanded="' + garageOpen + '">' + icon('garage') + '<span>Garage</span>' + icon('down') + '</button>' +
-      '</div>' +
-      (garageOpen ? '<div class="chips sub">' +
-        '<button class="chip act2" data-garage="1" data-confirm>' + icon('up') + '<span>Ouvrir le garage</span></button>' +
-        '<button class="chip act2" data-garage="2" data-confirm>' + icon('down') + '<span>Fermer le garage</span></button></div>' : '');
+    var gate = STATES[CFG.dock.gate] || {}, gateOpen = gate.value !== undefined && gate.value !== '0';
+    var openDoors = s.doors.filter(doorOpen).length;
+    var closed = !openDoors && !gateOpen;
+    var h = '<div class="status"><span class="' + (closed ? 'ok' : 'bad') + '">● ' + (closed ? 'Tout est fermé' : (gateOpen ? 'Portail ouvert' : openDoors + ' porte' + (openDoors > 1 ? 's' : '') + ' ouverte' + (openDoors > 1 ? 's' : ''))) + '</span>' +
+      '<span class="' + (armed ? 'ok' : '') + '">' + icon('shield') + (armed ? 'Alarme activée' : 'Alarme désactivée') + '</span>' +
+      '<span>' + icon(n ? 'home' : 'leave') + (n ? n + ' personne' + (n > 1 ? 's' : '') : 'Personne') + '</span></div>';
+    // Chauffage
+    var r = ntCurrentRoom();
+    if (r) {
+      loadRoomHist(r.id);
+      var sp = ntPend && String(ntPend.room) === String(r.id) ? ntPend.temp : r.setpoint, hp = HISTN[r.id];
+      h += '<div class="hcard"><button class="hc-top" data-goto="climate"><span>Chauffage · ' + esc(r.name) + '</span><span class="' + (r.heating ? 'heat' : 'mu') + '">' + icon('flame') + (r.heating ? 'Chauffe' : 'Au repos') + '</span></button>' +
+        '<div class="hc-mid"><div class="big">' + fmt(r.temp, 1) + '°<em id="ntsp">Consigne ' + fmt(sp, 1) + '°</em></div>' +
+        '<div class="hc-sp">' + spark(hp && hp.points ? hp.points : null, { w: 180, h: 60, ref: sp }) + '</div></div>' +
+        '<div class="hc-plan"><span><b>' + esc(NT.schedule || 'Planning') + '</b> · ' + esc(schedWhen()) + '</span>' +
+        '<span class="stp2"><button data-nt-step="-0.5" aria-label="Baisser">−</button><button data-nt-step="0.5" aria-label="Monter">+</button></span></div></div>';
+    } else {
+      h += '<div class="hcard"><div class="hc-top"><span>Chauffage</span><span class="mu">' + (ntErr ? 'Netatmo indisponible' : 'Connexion…') + '</span></div></div>';
+    }
+    // Accès rapide
+    var sd = tuDev('sauna'), son = tuOn('sauna'), gar = STATES[CFG.dock.garage] || {};
+    var tile = function (k, ic, name, st, on) {
+      return '<button class="q' + (on ? ' on' : '') + (SLIDE && SLIDE.where === 'home' && SLIDE.key.indexOf(k) === 0 ? ' sel' : '') + '" data-qa="' + k + '"><span class="ic">' + icon(ic) + '</span>' + name + '<small>' + esc(st) + '</small></button>';
+    };
+    h += '<div class="lbl">Accès rapide</div><div class="quick">' +
+      tile('gate', 'gate', 'Portail', gate.text || '—', gateOpen) +
+      tile('garage', 'garage', 'Garage', gar.text && gar.text !== 'En attente' ? gar.text : 'Ouvrir / fermer', false) +
+      tile('sauna', 'flame', 'Sauna', !sd ? '…' : son ? (sd.power > 50 ? watts(sd.power) : 'Allumé') : 'Éteint', son) +
+      tile('alarm', 'shield', 'Alarme', armed ? 'Activée' : 'Off', armed) +
+      '</div>' + slideHTML('home');
+    // Favoris
+    var salon = findRoom('salon'), lit = salon ? salon.items.filter(function (it) { return it.type === 'light' && isOn(it); }).length : 0;
+    var shut = [], allRooms = [];
+    CFG.groups.forEach(function (g) { g.rooms.forEach(function (rm) { allRooms.push(rm); rm.items.forEach(function (it) { if (it.type === 'shutter') shut.push(it); }); }); });
+    var up = shut.filter(function (i) { return shutterPos(i.id) === 'up'; }).length;
+    loadHistE(3557564, 168); loadEnergyToday();
+    var ex = IQ && IQ.exo, ph = ex && ex.ph != null ? ex.ph : num(3557564), water = ex && ex.water != null ? ex.water : num(3557562);
+    var et = energyToday(), hi = new Date().getHours();
+    h += '<div class="lbl">Favoris</div><div class="fav">' +
+      '<button class="fv' + (lit ? ' lit' : '') + '" data-goroom="salon">' + icon('bulb') + '<b>Salon</b><small>' + (lit ? lit + ' lumière' + (lit > 1 ? 's' : '') + ' allumée' + (lit > 1 ? 's' : '') : 'Lumières éteintes') + '</small></button>' +
+      '<button class="fv" data-goroom="volets">' + icon('blind') + '<b>Volets</b><small>' + (up === 0 ? 'Tous fermés' : up === shut.length ? 'Tous ouverts' : up + ' / ' + shut.length + ' ouverts') + '</small></button>' +
+      '<button class="fv" data-goto="more"><span class="fv-hd"><b>Piscine</b><span class="mono">' + (water != null ? fmt(water, 0) + '°' : '') + '</span></span>' +
+      '<span class="fv-big">pH ' + fmt(ph, 1) + '</span>' +
+      '<small>' + (ph != null ? (ph >= 7.0 && ph <= 7.6 ? 'Idéal' : 'À surveiller') : '') + (ex && ex.swc != null ? ' · chloration ' + ex.swc + ' %' : '') + '</small></button>' +
+      '<button class="fv" data-goto="more"><span class="fv-hd"><b>Énergie</b><span class="mono">' + (et ? fmt(et.total, 1) + ' kWh' : '') + '</span></span>' +
+      (et ? miniBars(et.hours, { w: 140, h: 30, hi: hi }) : '<div class="spark-empty">Chargement…</div>') + '<small>piscine + sauna, aujourd\'hui</small></button>' +
+      '</div>';
+    return h;
+  }
+  function findRoom(id) { var f = null; CFG.groups.forEach(function (g) { g.rooms.forEach(function (r) { if (r.id === id) f = r; }); }); return f; }
+
+  // ---------- Onglet Climat ----------
+  function climateHTML() {
+    var h = heroHTML();
+    var r = ntCurrentRoom();
+    if (r) {
+      loadRoomHist(r.id);
+      var hp = HISTN[r.id], sp = ntPend && String(ntPend.room) === String(r.id) ? ntPend.temp : r.setpoint;
+      h += '<div class="lbl">Température · ' + esc(r.name) + ' · 24 h</div><div class="card2">' +
+        spark(hp && hp.points ? hp.points : null, { w: 320, h: 90, ref: sp, labels: ['−24 h', '−18 h', '−12 h', '−6 h', 'maint.'] }) +
+        '<div class="legend"><span><i style="background:#FF8A5B"></i>Mesurée</span><span><i class="dash"></i>Consigne ' + fmt(sp, 1) + '°</span></div></div>';
+      h += '<div class="lbl">Toutes les pièces</div><div class="card2 rooms2">' + NT.rooms.map(function (x) {
+        return '<button class="r2' + (x.id === r.id ? ' on' : '') + '" data-ntroom="' + esc(x.id) + '"><span>' + (x.heating ? icon('flame') : '') + esc(x.name) + '</span><span class="mono">' + fmt(x.temp, 1) + '° <small>→ ' + fmt(x.setpoint, 1) + '°</small></span></button>';
+      }).join('') + '</div>';
+    }
+    return h;
+  }
+
+  // ---------- Onglet Caméras ----------
+  function camsTabHTML() {
+    var cams = allCams(), h = '';
+    h += cams.map(camCardHTML).join('');
+    if (!CAMS || !IM) h += '<p class="muted">Chargement des caméras…</p>';
+    if (IM && IM.error) h += '<p class="muted">Caméras Imou indisponibles pour le moment.</p>';
+    if (CAMS && CAMS.cameras) {
+      var names = {}; cams.forEach(function (c) { if (c.src === 'netatmo') names[c.id] = c.name; });
+      var evs = (CAMS.events || []).filter(function (e) { return names[e.camera]; });
+      h += '<div class="lbl">Derniers événements</div>';
+      h += evs.length ? '<div class="evlist">' + evs.map(function (e) {
+        var day = new Date(e.time * 1000), today = new Date().toDateString() === day.toDateString(), tag = e.video ? 'button' : 'div';
+        return '<' + tag + ' class="ev' + (e.video ? ' rec' : '') + '"' + (e.video ? ' data-evplay="' + esc(e.id) + '"' : '') + '>' + (e.snapshot ? '<img alt="" loading="lazy" src="' + esc(e.snapshot) + '">' : '<span class="evic">' + icon('cam') + '</span>') +
+          '<span><b>' + esc(EV[e.type] || 'Événement') + '</b><small>' + esc(names[e.camera] || '') + (e.video ? ' · voir le clip' : '') + '</small></span>' +
+          '<span class="evt">' + (today ? '' : day.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) + ' ') + hhmm(e.time) + '</span></' + tag + '>';
+      }).join('') + '</div>' : '<p class="muted">Aucun événement récent.</p>';
+    }
+    return h;
+  }
+
+  // ---------- Onglet Plus (piscine, énergie, météo, réglages) ----------
+  function moreHTML() {
+    var pis = findRoom('piscine'), met = findRoom('meteo'), sdb = findRoom('sdb'), h = '';
+    var ph = HISTE['3557564|168'];
+    h += '<div class="lbl">Piscine</div>';
+    h += pis.items.filter(function (it) { return /^iaqua-/.test(it.type); }).map(rowHTML).join('');
+    h += '<div class="card2"><div class="row-hd"><b>pH · sonde Ondilo · 7 jours</b><span class="mono">' + fmt(num(3557564), 2) + '</span></div>' +
+      spark(ph && ph.points ? ph.points.map(function (p) { return [new Date(String(p[0]).replace(' ', 'T')).getTime(), p[1]]; }) : null, { w: 320, h: 70, ref: 7.2, color: '#7CB2FF', labels: ['−7 j', '−5 j', '−3 j', '−1 j', 'auj.'] }) +
+      '<div class="acc2b">' + pis.items.filter(function (it) { return it.type === 'sensor' || it.type === 'light'; }).map(rowHTML).join('') + '</div></div>';
+    h += '<div class="lbl">Énergie</div><div class="card2 flat">' +
+      pis.items.filter(function (it) { return it.type === 'tuya-meter'; }).map(rowHTML).join('') +
+      sdb.items.filter(function (it) { return it.type === 'tuya-meter'; }).map(rowHTML).join('') + '</div>';
+    if (met) h += '<div class="lbl">Météo</div><div class="card2 flat">' + met.items.map(rowHTML).join('') + '</div>';
+    h += '<div class="lbl">Application</div><div class="card2 flat">' +
+      '<button class="row" data-settings><span class="ic">' + icon('gear') + '</span><span><b>Réglages et nouveautés</b><small>Version ' + esc(LOG ? LOG.version : '…') + (newVersion ? ' · nouvelle version' : '') + '</small></span><span class="val">›</span></button></div>';
+    return h;
   }
 
   function snapUrl(c) { return c.src === 'netatmo' ? c.snapshot + '?t=' + camsAt : c.snapshot; }
@@ -410,24 +600,31 @@
     }).join('');
   }
 
+  var TITLES = { home: 'Accueil', rooms: 'Pièces', climate: 'Climat', cams: 'Caméras', more: 'Plus' };
   function render() {
     if (!CFG || !token) return;
+    var y = window.scrollY, body;
+    if (TAB === 'rooms') body = roomsHTML();
+    else if (TAB === 'climate') body = climateHTML();
+    else if (TAB === 'cams') body = camsTabHTML();
+    else if (TAB === 'more') body = moreHTML();
+    else body = homeHTML();
     var d = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
-    var y = window.scrollY;
     app.innerHTML =
-      '<header class="hd"><div><small>' + esc(d.charAt(0).toUpperCase() + d.slice(1)) + '</small><h1>Bonjour' + (userName ? ' ' + esc(userName) : '') + '</h1></div>' +
+      '<header class="hd2"><div><small>' + (TAB === 'home' ? esc(d.charAt(0).toUpperCase() + d.slice(1)) + (userName ? ' · ' + esc(userName) : '') : '&nbsp;') + '</small><h1>' + TITLES[TAB] + '</h1></div>' +
       '<div class="hd-r"><div class="sync' + (offline ? ' off' : '') + '"><i></i>' + (offline ? 'Hors ligne' : lastOk ? ago(lastOk) : '…') + '</div>' +
-      '<button class="gear' + (newVersion ? ' dot' : '') + '" data-settings aria-label="Réglages">' + icon('gear') + '</button></div></header>' +
-      heroHTML() + chipsHTML() + roomsHTML() +
-      '<button class="foot" data-settings>Maison v' + esc(LOG ? LOG.version : '…') + (lastOk ? ' · mis à jour ' + ago(lastOk) : '') + '</button>';
+      (TAB === 'home' ? '<button class="gear' + (newVersion ? ' dot' : '') + '" data-settings aria-label="Réglages">' + icon('gear') + '</button>' : '') + '</div></header>' +
+      body + '<div class="foot">Maison v' + esc(LOG ? LOG.version : '…') + (lastOk ? ' · mis à jour ' + ago(lastOk) : '') + '</div>';
     window.scrollTo(0, y);
-    dock.hidden = false;
-    var da = dock.querySelector('[data-dock="alarm"]');
-    if (!da.classList.contains('armed-confirm')) da.classList.toggle('armed', alarmArmed());
+    tabsEl.hidden = false;
+    Array.prototype.forEach.call(tabsEl.querySelectorAll('[data-tab]'), function (b) { b.classList.toggle('on', b.dataset.tab === TAB); });
+    var mb = tabsEl.querySelector('[data-tab="more"]'); if (mb) mb.classList.toggle('dot', newVersion);
+    var v = TAB === 'cams' && liveCam && document.getElementById('v-' + liveCam);
+    if (v) v.addEventListener('error', function () { toast('La vidéo en direct s\'ouvre dans Safari sur iPhone', true); });
   }
 
   function setup() {
-    dock.hidden = true;
+    tabsEl.hidden = true;
     app.innerHTML = '<div class="setup"><h1>Maison</h1><p>Cette appli n\'est pas encore reliée à ta maison. Ouvre le lien d\'installation (QR code) depuis cet iPhone.</p></div>';
   }
 
@@ -875,8 +1072,30 @@
   app.addEventListener('click', function (e) {
     var b;
     if ((b = e.target.closest('[data-settings]'))) return openSheet('settings');
-    if ((b = e.target.closest('[data-opencams]'))) { liveCam = b.dataset.opencams; sheet.dataset.jump = liveCam; return openSheet('cams'); }
-    if ((b = e.target.closest('[data-ntroom]'))) { ntRoom = b.dataset.ntroom; store.set('maison.ntRoom', ntRoom); ntPend = null; return render(); }
+    if ((b = e.target.closest('[data-opencams]'))) { liveCam = b.dataset.opencams; liveHd = true; TAB = 'cams'; store.set('maison.tab', TAB); loadCams(false); loadImou(false); render();
+      var cc = document.getElementById('cc-' + liveCam); if (cc) cc.scrollIntoView({ block: 'center' }); return; }
+    // Accès rapide de l'accueil
+    if ((b = e.target.closest('[data-qa]'))) {
+      var qa = b.dataset.qa;
+      if (qa === 'gate') return openSlide('gate', 'home');
+      if (qa === 'garage') return openSlide('garage-1', 'home');
+      if (qa === 'alarm') return openSlide(alarmArmed() ? 'alarm-off' : 'alarm-on', 'home');
+      if (qa === 'sauna') { if (tuOn('sauna')) { SLIDE = null; return saunaSet(false); } return openSlide('sauna-on', 'home'); }
+    }
+    if ((b = e.target.closest('[data-slideopen]'))) { var so = b.dataset.slideopen.split(':'); return openSlide(so[0], so[1]); }
+    if ((b = e.target.closest('[data-slidekey]'))) { SLIDE.key = b.dataset.slidekey; return render(); }
+    if (e.target.closest('[data-slidex]')) { SLIDE = null; return render(); }
+    if ((b = e.target.closest('[data-goto]'))) { TAB = b.dataset.goto; store.set('maison.tab', TAB); window.scrollTo(0, 0); if (TAB === 'more') { refreshIq(true); refreshTuya(true); } return render(); }
+    if ((b = e.target.closest('[data-goroom]'))) {
+      TAB = 'rooms'; store.set('maison.tab', TAB); openRoom = b.dataset.goroom; store.set('maison.open', openRoom); render();
+      var rr = document.getElementById('room-' + openRoom); if (rr) rr.scrollIntoView({ block: 'start' }); return;
+    }
+    // Caméras (onglet)
+    if ((b = e.target.closest('[data-live]'))) { liveCam = b.dataset.live; liveHd = true; return render(); }
+    if (e.target.closest('[data-hd]')) { liveHd = !liveHd; return render(); }
+    if ((b = e.target.closest('[data-rec]'))) return openRec(b.dataset.rec);
+    if ((b = e.target.closest('[data-evplay]'))) return playEvent(b.dataset.evplay);
+    if ((b = e.target.closest('[data-ntroom]'))) { ntRoom = b.dataset.ntroom; store.set('maison.ntRoom', ntRoom); ntPend = null; loadRoomHist(ntRoom); return render(); }
     if ((b = e.target.closest('[data-nt-step]'))) return stepSetpoint(parseFloat(b.dataset.ntStep));
     if ((b = e.target.closest('[data-nt-home]'))) {
       var r = ntCurrentRoom();
@@ -937,29 +1156,6 @@
     if ((b = e.target.closest('[data-action]'))) {
       if (!confirmed(b)) return;
       return send(+b.dataset.action, b.dataset.v, { optimistic: false, msg: b.dataset.msg });
-    }
-    if ((b = e.target.closest('[data-sauna-chip]'))) {
-      if (!confirmed(b)) return;
-      var want = !tuOn('sauna');
-      tuPend.sauna = { on: want, until: Date.now() + 10000 }; render();
-      return api({ action: 'tu.switch', key: 'sauna', on: want }).then(function () {
-        toast(want ? 'Sauna allumé' : 'Sauna éteint'); setTimeout(function () { refreshTuya(true); }, 2500); setTimeout(function () { refreshTuya(true); }, 8000);
-      }).catch(function () { delete tuPend.sauna; render(); toast('Le sauna ne répond pas, réessaie', true); });
-    }
-    if ((b = e.target.closest('[data-gate]'))) {
-      if (!confirmed(b)) return;
-      return send(CFG.dock.gate, 100, { optimistic: false, msg: 'Portail : commande envoyée' });
-    }
-    if (e.target.closest('[data-garage-toggle]')) { garageOpen = !garageOpen; return render(); }
-    if ((b = e.target.closest('[data-garage]'))) {
-      if (!confirmed(b)) return;
-      var gv = +b.dataset.garage; garageOpen = false;
-      return send(CFG.dock.garage, gv, { optimistic: false, msg: gv === 1 ? 'Garage : ouverture envoyée' : 'Garage : fermeture envoyée' });
-    }
-    if ((b = e.target.closest('[data-alarm]'))) {
-      if (!confirmed(b)) return;
-      var armed = alarmArmed();
-      return send(CFG.status.alarm, armed ? 0 : 12, { msg: armed ? 'Alarme désactivée' : 'Alarme activée' });
     }
   });
   sheet.addEventListener('click', function (e) {
@@ -1081,21 +1277,49 @@
     if (t.hasAttribute('data-pe-zname')) { var zn = zoneById(+t.dataset.peZname); if (zn && t.value.trim()) { zn.name = t.value.trim().slice(0, 30); peChanged(); } return; }
     if (t.hasAttribute('data-pe-zone')) { peTT()[+t.dataset.peZone].z = +t.value; return peChanged(); }
     if (t.hasAttribute('data-pe-time')) {
-      var m = /^(dd):(dd)$/.exec(t.value || ''); if (!m) return renderPlan();
+      var m = /^([0-9][0-9]):([0-9][0-9])$/.exec(t.value || ''); if (!m) return renderPlan();
       var o = PE.day * 1440 + (+m[1]) * 60 + (+m[2]), i = +t.dataset.peTime;
       if (o === 0 || peTT().some(function (x, j) { return j !== i && x.o === o; })) { toast('Une plage existe déjà à cette heure', true); return renderPlan(); }
       peTT()[i].o = o; peSort(); return peChanged();
     }
   });
-  dock.addEventListener('click', function (e) {
-    var b = e.target.closest('[data-dock]'); if (!b || !CFG) return;
-    var k = b.dataset.dock;
-    if (k === 'cam') { liveCam = null; return openSheet('cams'); }
-    if (!confirmed(b)) return;
-    if (k === 'gate') return send(CFG.dock.gate, 100, { optimistic: false, msg: 'Portail : ouverture envoyée' });
-    if (k === 'garage') return send(CFG.dock.garage, 1, { optimistic: false, msg: 'Garage : ouverture envoyée' });
-    if (k === 'alarm') { var a = alarmArmed(); return send(CFG.dock.alarm, a ? 0 : 12, { msg: a ? 'Alarme désactivée' : 'Alarme activée' }); }
+  // ---------- Barre d'onglets ----------
+  tabsEl.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-tab]'); if (!b || !CFG) return;
+    var t = b.dataset.tab;
+    if (t === TAB) { window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+    if (TAB === 'cams') liveCam = null;
+    TAB = t; store.set('maison.tab', TAB); SLIDE = null; window.scrollTo(0, 0);
+    if (t === 'cams') { loadCams(false); loadImou(false); }
+    if (t === 'more') { refreshIq(true); refreshTuya(true); loadEnergyToday(); loadHistE(3557564, 168); }
+    if (t === 'climate') { var r = ntCurrentRoom(); if (r) loadRoomHist(r.id); }
+    render();
   });
+
+  // ---------- Glisser pour confirmer (portail, garage, alarme, allumage du sauna) ----------
+  var drag = null;
+  app.addEventListener('pointerdown', function (e) {
+    var k = e.target.closest('.slide .knob'); if (!k) return;
+    var sl = k.parentNode;
+    drag = { sl: sl, k: k, x0: e.clientX - k.offsetLeft, max: sl.clientWidth - k.offsetWidth - 4 };
+    sl.classList.add('dragging'); k.style.transition = 'none';
+    try { k.setPointerCapture(e.pointerId); } catch (x) {}
+    e.preventDefault();
+  });
+  app.addEventListener('pointermove', function (e) {
+    if (!drag) return;
+    var x = Math.max(4, Math.min(drag.max, e.clientX - drag.x0));
+    drag.k.style.left = x + 'px';
+    drag.sl.style.setProperty('--p', ((x - 4) / Math.max(1, drag.max - 4)).toFixed(3));
+  });
+  function endDrag() {
+    if (!drag) return;
+    var d = drag; drag = null; d.k.style.transition = ''; d.sl.classList.remove('dragging');
+    if (d.k.offsetLeft >= d.max - 8) { d.sl.classList.add('done'); doSlide(d.sl.dataset.slide); }
+    else { d.k.style.left = '4px'; d.sl.style.setProperty('--p', 0); }
+  }
+  app.addEventListener('pointerup', endDrag);
+  app.addEventListener('pointercancel', endDrag);
   function findItem(id) {
     var f = null;
     CFG.groups.forEach(function (g) { g.rooms.forEach(function (r) { r.items.forEach(function (it) { if (it.id === id) f = it; }); }); });
@@ -1115,6 +1339,8 @@
     CFG = c;
     if (!token) return setup();
     render(); refresh(); refreshHeating(); refreshTuya(true); refreshIq(false);
+    if (TAB === 'cams') { loadCams(false); loadImou(false); }
+    if (TAB === 'more') { loadEnergyToday(); loadHistE(3557564, 168); }
     setInterval(function () { if (!document.hidden) refreshIq(false); }, 60000);
     setInterval(function () { if (!document.hidden) refresh(); }, 10000);
     setInterval(function () { if (!document.hidden && !ntPend) refreshHeating(); }, 30000);
