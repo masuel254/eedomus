@@ -60,6 +60,7 @@ for (const g of cfg.groups) for (const room of g.rooms) {
       case 'action': allow(it.id, [it.value]); break;
       case 'door': case 'sensor': read(it.id); break;
       case 'tuya-switch': case 'tuya-meter': break; // gérés par la liste blanche Tuya (CFG.tu.switchable)
+      case 'iaqua-exo': case 'iaqua-hp': break;     // gérés par la liste blanche iAquaLink (action iq.set)
       default: throw new Error(`Type inconnu: ${it.type}`);
     }
   }
@@ -85,6 +86,7 @@ const CODE_CFG = {
     seed: createHash('sha256').update(env.NETATMO_REFRESH_TOKEN.split('|')[0]).digest('hex').slice(0, 16),
   } : null,
   deployedAt: Date.now(),
+  iq: env.IAQUA_EMAIL ? { email: env.IAQUA_EMAIL, password: env.IAQUA_PASSWORD, exo: env.IAQUA_EXO_SN || null, hpm: env.IAQUA_HPM_SN || null } : null,
   im: env.IMOU_APP_ID ? { id: env.IMOU_APP_ID, secret: env.IMOU_APP_SECRET } : null,
   tu: env.TUYA_CLIENT_ID ? {
     id: env.TUYA_CLIENT_ID, secret: env.TUYA_CLIENT_SECRET, base: 'https://openapi.tuyaeu.com',
@@ -133,7 +135,7 @@ async function eedomus(kind, query, attempt) {
 const SD = $getWorkflowStaticData('global');
 // Nouveau déploiement : on vide les données en cache (formats changés), on garde les jetons d'accès.
 if (SD.deployedAt !== CFG.deployedAt) {
-  ['ntHomes', 'ntHeat', 'ntCams', 'imDev', 'imLive', 'imSnap', 'imRec', 'tuState', 'tuSpec'].forEach((k) => { delete SD[k]; });
+  ['ntHomes', 'ntHeat', 'ntCams', 'imDev', 'imLive', 'imSnap', 'imRec', 'tuState', 'tuSpec', 'iqState'].forEach((k) => { delete SD[k]; });
   SD.deployedAt = CFG.deployedAt;
 }
 function fail(httpStatus, code, detail) { const e = new Error(code); e.httpStatus = httpStatus; e.code = code; e.detail = detail; return e; }
@@ -573,6 +575,96 @@ function enSeries(k) {
   return { hours, days, since: Object.keys(e.d).sort()[0] || null, index: e.last };
 }
 
+// ---------------- iAquaLink (Zodiac / Fluidra) : électrolyseur eXO et pompe à chaleur ----------------
+// API non officielle (celle de l'appli iAquaLink, documentée par l'intégration Home Assistant iaqualink-py).
+const IQ_KEY = 'EOOEMOW4YR6QNB07', IQ_UA = 'okhttp/3.14.7';
+async function iqLogin(force) {
+  SD.iq = SD.iq || {};
+  if (!force && SD.iq.idt && SD.iq.exp > Date.now() + 120000) return SD.iq.idt;
+  let L;
+  try {
+    L = parse(await helpers.httpRequest({ method: 'POST', url: 'https://prod.zodiac-io.com/users/v1/login', json: false, timeout: 20000,
+      headers: { 'Content-Type': 'application/json', 'User-Agent': IQ_UA },
+      body: JSON.stringify({ api_key: IQ_KEY, email: CFG.iq.email, password: CFG.iq.password }) }));
+  } catch (e) { throw fail(502, 'iaqua_auth', String(e.message || e)); }
+  if (!L || !L.userPoolOAuth || !L.userPoolOAuth.IdToken) throw fail(502, 'iaqua_auth');
+  SD.iq.idt = L.userPoolOAuth.IdToken;
+  SD.iq.exp = Date.now() + Number(L.userPoolOAuth.ExpiresIn || 3600) * 1000;
+  return SD.iq.idt;
+}
+async function iqShadow(sn, desired, retry) {
+  const idt = await iqLogin(false);
+  const opts = { method: desired ? 'POST' : 'GET', url: 'https://prod.zodiac-io.com/devices/v1/' + sn + '/shadow', json: false, timeout: 20000,
+    headers: { Authorization: idt, 'User-Agent': IQ_UA } };
+  if (desired) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify({ state: { desired } }); }
+  try { return parse(await helpers.httpRequest(opts)); }
+  catch (e) {
+    const st = String(e.httpCode || (e.response && e.response.status) || '');
+    if (!retry && (st === '401' || st === '403')) { await iqLogin(true); return iqShadow(sn, desired, true); }
+    throw fail(502, 'iaqua', String(e.message || e));
+  }
+}
+function iqExo(rep) {
+  const s = ((rep.equipment || {}).swc_0) || {}, sens = {};
+  ['sns_1', 'sns_2', 'sns_3'].forEach((k) => { if (s[k]) sens[String(s[k].sensor_type || '').toLowerCase()] = s[k]; });
+  const sched = [];
+  Object.keys(rep.schedules || {}).forEach((k) => {
+    const x = rep.schedules[k];
+    if (x && typeof x === 'object' && x.timer) sched.push({ id: x.id, name: x.name, endpoint: x.endpoint, enabled: !!x.enabled, active: !!x.active, start: x.timer.start, end: x.timer.end, rpm: x.rpm || null });
+  });
+  sched.sort((a, b) => (a.start < b.start ? -1 : 1));
+  return {
+    online: (rep.aws || {}).status === 'connected', since: (rep.aws || {}).timestamp || null,
+    production: s.production ?? null, state: s.exo_state ?? null, swc: s.swc ?? null, swcLow: s.swc_low ?? null,
+    boost: s.boost ?? null, boostTime: s.boost_time || null, low: s.low ?? null,
+    phSp: s.ph_sp != null ? s.ph_sp / 10 : null, orpSp: s.orp_sp ?? null,
+    ph: sens.ph && sens.ph.state ? sens.ph.value / 10 : null, orp: sens.orp && sens.orp.state ? sens.orp.value : null,
+    water: sens['water temp'] && sens['water temp'].state ? sens['water temp'].value : null,
+    pump: s.filter_pump ? s.filter_pump.state : null, error: s.error_code || 0, schedules: sched,
+  };
+}
+function iqHp(rep) {
+  const h = ((rep.equipment || {}).hp_0) || {};
+  return {
+    online: (rep.aws || {}).status === 'connected', since: (rep.aws || {}).timestamp || null,
+    on: h.state === 1, setpoint: h.tsp ?? null, water: h.sns_1 ? h.sns_1.value : null, air: h.sns_2 ? h.sns_2.value : null,
+    heating: h.hp === 1, status: h.status ?? null, reason: h.reason ?? null,
+  };
+}
+async function iqState(fresh) {
+  if (!fresh && SD.iqState && SD.iqState.at > Date.now() - 20000) return SD.iqState.data;
+  const data = { ok: true, at: new Date().toISOString() };
+  if (CFG.iq.exo) { const r = await iqShadow(CFG.iq.exo); data.exo = iqExo((r.state && r.state.reported) || {}); }
+  if (CFG.iq.hpm) { try { const r = await iqShadow(CFG.iq.hpm); data.hp = iqHp((r.state && r.state.reported) || {}); } catch (e) { data.hp = null; } }
+  SD.iqState = { at: Date.now(), data };
+  return data;
+}
+async function iaqua(b) {
+  if (!CFG.iq) throw fail(503, 'iaqua_not_configured');
+  if (b.action === 'iq.state') return iqState(!!b.fresh && !(SD.iqState && SD.iqState.at > Date.now() - 5000));
+  if (b.action === 'iq.set') {
+    // Liste blanche des réglages autorisés, avec bornes
+    const v = Number(b.value);
+    let sn, desired;
+    if (b.dev === 'exo' && CFG.iq.exo) {
+      sn = CFG.iq.exo;
+      if (b.key === 'boost' && (v === 0 || v === 1)) desired = { equipment: { swc_0: { boost: v } } };
+      else if (b.key === 'swc' && v >= 0 && v <= 100 && v % 5 === 0) desired = { equipment: { swc_0: { swc: v } } };
+      else if (b.key === 'ph_sp' && v >= 6.8 && v <= 7.6) desired = { equipment: { swc_0: { ph_sp: Math.round(v * 10) } } };
+      else if (b.key === 'pump' && (v === 0 || v === 1)) desired = { equipment: { swc_0: { filter_pump: { state: v } } } };
+    } else if (b.dev === 'hp' && CFG.iq.hpm) {
+      sn = CFG.iq.hpm;
+      if (b.key === 'on' && (v === 0 || v === 1)) desired = { equipment: { hp_0: { state: v } } };
+      else if (b.key === 'tsp' && v >= 15 && v <= 32 && (v * 2) % 1 === 0) desired = { equipment: { hp_0: { tsp: v } } };
+    }
+    if (!desired) throw fail(403, 'not_allowed');
+    await iqShadow(sn, desired);
+    SD.iqState = null;
+    return { ok: true, dev: b.dev, key: b.key, value: v };
+  }
+  throw fail(400, 'unknown_action');
+}
+
 async function tuya(b) {
   if (!CFG.tu) throw fail(503, 'tuya_not_configured');
   if (b.action === 'tu.energy') {
@@ -656,6 +748,7 @@ try {
   }
   if (String(body.action || '').startsWith('im.')) return reply(200, await imou(body));
   if (String(body.action || '').startsWith('tu.')) return reply(200, await tuya(body));
+  if (String(body.action || '').startsWith('iq.')) return reply(200, await iaqua(body));
 
   return reply(400, { ok: false, error: 'unknown_action' });
 } catch (e) {

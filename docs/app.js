@@ -88,6 +88,72 @@
       .then(function () { camsLoading = false; if (!busy()) render(); if (!sheet.hidden && sheet.dataset.view === 'cams' && !sheet.querySelector('video')) renderCams(); });
   }
   // Smart Life (Tuya) : sauna et compteurs de la piscine
+  // iAquaLink (Zodiac) : électrolyseur eXO et pompe à chaleur
+  var IQ = null, iqPend = {};
+  function refreshIq(fresh) {
+    if (!token) return;
+    api({ action: 'iq.state', fresh: fresh === true }).then(function (j) { IQ = j; if (!busy() && !Object.keys(iqPend).some(function (k) { return iqPend[k].timer; })) render(); }).catch(function () { if (!IQ) IQ = { error: true }; });
+  }
+  function iqVal(dev, key, base) { var p = iqPend[dev + ':' + key]; return p && p.until > Date.now() ? p.v : base; }
+  function iqSend(dev, key, value, msg) {
+    iqPend[dev + ':' + key] = { v: value, until: Date.now() + 20000 };
+    return api({ action: 'iq.set', dev: dev, key: key, value: value }).then(function () {
+      toast(msg); setTimeout(function () { refreshIq(true); }, 4000); setTimeout(function () { refreshIq(true); }, 12000);
+    }).catch(function (e) { delete iqPend[dev + ':' + key]; render(); toast(e.status === 403 ? 'Réglage non autorisé' : 'iAquaLink ne répond pas, réessaie', true); });
+  }
+  var SCH = { vsp: 'Filtration', swc: 'Électrolyse', aux: 'Auxiliaire' };
+  function poolExoHTML(it) {
+    if (!IQ) return '<div class="pool"><p class="muted">Lecture de l\'électrolyseur…</p></div>';
+    var x = IQ.exo; if (!x) return '<div class="pool"><p class="muted">Électrolyseur indisponible pour le moment.</p></div>';
+    var swc = iqVal('exo', 'swc', x.swc), ph = iqVal('exo', 'ph_sp', x.phSp), boost = iqVal('exo', 'boost', x.boost), pump = iqVal('exo', 'pump', x.pump), off = !x.online;
+    var sub = [x.ph != null ? 'pH ' + fmt(x.ph, 1) : null, x.orp != null ? 'Redox ' + x.orp + ' mV' : null, x.water != null ? 'Eau ' + x.water + '°' : null].filter(Boolean).join(' · ');
+    var progs = (x.schedules || []).filter(function (s) { return s.enabled; }).map(function (s) {
+      var kind = SCH[String(s.endpoint || '').replace(/[_0-9]+$/, '')] || s.name;
+      return { kind: kind, txt: s.start + '–' + s.end + (s.active ? ' (en cours)' : '') };
+    });
+    var byKind = {}; progs.forEach(function (p) { (byKind[p.kind] = byKind[p.kind] || []).push(p.txt); });
+    return '<div class="pool' + (off ? ' off' : '') + '">' +
+      '<div class="pool-hd"><span class="ic">' + icon('drop') + '</span><span><b>' + esc(it.name) + '</b><small>' + esc(sub || '—') + '</small></span>' +
+      '<span class="pill2 ' + (off ? 'bad' : 'ok') + '">' + (off ? 'Hors ligne' : 'Connecté') + '</span></div>' +
+      '<div class="pool-grid">' +
+      '<div class="ctl"><small>Chloration</small><div class="stp"><button data-iq-step="exo:swc:-10"' + (off ? ' disabled' : '') + ' aria-label="Moins">−</button><b id="iq-exo-swc">' + (swc == null ? '—' : swc + ' %') + '</b><button data-iq-step="exo:swc:10"' + (off ? ' disabled' : '') + ' aria-label="Plus">+</button></div></div>' +
+      '<div class="ctl"><small>Consigne pH</small><div class="stp"><button data-iq-step="exo:ph_sp:-0.1"' + (off ? ' disabled' : '') + ' aria-label="Moins">−</button><b id="iq-exo-ph_sp">' + (ph == null ? '—' : fmt(ph, 1)) + '</b><button data-iq-step="exo:ph_sp:0.1"' + (off ? ' disabled' : '') + ' aria-label="Plus">+</button></div></div>' +
+      '<button class="ctl tog' + (boost ? ' is-on' : '') + '" data-iq-tog="exo:boost"' + (off ? ' disabled' : '') + '><small>Boost' + (boost && x.boostTime ? ' · ' + esc(x.boostTime) : '') + '</small><span class="sw"></span></button>' +
+      '<button class="ctl tog' + (pump ? ' is-on' : '') + '" data-iq-tog="exo:pump"' + (off ? ' disabled' : '') + '><small>Filtration</small><span class="sw"></span></button>' +
+      '</div>' +
+      (progs.length ? '<div class="pool-sched">' + icon('cal') + '<span>' + Object.keys(byKind).map(function (k) { return '<b>' + esc(k) + '</b> ' + esc(byKind[k].join(' · ')); }).join('<br>') + '</span></div>' : '') +
+      '</div>';
+  }
+  function poolHpHTML(it) {
+    if (!IQ) return '';
+    var x = IQ.hp; if (!x) return '<div class="pool"><p class="muted">Pompe à chaleur indisponible pour le moment.</p></div>';
+    var on = iqVal('hp', 'on', x.on ? 1 : 0), tsp = iqVal('hp', 'tsp', x.setpoint), off = !x.online;
+    var pill = off ? 'Hors ligne' + (x.since ? ' depuis le ' + new Date(x.since).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : '') : on ? (x.heating ? 'Chauffe' : 'En marche') : 'Arrêtée';
+    var sub = [x.water != null ? 'Eau ' + fmt(x.water, 1) + '°' : null, x.air != null ? 'Air ' + fmt(x.air, 1) + '°' : null].filter(Boolean).join(' · ') + (off ? ' (dernières valeurs)' : '');
+    return '<div class="pool' + (off ? ' off' : '') + '">' +
+      '<div class="pool-hd"><span class="ic">' + icon('flame') + '</span><span><b>' + esc(it.name) + '</b><small>' + esc(sub || '—') + '</small></span>' +
+      '<span class="pill2 ' + (off ? 'bad' : on ? 'heat' : '') + '">' + esc(pill) + '</span></div>' +
+      '<div class="pool-grid">' +
+      '<div class="ctl"><small>Consigne eau</small><div class="stp"><button data-iq-step="hp:tsp:-0.5"' + (off ? ' disabled' : '') + ' aria-label="Moins">−</button><b id="iq-hp-tsp">' + (tsp == null ? '—' : fmt(tsp, 1) + '°') + '</b><button data-iq-step="hp:tsp:0.5"' + (off ? ' disabled' : '') + ' aria-label="Plus">+</button></div></div>' +
+      '<button class="ctl tog' + (on ? ' is-on heat' : '') + '" data-iq-tog="hp:on"' + (off ? ' disabled' : ' data-confirm') + '><small data-label>' + (off ? 'Dernier état : ' + (on ? 'marche' : 'arrêt') : on ? 'En marche' : 'Arrêtée') + '</small><span class="sw"></span></button>' +
+      '</div>' +
+      (off ? '<p class="note-q">La pompe à chaleur ne communique plus avec le cloud Zodiac. Rallume-la (ou vérifie son Wi-Fi) pour la piloter.</p>' : '') +
+      '</div>';
+  }
+  var IQ_LIM = { swc: [0, 100], ph_sp: [6.8, 7.6], tsp: [15, 32] };
+  function iqStep(dev, key, delta) {
+    var cur = dev === 'exo' ? (key === 'swc' ? IQ.exo.swc : IQ.exo.phSp) : IQ.hp.setpoint;
+    var p = iqPend[dev + ':' + key], base = p ? p.v : cur;
+    if (base == null) return;
+    var lim = IQ_LIM[key], v = Math.round((base + delta) * 10) / 10;
+    v = Math.max(lim[0], Math.min(lim[1], v));
+    if (p && p.timer) clearTimeout(p.timer);
+    var el = document.getElementById('iq-' + dev + '-' + key);
+    if (el) el.textContent = key === 'swc' ? v + ' %' : key === 'tsp' ? fmt(v, 1) + '°' : fmt(v, 1);
+    var label = key === 'swc' ? 'Chloration : ' + v + ' %' : key === 'ph_sp' ? 'Consigne pH : ' + fmt(v, 1) : 'Consigne eau : ' + fmt(v, 1) + '°';
+    iqPend[dev + ':' + key] = { v: v, until: Date.now() + 20000, timer: setTimeout(function () { iqPend[dev + ':' + key].timer = null; iqSend(dev, key, v, label); }, 1200) };
+  }
+
   function refreshTuya(fresh) {
     if (!token) return;
     api({ action: 'tu.state', fresh: fresh === true }).then(function (j) { TU = j; if (!busy()) render(); }).catch(function () {});
@@ -205,6 +271,8 @@
       return '<div class="row"><span class="ic">' + icon(it.icon || 'home') + '</span><span><b>' + esc(it.name) + '</b><small>' + (STATES[id] ? esc(STATES[id].text) : '') + '</small></span>' +
         '<button class="act" data-action="' + id + '" data-v="' + esc(it.value) + '"' + (it.confirm ? ' data-confirm' : '') + ' data-msg="' + esc(it.name) + ' : envoyé">' + esc(it.label || 'OK') + '</button></div>';
     }
+    if (it.type === 'iaqua-exo') return poolExoHTML(it);
+    if (it.type === 'iaqua-hp') return poolHpHTML(it);
     if (it.type === 'tuya-switch') {
       var d = tuDev(it.key), son = tuOn(it.key);
       var sub = !d ? 'Chargement…' : son ? 'Allumé' + (d.power > 5 ? ' · chauffe ' + watts(d.power) : '') : 'Éteint';
@@ -634,8 +702,21 @@
       // Pièce avec un appareil Smart Life (sauna, compteurs) : état frais tout de suite
       CFG.groups.forEach(function (g) { g.rooms.forEach(function (rm) {
         if (rm.id === openRoom && rm.items.some(function (it) { return /^tuya-/.test(it.type); })) refreshTuya(true);
+        if (rm.id === openRoom && rm.items.some(function (it) { return /^iaqua-/.test(it.type); })) refreshIq(true);
       }); });
       return render();
+    }
+    if ((b = e.target.closest('[data-iq-step]'))) {
+      var ps = b.dataset.iqStep.split(':'); return iqStep(ps[0], ps[1], parseFloat(ps[2]));
+    }
+    if ((b = e.target.closest('[data-iq-tog]'))) {
+      if (!confirmed(b)) return;
+      var pt = b.dataset.iqTog.split(':'), dv = pt[0], ky = pt[1];
+      var curV = dv === 'exo' ? iqVal('exo', ky, IQ.exo[ky]) : iqVal('hp', 'on', IQ.hp.on ? 1 : 0);
+      var nv = curV ? 0 : 1;
+      var names = { 'exo:boost': 'Boost', 'exo:pump': 'Filtration', 'hp:on': 'Pompe à chaleur' };
+      iqPend[dv + ':' + ky] = { v: nv, until: Date.now() + 20000 }; render();
+      return iqSend(dv, ky, nv, names[dv + ':' + ky] + (nv ? ' : marche' : ' : arrêt'));
     }
     if ((b = e.target.closest('[data-energy]'))) return openEnergy(b.dataset.energy, b.dataset.ename);
     if ((b = e.target.closest('[data-tuya]'))) {
@@ -715,7 +796,8 @@
   fetch('config.json', { cache: 'no-cache' }).then(function (r) { return r.json(); }).then(function (c) {
     CFG = c;
     if (!token) return setup();
-    render(); refresh(); refreshHeating(); refreshTuya(true);
+    render(); refresh(); refreshHeating(); refreshTuya(true); refreshIq(false);
+    setInterval(function () { if (!document.hidden) refreshIq(false); }, 60000);
     setInterval(function () { if (!document.hidden) refresh(); }, 10000);
     setInterval(function () { if (!document.hidden && !ntPend) refreshHeating(); }, 30000);
     setInterval(function () { if (!document.hidden) refreshTuya(); }, 30000);

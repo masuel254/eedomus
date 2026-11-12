@@ -292,16 +292,26 @@
           "temp": 3557562,
           "items": [
             {
+              "type": "iaqua-exo",
+              "name": "Électrolyseur eXO"
+            },
+            {
+              "type": "iaqua-hp",
+              "name": "Pompe à chaleur Zodiac"
+            },
+            {
               "key": "pac",
-              "name": "Pompe à chaleur",
+              "name": "Conso pompe à chaleur",
               "type": "tuya-meter",
-              "icon": "flame"
+              "icon": "flame",
+              "label": "Pompe à chaleur"
             },
             {
               "key": "elec",
-              "name": "Électrolyseur",
+              "name": "Conso électrolyseur",
               "type": "tuya-meter",
-              "icon": "bolt"
+              "icon": "bolt",
+              "label": "Électrolyseur"
             },
             {
               "id": 2090770,

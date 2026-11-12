@@ -302,3 +302,32 @@ svg.bars .b { fill: var(--ok); opacity: .45; }
 svg.bars .b-hi { fill: var(--ok); }
 svg.bars .b-empty { fill: var(--s3); }
 svg.bars .lbl { fill: var(--mu); font-size: 10px; font-family: var(--f-mono); }
+
+/* ---------- v1.8 : iAquaLink (électrolyseur eXO, pompe à chaleur Zodiac) ---------- */
+.pool { margin: 10px 12px; padding: 12px; border-radius: 18px; background: var(--s1); border: 1px solid var(--ln); display: grid; gap: 10px; }
+.pool.off { opacity: .85; }
+.pool-hd { display: grid; grid-template-columns: 38px 1fr auto; gap: 10px; align-items: center; }
+.pool-hd .ic { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; background: rgba(124,178,255,.14); color: var(--cool); }
+.pool-hd b { display: block; font-size: 15px; }
+.pool-hd small { color: var(--mu); font-size: 12.5px; }
+.pill2 { font-size: 11.5px; font-weight: 800; padding: 4px 9px; border-radius: 999px; background: var(--s3); color: var(--mu); white-space: nowrap; }
+.pill2.ok { background: rgba(74,222,128,.12); color: var(--ok); }
+.pill2.bad { background: rgba(248,113,113,.12); color: var(--warn); }
+.pill2.heat { background: rgba(255,138,91,.14); color: var(--heat); }
+.pool-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ctl { background: var(--s2); border: 1px solid var(--ln); border-radius: 14px; padding: 10px; display: grid; gap: 6px; text-align: left; }
+.ctl small { color: var(--mu); font-size: 12px; font-weight: 700; }
+.stp { display: grid; grid-template-columns: 34px 1fr 34px; align-items: center; text-align: center; }
+.stp button { width: 34px; height: 34px; border-radius: 50%; background: var(--s3); font-size: 19px; display: grid; place-items: center; }
+.stp button:disabled { opacity: .35; }
+.stp b { font-family: var(--f-mono); font-size: 17px; font-weight: 500; }
+.ctl.tog { grid-template-columns: 1fr auto; align-items: center; }
+.ctl.tog.is-on .sw { background: var(--cool); }
+.ctl.tog.is-on.heat .sw { background: var(--heat); }
+.ctl.tog.is-on .sw::after { transform: translateX(20px); background: #fff; }
+.ctl.tog:disabled { opacity: .5; }
+.ctl.tog.confirming { background: rgba(255,138,91,.12); }
+.ctl.tog.confirming small { color: var(--heat); }
+.pool-sched { display: grid; grid-template-columns: 18px 1fr; gap: 8px; align-items: start; color: var(--mu); font-size: 12.5px; line-height: 1.5; padding: 2px 2px 0; }
+.pool-sched svg.i { width: 16px; height: 16px; margin-top: 2px; }
+.pool-sched b { color: var(--tx); font-weight: 700; }

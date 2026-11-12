@@ -1,7 +1,19 @@
 {
-  "version": "1.7.0",
+  "version": "1.8.0",
   "date": "2026-11-12",
   "releases": [
+    {
+      "version": "1.8.0",
+      "date": "2026-11-12",
+      "time": "17:58",
+      "title": "Piscine iAquaLink (Zodiac)",
+      "changes": [
+        "Électrolyseur eXO : pH, eau, chloration (−/+), consigne pH (−/+), Boost et filtration",
+        "Programmes de filtration affichés (ex. 06:30–08:30 · 16:00–17:00)",
+        "Pompe à chaleur Zodiac : consigne d’eau (−/+), marche/arrêt avec confirmation, températures",
+        "Lignes Smart Life renommées « Conso électrolyseur » et « Conso pompe à chaleur »"
+      ]
+    },
     {
       "version": "1.7.0",
       "date": "2026-11-12",
@@ -176,15 +188,19 @@
     "Caméras : Presence (Netatmo) + 5 Imou, photo, direct et événements Presence",
     "Smart Life : sauna (marche/arrêt) et compteurs électrolyseur + pompe à chaleur",
     "Enregistrements : carte SD des caméras Imou (7 jours) et clips des événements Presence",
-    "Consommation électrique : électrolyseur, pompe à chaleur et sauna (jour, mois, année)"
+    "Consommation électrique : électrolyseur, pompe à chaleur et sauna (jour, mois, année)",
+    "iAquaLink : électrolyseur eXO (chloration, pH, Boost, filtration) et pompe à chaleur Zodiac (consigne, marche/arrêt)"
   ],
   "todo": [
     "Tester la vidéo en direct sur iPhone (Imou et Netatmo)",
     "Surveiller la consommation vidéo Imou (2 Go gratuits)",
     "État réel de la porte de garage (pas de capteur d'ouverture aujourd'hui)",
-    "Révoquer les codes d'accès partagés pendant la mise en place (eedomus, n8n, Netatmo, Imou, Tuya)",
+    "Révoquer les codes d'accès partagés pendant la mise en place (eedomus, n8n, Netatmo, Imou, Tuya, iAquaLink)",
     "Tuya : prolongation demandée le 12/11/2026, en attente de validation (essai actuel jusqu'au 12/12/2026 à 16:47)",
-    "Option : demander à Tuya le service « Statistiques » pour récupérer l'historique d'avant le 12/11/2026"
+    "Option : demander à Tuya le service « Statistiques » pour récupérer l'historique d'avant le 12/11/2026",
+    "Tester les réglages iAquaLink depuis l’appli (chloration, pH, Boost, filtration)",
+    "Pompe à chaleur Zodiac hors ligne depuis le 27/09 : à retester quand elle sera rallumée",
+    "Option : modifier les programmes de filtration depuis l’appli"
   ],
-  "time": "17:50"
+  "time": "17:58"
 }
