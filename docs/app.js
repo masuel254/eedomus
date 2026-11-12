@@ -98,7 +98,10 @@
     var a = [];
     if (CAMS && CAMS.cameras) CAMS.cameras.forEach(function (c) { a.push(Object.assign({ src: 'netatmo' }, c)); });
     if (IM && IM.cameras) IM.cameras.forEach(function (c) { a.push(Object.assign({ src: 'imou' }, c)); });
-    return a;
+    var cc = (CFG && CFG.cameras) || {}, hidden = (cc.hidden || []).map(norm), order = (cc.order || []).map(norm);
+    a = a.filter(function (c) { return hidden.indexOf(norm(c.name)) < 0; });
+    var rank = function (c) { var i = order.indexOf(norm(c.name)); return i < 0 ? 99 : i; };
+    return a.sort(function (x, y) { return rank(x) - rank(y); });
   }
   function roomCams(room) {
     return allCams().filter(function (c) { return (c.src === 'netatmo' && room.camera) || (c.src === 'imou' && norm(c.name) === norm(room.name)); });
@@ -317,16 +320,15 @@
   function renderCams() {
     var h = '<div class="sh-hd"><h2>Caméras</h2><button class="close" data-close aria-label="Fermer">×</button></div>';
     var cams = allCams();
-    var imCams = cams.filter(function (c) { return c.src === 'imou'; }), ntCams = cams.filter(function (c) { return c.src === 'netatmo'; });
-    h += '<h3>Imou · ' + (IM ? imCams.length + ' caméras' : 'chargement…') + '</h3>' + imCams.map(camCardHTML).join('');
+    h += cams.map(camCardHTML).join('');
+    if (!CAMS || !IM) h += '<p class="muted">Chargement des caméras…</p>';
     if (IM && IM.error) h += '<p class="muted">Caméras Imou indisponibles pour le moment.</p>';
     h += '<p class="note-q">Vidéo Imou en qualité standard pour économiser les 2 Go gratuits. Touche « HD » pendant le direct pour la haute définition.</p>';
-    h += '<h3>Netatmo · ' + (CAMS ? ntCams.length + ' caméras' : 'chargement…') + '</h3>';
     if (CAMS && CAMS.cameras) {
-      h += ntCams.map(camCardHTML).join('');
-      var names = {}; CAMS.cameras.forEach(function (c) { names[c.id] = c.name; });
-      h += '<h3>Derniers événements Netatmo</h3>';
-      h += CAMS.events.length ? '<div class="evlist">' + CAMS.events.map(function (e) {
+      var names = {}; cams.forEach(function (c) { if (c.src === 'netatmo') names[c.id] = c.name; });
+      var evs = (CAMS.events || []).filter(function (e) { return names[e.camera]; });
+      h += '<h3>Derniers événements · ' + esc(Object.keys(names).map(function (k) { return names[k]; }).join(', ')) + '</h3>';
+      h += evs.length ? '<div class="evlist">' + evs.map(function (e) {
         var day = new Date(e.time * 1000), today = new Date().toDateString() === day.toDateString();
         return '<div class="ev">' + (e.snapshot ? '<img alt="" loading="lazy" src="' + esc(e.snapshot) + '">' : '<span class="evic">' + icon('cam') + '</span>') +
           '<span><b>' + esc(EV[e.type] || 'Événement') + '</b><small>' + esc(names[e.camera] || '') + '</small></span>' +

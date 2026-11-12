@@ -1,7 +1,18 @@
 {
-  "version": "1.3.1",
+  "version": "1.3.2",
   "date": "2026-11-12",
   "releases": [
+    {
+      "version": "1.3.2",
+      "date": "2026-11-12",
+      "time": "16:37",
+      "title": "Caméras réorganisées",
+      "changes": [
+        "Caméra Extérieure Netatmo (hors service) retirée",
+        "Nouvel ordre : Presence, Garage, Salon, Jardin, Piscine, Cellier",
+        "Écran Caméras en une seule liste, événements de Presence uniquement"
+      ]
+    },
     {
       "version": "1.3.1",
       "date": "2026-11-12",
@@ -67,7 +78,7 @@
     "Températures des pièces, piscine et météo (eedomus)",
     "Chauffage Netatmo : lecture des 10 pièces, consigne, modes",
     "Installation sur iPhone pour toute la famille",
-    "Caméras Netatmo (2) et Imou (5) : photo, direct, événements Netatmo"
+    "Caméras : Presence (Netatmo) + 5 Imou, photo, direct et événements Presence"
   ],
   "todo": [
     "Tester la vidéo en direct sur iPhone (Imou et Netatmo)",
@@ -75,5 +86,5 @@
     "État réel de la porte de garage (pas de capteur d'ouverture aujourd'hui)",
     "Révoquer les codes d'accès partagés pendant la mise en place (eedomus, n8n, Netatmo, Imou)"
   ],
-  "time": "16:23"
+  "time": "16:37"
 }

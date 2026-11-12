@@ -1,5 +1,9 @@
 {
   "api": "https://vps-444b360b.vps.ovh.net/webhook/maison",
+  "cameras": {
+    "order": ["Presence", "Garage", "Salon", "Jardin", "Piscine", "Cellier"],
+    "hidden": ["Caméra Extérieure"]
+  },
   "heating": {
     "room": "Séjour",
     "roomTemp": 953769,
