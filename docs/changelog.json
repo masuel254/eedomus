@@ -1,7 +1,16 @@
 {
-  "version": "2.1.2",
+  "version": "2.1.3",
   "date": "2026-11-12",
   "releases": [
+    {
+      "version": "2.1.3",
+      "date": "2026-11-12",
+      "time": "21:09",
+      "title": "Volets simplifiés",
+      "changes": [
+        "Volets : un seul réglage « Ouvrir les volets de la chambre d’amis le matin » (Oui / Non)"
+      ]
+    },
     {
       "version": "2.1.2",
       "date": "2026-11-12",
@@ -299,5 +308,5 @@
     "Graphiques supplémentaires : température extérieure, consommation sur la semaine",
     "Surveiller le forfait vidéo Imou avec « Tout en direct » activé"
   ],
-  "time": "21:07"
+  "time": "21:09"
 }

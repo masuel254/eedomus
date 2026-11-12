@@ -63,19 +63,8 @@
               "icon": "down"
             },
             {
-              "id": 3532306,
-              "name": "Quelqu'un dort dans la chambre d'amis",
-              "sub": "Chambre du bas",
-              "type": "yesno"
-            },
-            {
               "id": 3432548,
-              "name": "Ouvrir les volets de la chambre le matin",
-              "type": "yesno"
-            },
-            {
-              "id": 3082639,
-              "name": "Lever les volets le matin sur mouvement",
+              "name": "Ouvrir les volets de la chambre d'amis le matin",
               "type": "yesno"
             }
           ]
