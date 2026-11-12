@@ -88,9 +88,9 @@
       .then(function () { camsLoading = false; if (!busy()) render(); if (!sheet.hidden && sheet.dataset.view === 'cams' && !sheet.querySelector('video')) renderCams(); });
   }
   // Smart Life (Tuya) : sauna et compteurs de la piscine
-  function refreshTuya() {
+  function refreshTuya(fresh) {
     if (!token) return;
-    api({ action: 'tu.state' }).then(function (j) { TU = j; if (!busy()) render(); }).catch(function () {});
+    api({ action: 'tu.state', fresh: fresh === true }).then(function (j) { TU = j; if (!busy()) render(); }).catch(function () {});
   }
   function tuDev(key) { return TU && TU.devices ? TU.devices[key] : null; }
   function tuOn(key) { var p = tuPend[key]; if (p && p.until > Date.now()) return p.on; var d = tuDev(key); return !!(d && d.on); }
@@ -541,7 +541,12 @@
         .catch(function () { toast('Netatmo ne répond pas, réessaie', true); });
     }
     if ((b = e.target.closest('[data-room]'))) {
-      openRoom = openRoom === b.dataset.room ? '' : b.dataset.room; store.set('maison.open', openRoom); return render();
+      openRoom = openRoom === b.dataset.room ? '' : b.dataset.room; store.set('maison.open', openRoom);
+      // Pièce avec un appareil Smart Life (sauna, compteurs) : état frais tout de suite
+      CFG.groups.forEach(function (g) { g.rooms.forEach(function (rm) {
+        if (rm.id === openRoom && rm.items.some(function (it) { return /^tuya-/.test(it.type); })) refreshTuya(true);
+      }); });
+      return render();
     }
     if ((b = e.target.closest('[data-tuya]'))) {
       if (!confirmed(b)) return;
@@ -618,12 +623,12 @@
   fetch('config.json', { cache: 'no-cache' }).then(function (r) { return r.json(); }).then(function (c) {
     CFG = c;
     if (!token) return setup();
-    render(); refresh(); refreshHeating(); refreshTuya();
+    render(); refresh(); refreshHeating(); refreshTuya(true);
     setInterval(function () { if (!document.hidden) refresh(); }, 10000);
     setInterval(function () { if (!document.hidden && !ntPend) refreshHeating(); }, 30000);
     setInterval(function () { if (!document.hidden) refreshTuya(); }, 30000);
     setInterval(function () { if (!document.hidden && lastOk && !busy()) render(); }, 30000);
-    document.addEventListener('visibilitychange', function () { if (!document.hidden) { refresh(); refreshHeating(); refreshTuya(); } });
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) { refresh(); refreshHeating(); refreshTuya(true); } });
   }).catch(function () { app.innerHTML = '<div class="setup"><h1>Maison</h1><p>Impossible de charger la configuration. Vérifie ta connexion.</p></div>'; });
 
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});

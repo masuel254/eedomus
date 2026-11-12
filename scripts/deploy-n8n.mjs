@@ -520,7 +520,8 @@ async function tuState(fresh) {
 }
 async function tuya(b) {
   if (!CFG.tu) throw fail(503, 'tuya_not_configured');
-  if (b.action === 'tu.state') return tuState(false);
+  // fresh : lecture directe chez Tuya (retour dans l'appli, ouverture d'une pièce), au plus une fois toutes les 5 s
+  if (b.action === 'tu.state') return tuState(!!b.fresh && !(SD.tuState && SD.tuState.at > Date.now() - 5000));
   if (b.action === 'tu.switch') {
     if (!CFG.tu.switchable.includes(b.key) || typeof b.on !== 'boolean') throw fail(403, 'not_allowed');
     const id = CFG.tu.devices[b.key];
