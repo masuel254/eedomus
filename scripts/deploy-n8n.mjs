@@ -25,6 +25,23 @@ if (!env.MAISON_TOKEN) {
   console.log('Nouveau jeton MAISON_TOKEN généré dans .env');
 }
 
+// Un jeton par personne : MAISON_TOKEN (Sam) et MAISON_TOKEN_<PRENOM>.
+// Ajouter : node scripts/deploy-n8n.mjs --add Prénom   ·   Révoquer : supprimer la ligne dans .env puis relancer.
+const addIdx = process.argv.indexOf('--add');
+if (addIdx > 0) {
+  const who = process.argv[addIdx + 1];
+  if (!who) throw new Error('Usage : --add Prénom');
+  const key = 'MAISON_TOKEN_' + who.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (!env[key]) {
+    env[key] = randomBytes(24).toString('base64url');
+    appendFileSync(envPath, `${key}=${env[key]}\n`);
+    console.log(`Jeton ${key} ajouté dans .env`);
+  }
+}
+const tokens = Object.entries(env)
+  .filter(([k]) => /^MAISON_TOKEN(_[A-Z0-9]+)?$/.test(k))
+  .map(([k, v]) => ({ who: k === 'MAISON_TOKEN' ? 'SAM' : k.slice('MAISON_TOKEN_'.length), v }));
+
 // Liste blanche : seuls ces modules / valeurs peuvent être pilotés depuis l'appli.
 const cfg = JSON.parse(readFileSync(join(root, 'docs', 'config.json'), 'utf8'));
 const settable = {};
@@ -56,7 +73,7 @@ allow(cfg.dock.alarm, [0, 12]);
 const CODE_CFG = {
   user: env.EEDOMUS_API_USER,
   secret: env.EEDOMUS_API_SECRET,
-  token: env.MAISON_TOKEN,
+  tokens: tokens.map((t) => t.v),
   settable,
   readable: [...readable],
 };
@@ -69,7 +86,7 @@ let body = req.body;
 if (typeof body === 'string') { try { body = JSON.parse(body); } catch (e) { body = {}; } }
 body = body || {};
 const reply = (status, data) => [{ json: { status, data } }];
-if (!body.token || body.token !== CFG.token) return reply(401, { ok: false, error: 'unauthorized' });
+if (!body.token || !CFG.tokens.includes(body.token)) return reply(401, { ok: false, error: 'unauthorized' });
 
 const auth = 'api_user=' + encodeURIComponent(CFG.user) + '&api_secret=' + encodeURIComponent(CFG.secret);
 async function eedomus(kind, query) {
