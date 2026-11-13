@@ -715,3 +715,15 @@ svg.gsvg { display: block; width: 100%; height: auto; user-select: none; -webkit
 .en-period button[disabled] { opacity: .3; }
 .cost-hero .cring svg { display: block; }
 .cost-hero .crc small { display: block; }
+
+/* autres appareils (estimés) */
+.sh-hd .back { display: inline-flex; align-items: center; gap: 4px; color: var(--mu); font-weight: 600; font-size: 15px; }
+.sh-hd .back svg.i { transform: rotate(90deg); width: 16px; height: 16px; }
+.sh-t { font-size: 26px; margin: 0 4px 12px; }
+.appl-tot { display: grid; gap: 4px; margin-top: 10px; }
+.appl-tot b { font-size: 34px; font-weight: 500; }
+.appl-tot small { color: var(--mu); font-size: 12.5px; }
+.cost-list.appl .row { grid-template-columns: 1fr auto; }
+.cost-list.appl .row > span:first-child { grid-column: auto; }
+.cost-list small.ay { color: var(--tx); opacity: .8; margin-top: 2px; }
+.cost-list small.ay { display: block; color: var(--ok); opacity: 1; font-weight: 600; }

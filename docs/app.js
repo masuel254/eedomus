@@ -983,6 +983,7 @@
     else if (view === 'rec') renderRec();
     else if (view === 'energy') renderEnergy();
     else if (view === 'cost') renderCost();
+    else if (view === 'costappl') renderCostAppl();
     else if (view === 'timers') renderTimers();
     else if (view === 'plans') renderPlans();
     else if (view === 'logs') renderLogs();
@@ -1333,12 +1334,48 @@
   }
 
   // ---------- Coût de l'énergie (estimation : gaz via Netatmo, électricité via Smart Life) ----------
+
+  // Appareils non mesurés : consommations moyennes annuelles (kWh/an pour 1 appareil), réglables en nombre
+  var APPL = [
+    { id: 'frigous', name: 'Réfrigérateur américain', sub: 'en marche 24 h/24', kwh: 450, q: 1 },
+    { id: 'frigo', name: 'Réfrigérateur', sub: 'en marche 24 h/24', kwh: 250, q: 1 },
+    { id: 'cave', name: 'Cave à vin', sub: 'en marche 24 h/24', kwh: 200, q: 1 },
+    { id: 'sserv', name: 'Sèche-serviettes 750 W', sub: '≈ 3 h par jour, les jours où le chauffage tourne', kwh: 470, q: 2, heat: true },
+    { id: 'spots', name: 'Spots et éclairage LED', sub: '≈ 40 points lumineux, 5 h par jour (plus en hiver)', kwh: 365, q: 1, light: true },
+    { id: 'slinge', name: 'Sèche-linge', sub: '≈ 4 séchages par semaine', kwh: 450, q: 1 },
+    { id: 'llinge', name: 'Lave-linge', sub: '≈ 5 lavages par semaine', kwh: 200, q: 1 },
+    { id: 'lvaiss', name: 'Lave-vaisselle', sub: '≈ 5 lavages par semaine', kwh: 230, q: 1 },
+    { id: 'tv', name: 'TV OLED 60 pouces', sub: '≈ 3 h par jour + veille', kwh: 150, q: 3 },
+    { id: 'plaques', name: 'Plaques de cuisson', sub: 'induction · mets 0 si tu cuisines au gaz', kwh: 350, q: 1 },
+    { id: 'four', name: 'Four', sub: 'mets 0 s’il est au gaz', kwh: 120, q: 1 },
+    { id: 'cafe', name: 'Machine à café', sub: 'avec la veille', kwh: 100, q: 1 },
+    { id: 'micro', name: 'Micro-ondes', sub: '', kwh: 60, q: 1 },
+    { id: 'hotte', name: 'Hotte', sub: 'moteur + éclairage', kwh: 40, q: 1 },
+    { id: 'box', name: 'Box internet + décodeur TV', sub: 'en marche 24 h/24', kwh: 100, q: 1 },
+    { id: 'vmc', name: 'VMC (ventilation)', sub: 'en marche 24 h/24 · mets 0 s’il n’y en a pas', kwh: 150, q: 1 },
+    { id: 'divers', name: 'Ordinateurs, chargeurs, aspirateur, veilles…', sub: 'petits appareils', kwh: 300, q: 1 }
+  ];
+  var LIGHT_M = [1.35, 1.2, 1, 0.85, 0.7, 0.6, 0.6, 0.7, 0.85, 1.05, 1.25, 1.4]; // éclairage selon le mois
+  function applQ(D, it) { var a = D.cfg.appl || {}; return a[it.id] != null ? a[it.id] : it.q; }
+  // kWh estimés d'un appareil pour un jour (AAAAMMJJ) ; le jour même est compté au prorata de l'heure
+  function applDay(D, it, dk) {
+    var q = applQ(D, it); if (!q) return 0;
+    var m = +dk.slice(4, 6) - 1, v;
+    if (it.heat) {
+      var gh = D.gas.days[dk], heating = gh != null ? gh > 0.5 : (m <= 3 || m >= 9);
+      v = heating ? 0.75 * 3 : 0;
+    } else v = it.kwh / 365 * (it.light ? LIGHT_M[m] : 1);
+    if (dk === ymdK(new Date())) { var t = new Date(); v *= (t.getHours() + t.getMinutes() / 60) / 24; }
+    return v * q;
+  }
+  function applYear(D, it) { return it.heat ? 0.75 * 3 * 210 : it.kwh; }
   var COST = null; // { tab, off, data, loading, error }
   var COST_ITEMS = [
     { k: 'gas', name: 'Chauffage (gaz)', icon: 'flame', color: '#FF8A5B' },
     { k: 'pac', name: 'Pompe à chaleur piscine', icon: 'thermo', color: '#FFC24B' },
     { k: 'elec', name: 'Électrolyseur + pompe', icon: 'bolt', color: '#5BA8FF' },
-    { k: 'sauna', name: 'Sauna', icon: 'drop', color: '#B48CFF' }
+    { k: 'sauna', name: 'Sauna', icon: 'drop', color: '#B48CFF' },
+    { k: 'other', name: 'Autres appareils (estimés)', icon: 'home', color: '#4CD38A' }
   ];
   function costLoad(body) {
     if (!COST) return;
@@ -1359,6 +1396,7 @@
   function costDay(D, k) {
     var c = D.cfg, out = { kwh: 0, eur: 0, h: 0, any: false };
     if (k === 'gas') { var h = D.gas.days[COST_CUR]; if (h != null) { out.h = h; out.kwh = h * c.kw; out.eur = out.kwh * c.gasPrice; out.any = true; } }
+    else if (k === 'other') { var o = 0; APPL.forEach(function (it) { o += applDay(D, it, COST_CUR); }); out.kwh = o; out.eur = o * c.elecPrice; out.any = true; }
     else { var e = D.elec[k] && D.elec[k].days[COST_CUR]; if (e != null) { out.kwh = e; out.eur = e * c.elecPrice; out.any = true; } }
     return out;
   }
@@ -1420,7 +1458,7 @@
       '<div><i style="background:var(--mu)"></i><small>Par jour</small><b class="mono">' + eur(total / nDays, total / nDays < 10 ? 2 : 0) + '</b><span>moyenne</span></div></div></div>';
     // Graphique empilé gaz / électricité
     if (P.groups.length) {
-      var vals = P.groups.map(function (g) { var ga = costSum(D, g.days, 'gas').eur, el = 0; ['pac', 'elec', 'sauna'].forEach(function (k) { el += costSum(D, g.days, k).eur; }); return [ga, el]; });
+      var vals = P.groups.map(function (g) { var ga = costSum(D, g.days, 'gas').eur, el = 0; ['pac', 'elec', 'sauna', 'other'].forEach(function (k) { el += costSum(D, g.days, k).eur; }); return [ga, el]; });
       var W = 320, H = 140, base = 116, n = vals.length, gap = n > 20 ? 2 : 5, bw = (W - gap * (n - 1)) / n, max = Math.max.apply(null, vals.map(function (v) { return v[0] + v[1]; }).concat([0.01]));
       var s = '<svg class="bars" viewBox="0 0 ' + W + ' ' + H + '"><line x1="0" x2="' + W + '" y1="' + base + '" y2="' + base + '" class="axis"/>';
       vals.forEach(function (v, i) {
@@ -1436,8 +1474,9 @@
     var mx = Math.max.apply(null, COST_ITEMS.map(function (it) { return tot[it.k].eur; }).concat([0.01]));
     h += '<div class="lbl">Détail</div><div class="card2 flat cost-list">' + COST_ITEMS.map(function (it) {
       var s = tot[it.k], sub = it.k === 'gas' ? fmt(s.h, 0) + ' h de chauffe · ' + fmt(s.kwh, 0) + ' kWh' : (s.any ? kwh(s.kwh) + ' kWh' : 'pas encore de relevé');
+      if (it.k === 'other') sub = '≈ ' + kwh(s.kwh) + ' kWh · réfrigérateurs, lumières, TV, linge…';
       var tag = it.k === 'gas' ? 'div' : 'button';
-      return '<' + tag + ' class="row"' + (it.k === 'gas' ? '' : ' data-energy="' + it.k + '" data-ename="' + esc(it.name) + '"') + '><span class="ic" style="color:' + it.color + '">' + icon(it.icon) + '</span>' +
+      return '<' + tag + ' class="row"' + (it.k === 'gas' ? '' : it.k === 'other' ? ' data-costappl' : ' data-energy="' + it.k + '" data-ename="' + esc(it.name) + '"') + '><span class="ic" style="color:' + it.color + '">' + icon(it.icon) + '</span>' +
         '<span><b>' + esc(it.name) + '</b><small>' + esc(sub) + '</small><span class="cbar"><i style="width:' + (s.eur / mx * 100).toFixed(0) + '%;background:' + it.color + '"></i></span></span>' +
         '<span class="val mono">' + eur(s.eur) + '</span></' + tag + '>';
     }).join('') + '</div>';
@@ -1468,8 +1507,23 @@
       (cal ? '<p class="ok2">' + (cal.kw ? 'Puissance calculée : ' + fmt(cal.kw, 1) + ' kW (' + fmt(cal.kwh, 0) + ' kWh pour ' + fmt(cal.hours, 0) + ' h de chauffe sur ' + fmt(cal.days, 0) + ' jours).' : 'Encore un peu de patience : il faut au moins 3 jours et 10 h de chauffe entre le premier et le dernier relevé.') + '</p>' : ms.length === 1 ? '<p class="ok2">1er relevé noté. Refais-le dans 1 à 2 semaines.</p>' : '') +
       (ms.length ? '<button class="cm-reset" data-costmeter-reset>Effacer les relevés</button>' : '') + '</div>';
     var since = ['pac', 'elec', 'sauna'].map(function (k) { return D.elec[k] && D.elec[k].since; }).filter(Boolean).sort()[0];
-    h += '<p class="note-q">Estimation. Gaz = heures de chauffe de la chaudière (Netatmo) × puissance × prix ; seul le chauffage est compté (pas l’eau chaude ni la cuisson). Électricité = kWh mesurés par les prises Smart Life × prix' +
+    h += '<p class="note-q">Estimation. Gaz = heures de chauffe de la chaudière (Netatmo) × puissance × prix ; seul le chauffage est compté (pas l’eau chaude ni la cuisson). Électricité = kWh mesurés par les prises Smart Life × prix, plus une estimation des autres appareils (consommations moyennes, réglables)' +
       (since ? ', relevés depuis le ' + (+since.slice(6, 8)) + '/' + since.slice(4, 6) : '') + '.' + (D.gas && D.gas.err ? ' Netatmo n’a pas répondu, chiffres du gaz peut-être incomplets.' : '') + '</p>';
+    var keep = sheet.scrollTop; sheet.innerHTML = '<div class="sh-in">' + h + '</div>'; sheet.scrollTop = keep;
+  }
+  // Écran « Autres appareils » : liste réglable, consommation et coût par an
+  function renderCostAppl() {
+    var D = COST && COST.data; if (!D) return;
+    var c = D.cfg, tot = 0, rows = APPL.map(function (it) {
+      var q = applQ(D, it), y = applYear(D, it) * q; tot += y;
+      return '<div class="row"><span><b>' + esc(it.name) + '</b>' + (it.sub ? '<small>' + esc(it.sub) + '</small>' : '') + '<small class="ay">' + (q ? fmt(y, 0) + ' kWh/an · ≈ ' + eur(y * c.elecPrice, 0) + ' par an' : 'non compté') + '</small></span>' +
+        '<span class="cset"><b class="mono">× ' + q + '</b><span class="stp2"><button data-applq="' + it.id + ':-1" aria-label="Moins">−</button><button data-applq="' + it.id + ':1" aria-label="Plus">+</button></span></span></div>';
+    }).join('');
+    var h = '<div class="sh-hd"><button class="back" data-costback>' + icon('down') + ' Énergie</button><button class="close" data-close aria-label="Fermer">×</button></div>' +
+      '<h2 class="sh-t">Autres appareils</h2>' +
+      '<div class="en-card cost-hero"><span class="est">≈ estimation</span><div class="appl-tot"><b class="mono">' + eur(tot * c.elecPrice / 12, 0) + '</b><small>par mois en moyenne · ' + fmt(tot, 0) + ' kWh/an · ≈ ' + eur(tot * c.elecPrice, 0) + '/an</small></div></div>' +
+      '<div class="lbl">Ajuste le nombre de chaque appareil</div><div class="card2 flat cost-list appl">' + rows + '</div>' +
+      '<p class="note-q">Consommations moyennes d’appareils récents pour une famille de 4. Les sèche-serviettes ne comptent que les jours où le chauffage a tourné (Netatmo) ; l’éclairage compte plus en hiver. Un ballon d’eau chaude électrique ou une piscine sont à part (la piscine est déjà mesurée).</p>';
     var keep = sheet.scrollTop; sheet.innerHTML = '<div class="sh-in">' + h + '</div>'; sheet.scrollTop = keep;
   }
   function stepEnergy(dir) {
@@ -1733,6 +1787,15 @@
     if ((b = e.target.closest('[data-rec]'))) return openRec(b.dataset.rec);
     if ((b = e.target.closest('[data-entab]'))) { ENG.tab = b.dataset.entab; return renderEnergy(); }
     if ((b = e.target.closest('[data-energy]')) && sheet.dataset.view === 'cost') return openEnergy(b.dataset.energy, b.dataset.ename);
+    if (e.target.closest('[data-costappl]')) { sheet.scrollTop = 0; return openSheet('costappl'); }
+    if (e.target.closest('[data-costback]')) { sheet.scrollTop = 0; return openSheet('cost'); }
+    if ((b = e.target.closest('[data-applq]'))) {
+      var aq = b.dataset.applq.split(':'), it2 = APPL.filter(function (x) { return x.id === aq[0]; })[0], cfa = COST.data.cfg;
+      cfa.appl = cfa.appl || {}; var nq = Math.max(0, Math.min(60, applQ(COST.data, it2) + +aq[1])); if (nq === applQ(COST.data, it2)) return;
+      cfa.appl[aq[0]] = nq; renderCostAppl(); var pa = {}; pa[aq[0]] = nq;
+      return api({ action: 'cost.cfg', appl: pa }).then(function (j) { COST.data = j; try { localStorage.setItem('maison-cost', JSON.stringify(j)); } catch (e) {} if (sheet.dataset.view === 'costappl') renderCostAppl(); })
+        .catch(function () { toast('Réglage non enregistré, réessaie', true); });
+    }
     if ((b = e.target.closest('[data-costtab]'))) { COST.tab = b.dataset.costtab; COST.off = 0; return renderCost(); }
     if ((b = e.target.closest('[data-coststep]'))) { var nv2 = COST.off + +b.dataset.coststep; if (nv2 > 0) return; COST.off = nv2; return renderCost(); }
     if ((b = e.target.closest('[data-costset]'))) {
