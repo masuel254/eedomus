@@ -1377,7 +1377,7 @@
     { id: 'tv', name: 'TV OLED 60 pouces', sub: '≈ 3 h par jour + veille', kwh: 150, q: 3 },
     { id: 'four', name: 'Four électrique du piano', sub: 'grand four, ≈ 3 fois par semaine', kwh: 150, q: 1 },
     { id: 'plancha', name: 'Plancha électrique', sub: '≈ 2 fois par semaine, 30 min', kwh: 125, q: 1 },
-    { id: 'ecs', name: 'Eau chaude (chaudière gaz)', sub: 'douches, bains, vaisselle à la main… pour 4 personnes', kwh: 2500, q: 1, gas: true },
+    { id: 'ecs', name: 'Eau chaude (chaudière gaz)', sub: 'douches, bains, vaisselle à la main… pour 3 personnes', kwh: 1900, q: 1, gas: true },
     { id: 'feux', name: 'Feux du piano (gaz)', sub: 'cuisson de tous les jours', kwh: 250, q: 1, gas: true },
     { id: 'cafe', name: 'Machine à café', sub: 'avec la veille', kwh: 100, q: 1 },
     { id: 'micro', name: 'Micro-ondes', sub: '', kwh: 60, q: 1 },
@@ -1565,12 +1565,13 @@
       '<h2 class="sh-t">Autres appareils</h2>' +
       '<div class="en-card cost-hero"><span class="est">≈ estimation</span><div class="appl-tot"><b class="mono">' + eur((totE + totG) / 12, 0) + '</b><small>par mois en moyenne · ≈ ' + eur(totE + totG, 0) + '/an (électricité ' + eur(totE, 0) + ', gaz ' + eur(totG, 0) + ')</small></div></div>' +
       '<div class="lbl">Ajuste le nombre de chaque appareil</div><div class="card2 flat cost-list appl">' + rows + '</div>' +
-      '<p class="note-q">Consommations moyennes d’appareils récents pour une famille de 4. Les sèche-serviettes ne comptent que les jours où le chauffage a tourné (Netatmo) ; l’éclairage compte plus en hiver. Pas de ballon électrique : l’eau chaude vient de la chaudière gaz, que Netatmo ne compte que pour le chauffage. La piscine et le sauna sont mesurés à part.</p>';
+      '<p class="note-q">Consommations moyennes d’appareils récents pour un foyer de 3 personnes. Les sèche-serviettes ne comptent que les jours où le chauffage a tourné (Netatmo) ; l’éclairage compte plus en hiver. Pas de ballon électrique : l’eau chaude vient de la chaudière gaz, que Netatmo ne compte que pour le chauffage. La piscine et le sauna sont mesurés à part.</p>';
     var keep = sheet.scrollTop; sheet.innerHTML = '<div class="sh-in">' + h + '</div>'; sheet.scrollTop = keep;
   }
 
   // ---------- Écran Eau : consommation (litres, m³, €) par heure, jour, mois ----------
   var WAT = null; // { tab, off, data (réponse « cost »), hours: { AAAAMMJJ: {h: litres} } }
+  var FOYER = 3, EAU_FR = 145; // personnes au foyer ; moyenne française en litres par personne et par jour
   function openWater() {
     var cached = (COST && COST.data) || null; if (!cached) { try { cached = JSON.parse(localStorage.getItem('maison-cost') || 'null'); } catch (e) {} }
     WAT = { tab: 'day', off: 0, data: cached, hours: {} };
@@ -1604,7 +1605,9 @@
       if (WAT.off === 0) hi = vals.length - 1;
       if (WAT.tab === 'year') hi = WAT.off === 0 ? new Date().getMonth() : -1;
     }
-    var nd = P.days.filter(function (d) { return days[d] != null; }).length || 1, perDay = total / (WAT.tab === 'day' ? 1 : nd);
+    // moyenne par jour sur les journées complètes (aujourd'hui n'est pas fini) ; s'il n'y en a pas, on prend ce qu'on a
+    var cd = P.days.filter(function (d) { return days[d] != null && d !== today; }), cl = 0; cd.forEach(function (d) { cl += days[d]; });
+    var perDay = WAT.tab === 'day' ? total : cd.length ? cl / cd.length : total;
     h += '<div class="en-card wat"><div class="en-period"><button data-wstep="-1" aria-label="Période précédente">' + icon('down') + '</button><span>' + esc(P.title.charAt(0).toUpperCase() + P.title.slice(1)) + '</span>' +
       '<button data-wstep="1" aria-label="Période suivante"' + (WAT.off >= 0 ? ' disabled' : '') + '>' + icon('down') + '</button></div>' +
       '<div class="w-sum"><b class="mono">' + (any ? litres(total) : '—') + '</b><span class="mono">' + (any ? eur(total / 1000 * price, total / 1000 * price < 10 ? 2 : 0) : '') + '</span></div>' +
@@ -1612,14 +1615,28 @@
     h += '<div class="cost-k w3">' +
       '<div><i style="background:#38BDF8"></i><small>Volume</small><b class="mono">' + (any ? fmt(total / 1000, total < 10000 ? 2 : 1) : '—') + '</b><span>m³</span></div>' +
       '<div><i style="background:#38BDF8"></i><small>Coût</small><b class="mono">' + (any ? eur(total / 1000 * price, 2) : '—') + '</b><span>à ' + fmt(price, 2) + ' €/m³</span></div>' +
-      '<div><i style="background:var(--mu)"></i><small>Par personne</small><b class="mono">' + (any ? fmt(perDay / 4, 0) : '—') + '</b><span>' + (WAT.tab === 'day' ? 'litres ce jour-là' : 'litres / jour') + '</span></div></div>';
+      '<div><i style="background:var(--mu)"></i><small>Par personne</small><b class="mono">' + (any ? fmt(perDay / FOYER, 0) : '—') + '</b><span>' + (WAT.tab === 'day' ? 'litres ce jour-là' : 'litres / jour') + '</span></div></div>';
     if (WAT.tab !== 'day' && any) {
       var mx = -1, mk = ''; P.days.forEach(function (d) { if (days[d] != null && days[d] > mx) { mx = days[d]; mk = d; } });
       if (mk) { var dt = new Date(+mk.slice(0, 4), +mk.slice(4, 6) - 1, +mk.slice(6, 8)); h += '<div class="card2 flat cost-list"><div class="row"><span><b>Jour le plus gourmand</b><small>' + esc(dt.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })) + '</small></span><span class="val mono">' + litres(mx) + '</span></div>' +
         '<div class="row"><span><b>Moyenne par jour</b><small>pour toute la maison</small></span><span class="val mono">' + litres(perDay) + '</span></div></div>'; }
     }
+    // Comparaison avec la moyenne française (sur des journées complètes)
+    var fullDays = P.days.filter(function (d) { return days[d] != null && d !== today; }), fl = 0;
+    fullDays.forEach(function (d) { fl += days[d]; });
+    if (fullDays.length) {
+      var you = fl / fullDays.length / FOYER, pct = Math.round((1 - you / EAU_FR) * 100), mxv = Math.max(you, EAU_FR);
+      var yYou = you * FOYER * 365 / 1000, yFr = EAU_FR * FOYER * 365 / 1000;
+      h += '<div class="lbl">Comparé à la moyenne française</div><div class="card2 wcmp">' +
+        '<div class="wc-row"><span>Vous</span><span class="wc-bar"><i style="width:' + (you / mxv * 100).toFixed(0) + '%"></i></span><b class="mono">' + fmt(you, 0) + ' L</b></div>' +
+        '<div class="wc-row fr"><span>France</span><span class="wc-bar"><i style="width:' + (EAU_FR / mxv * 100).toFixed(0) + '%"></i></span><b class="mono">' + EAU_FR + ' L</b></div>' +
+        '<p class="wc-msg ' + (pct >= 0 ? 'good' : 'bad') + '">' + (pct >= 0 ? 'Vous consommez <b>' + pct + ' % de moins</b> que la moyenne' : 'Vous consommez <b>' + (-pct) + ' % de plus</b> que la moyenne') + ' (litres par personne et par jour' + (fullDays.length > 1 ? ', moyenne sur ' + fullDays.length + ' jours' : '') + ').</p>' +
+        '<div class="wc-year"><div><small>Vous, sur un an</small><b class="mono">' + fmt(yYou, 0) + ' m³</b><span>≈ ' + eur(yYou * price, 0) + '</span></div>' +
+        '<div><small>Foyer moyen de ' + FOYER + '</small><b class="mono">' + fmt(yFr, 0) + ' m³</b><span>≈ ' + eur(yFr * price, 0) + '</span></div>' +
+        '<div class="' + (yFr > yYou ? 'good' : 'bad') + '"><small>' + (yFr > yYou ? 'Économie' : 'En plus') + '</small><b class="mono">' + eur(Math.abs(yFr - yYou) * price, 0) + '</b><span>par an</span></div></div></div>';
+    }
     if (WAT.tab === 'day' && WAT.hours[P.days[0]] && WAT.hours[P.days[0]].loading) h += '<p class="muted">Lecture heure par heure…</p>';
-    h += '<p class="note-q">Mesuré par le compteur Quandify (Water Grip). En France, on consomme en moyenne environ 145 litres par personne et par jour. Le prix du m³ se règle dans Énergie › Réglages du calcul.</p>';
+    h += '<p class="note-q">Mesuré par le compteur Quandify (Water Grip). Foyer de 3 personnes. Moyenne française : environ 145 litres par personne et par jour (douche, toilettes, linge, vaisselle, cuisine, ménage, jardin). La comparaison n’utilise que des journées complètes. Le prix du m³ se règle dans Énergie › Réglages du calcul.</p>';
     var keep = sheet.scrollTop; sheet.innerHTML = '<div class="sh-in">' + h + '</div>'; sheet.scrollTop = keep;
   }
   function stepEnergy(dir) {
