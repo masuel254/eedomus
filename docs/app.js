@@ -409,7 +409,7 @@
   function doSlide(key) {
     SLIDE = null; clearTimeout(slideT);
     if (key === 'gate') send(CFG.dock.gate, 100, { optimistic: false, msg: 'Portail : commande envoyée' });
-    else if (key === 'garage-1' || key === 'garage-2') send(CFG.dock.garage, key === 'garage-1' ? 1 : 2, { optimistic: false, msg: key === 'garage-1' ? 'Garage : ouverture envoyée' : 'Garage : fermeture envoyée' });
+    else if (key === 'garage-1' || key === 'garage-2') { send(CFG.dock.garage, key === 'garage-1' ? 1 : 2, { optimistic: false, msg: key === 'garage-1' ? 'Garage : ouverture envoyée' : 'Garage : fermeture envoyée' }); GAR = { state: 'unknown', date: '', src: 'commande', log: [] }; setTimeout(function () { if (LOGS.doors) LOGS.doors.at = 0; loadLogs('doors', true); }, 3000); }
     else if (key === 'alarm-on' || key === 'alarm-off') send(CFG.status.alarm, key === 'alarm-on' ? 12 : 0, { msg: key === 'alarm-on' ? 'Alarme activée' : 'Alarme désactivée' });
     else if (key === 'sauna-on') saunaSet(true);
     setTimeout(render, 600);
@@ -488,16 +488,97 @@
     return s.zone || '';
   }
 
+  // ---------- Journaux des 3 derniers jours (présence, alarme, portes) ----------
+  var LOGS = {}, GAR = null, logsView = null;
+  function loadLogs(kind, quiet) {
+    var c = LOGS[kind]; if (c && (c.loading || Date.now() - c.at < 120000)) return;
+    LOGS[kind] = { loading: true, at: Date.now(), data: c ? c.data : null };
+    api({ action: 'logs', kind: kind }).then(function (j) {
+      LOGS[kind] = { at: Date.now(), data: j }; if (j.garage) GAR = j.garage;
+      if (!busy()) render(); if (logsView === kind && !sheet.hidden) renderLogs();
+    }).catch(function () { LOGS[kind] = { at: Date.now() - 90000, data: c ? c.data : null }; if (!quiet) toast('eedomus ne répond pas, réessaie', true); });
+  }
+  function openLogs(kind) { logsView = kind; sheet.scrollTop = 0; openSheet('logs'); LOGS[kind] && (LOGS[kind].at = 0); loadLogs(kind); if (kind === 'doors') loadImou(false); }
+  function dayLabel(d) {
+    var dt = new Date(d.replace(' ', 'T')), t0 = new Date(); t0.setHours(0, 0, 0, 0);
+    var diff = Math.round((t0 - new Date(dt.getFullYear(), dt.getMonth(), dt.getDate())) / 86400000);
+    if (diff <= 0) return "Aujourd'hui"; if (diff === 1) return 'Hier';
+    var s = dt.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }); return s.charAt(0).toUpperCase() + s.slice(1);
+  }
+  function personOf(text) { return String(text || '').replace(/\s+(pr[ée]sente?|absente?)$/i, '').replace(/^France$/, 'Françoise'); }
+  function logLine(kind, e) {
+    if (kind === 'people') {
+      var here = /pr[ée]sent/i.test(e.text);
+      return { cls: here ? 'ok' : 'mu', ic: here ? 'home' : 'leave', txt: personOf(e.text) + (here ? ' est arrivé' + (/e$/i.test(e.text) ? 'e' : '') : ' est parti' + (/e$/i.test(e.text) ? 'e' : '')) };
+    }
+    if (kind === 'alarm') {
+      var on = /activ[ée]e$/i.test(e.text) && !/d[ée]sactiv/i.test(e.text), bad = /sir[eè]ne|intrusion/i.test(e.text);
+      return { cls: bad ? 'bad' : on ? 'ok' : 'mu', ic: 'shield', txt: 'Alarme ' + e.text.toLowerCase() };
+    }
+    var open = /ouvert|ouverture/i.test(e.text), isGar = /garage/i.test(e.name);
+    return { cls: open ? 'warnc' : 'mu', ic: isGar ? 'garage' : /portail/i.test(e.name) ? 'gate' : 'door', txt: isGar ? 'Garage : commande ' + e.text.toLowerCase() : e.name + ' ' + e.text.toLowerCase() };
+  }
+  function renderLogs() {
+    var kind = logsView, L = LOGS[kind], d = L && L.data;
+    var title = { people: 'Présence', alarm: 'Alarme', doors: 'Portes' }[kind];
+    var h = '<div class="sh-hd"><h2>' + title + '</h2><button class="close" data-close aria-label="Fermer">×</button></div>';
+    // État actuel
+    if (kind === 'people') {
+      h += '<div class="card2 flat rs-list">' + CFG.status.people.map(function (id) {
+        var st = STATES[id] || {}, here = st.value !== undefined && st.value !== '0';
+        return '<div class="row"><span class="ic' + (here ? ' okc' : '') + '">' + icon(here ? 'home' : 'leave') + '</span><span><b>' + esc(personOf(st.text) || '—') + '</b><small>' + esc(since(id)) + '</small></span><span class="' + (here ? 'ok' : 'mu2') + '">' + (here ? 'Présent' : 'Absent') + '</span></div>';
+      }).join('') + '</div>';
+    } else if (kind === 'alarm') {
+      var av = num(CFG.status.alarm), ast = (STATES[CFG.status.alarm] || {}).text || '—';
+      h += '<div class="acard ' + (av ? 'ok' : '') + '"><span class="aic">' + icon('shield') + '</span><span><b>Alarme ' + esc(ast.toLowerCase()) + '</b><small>' + esc(since(CFG.status.alarm)) + '</small></span></div>';
+    } else {
+      var rows = CFG.status.doors.map(function (id) {
+        var it = findItem(id) || { name: 'Porte' }, o = doorOpen(id);
+        return '<div class="row"><span class="ic">' + icon('door') + '</span><span><b>' + esc(it.name) + '</b><small>' + esc(since(id)) + '</small></span><span class="' + (o ? 'bad' : 'ok') + '">' + (o ? 'Ouverte' : 'Fermée') + '</span></div>';
+      });
+      var g = STATES[CFG.dock.gate] || {}, go = g.value !== undefined && g.value !== '0';
+      rows.push('<div class="row"><span class="ic">' + icon('gate') + '</span><span><b>Portail</b><small>' + esc(since(CFG.dock.gate)) + '</small></span><span class="' + (go ? 'bad' : 'ok') + '">' + esc(g.text || '—') + '</span></div>');
+      var go2 = GAR && GAR.state === 'open';
+      var src = GAR ? { commande: 'commande envoyée, état à confirmer', manuel: 'confirmé à la main', camera: 'vu par la caméra', 'défaut': 'état par défaut' }[GAR.src] || '' : '';
+      var gu = GAR && GAR.state === 'unknown';
+      rows.push('<div class="row"><span class="ic">' + icon('garage') + '</span><span><b>Porte de garage</b><small>' + esc((GAR && GAR.date ? 'depuis ' + GAR.date.slice(11, 16) + ' · ' : '') + src) + '</small></span><span class="' + (go2 ? 'bad' : gu ? 'warn2' : 'ok') + '">' + (GAR ? (go2 ? 'Ouverte' : gu ? 'À vérifier' : 'Fermée') : '…') + '</span></div>');
+      h += '<div class="card2 flat rs-list">' + rows.join('') + '</div>';
+      // Vérification par la caméra du garage
+      var gc = IM && IM.cameras ? IM.cameras.filter(function (c) { return norm(c.name) === 'garage'; })[0] : null;
+      h += '<div class="garcheck"><div class="gc-hd"><b>Vérifier la porte de garage</b><small>Regarde la photo, puis confirme l\'état si besoin.</small></div>' +
+        (gc && gc.snapshot ? '<button class="gc-img" data-opencams="' + esc(gc.id) + '"><img alt="Caméra du garage" src="' + esc(gc.snapshot) + '"><span>Voir en direct ›</span></button>' : '<p class="muted">Photo de la caméra en cours de chargement…</p>') +
+        '<div class="gc-btns"><button class="act' + (go2 ? ' on' : '') + '" data-garmark="open">Elle est ouverte</button><button class="act' + (GAR && !go2 ? ' on' : '') + '" data-garmark="closed">Elle est fermée</button></div></div>';
+    }
+    // Journal
+    h += '<div class="lbl" style="margin-left:4px">3 derniers jours</div>';
+    if (!d) h += '<p class="muted">Lecture de l\'historique eedomus…</p>';
+    else {
+      var evs = d.events.filter(function (e) { return !(kind === 'doors' && /en attente/i.test(e.text)); });
+      if (!evs.length) h += '<p class="muted">Aucun changement sur les 3 derniers jours.</p>';
+      var cur = '';
+      evs.forEach(function (e) {
+        var dl = dayLabel(e.date); if (dl !== cur) { if (cur) h += '</div>'; h += '<div class="lday">' + esc(dl) + '</div><div class="card2 flat logs">'; cur = dl; }
+        var l = logLine(kind, e);
+        h += '<div class="lg ' + l.cls + '"><span class="lt">' + esc(e.date.slice(11, 16)) + '</span><span class="li">' + icon(l.ic) + '</span><span>' + esc(l.txt) + '</span></div>';
+      });
+      if (cur) h += '</div>';
+    }
+    var keep = sheet.scrollTop; sheet.innerHTML = '<div class="sh-in">' + h + '</div>'; sheet.scrollTop = keep;
+  }
+
   // ---------- Onglet Accueil ----------
   function homeHTML() {
     var s = CFG.status, armed = alarmArmed();
     var n = s.people.filter(function (id) { var v = val(id); return v !== undefined && v !== '0'; }).length;
     var gate = STATES[CFG.dock.gate] || {}, gateOpen = gate.value !== undefined && gate.value !== '0';
     var openDoors = s.doors.filter(doorOpen).length;
-    var closed = !openDoors && !gateOpen;
-    var h = '<div class="status"><span class="' + (closed ? 'ok' : 'bad') + '">● ' + (closed ? 'Tout est fermé' : (gateOpen ? 'Portail ouvert' : openDoors + ' porte' + (openDoors > 1 ? 's' : '') + ' ouverte' + (openDoors > 1 ? 's' : ''))) + '</span>' +
-      '<span class="' + (armed ? 'ok' : '') + '">' + icon('shield') + (armed ? 'Alarme activée' : 'Alarme désactivée') + '</span>' +
-      '<span>' + icon(n ? 'home' : 'leave') + (n ? n + ' personne' + (n > 1 ? 's' : '') : 'Personne') + '</span></div>';
+    loadLogs('doors', true);
+    var garOpen = GAR && GAR.state === 'open', garUnk = GAR && GAR.state === 'unknown';
+    var closed = !openDoors && !gateOpen && !garOpen && !garUnk;
+    var what = gateOpen ? 'Portail ouvert' : garOpen ? 'Garage ouvert' : garUnk && !openDoors ? 'Garage à vérifier' : openDoors + ' porte' + (openDoors > 1 ? 's' : '') + ' ouverte' + (openDoors > 1 ? 's' : '');
+    var h = '<div class="status"><button class="' + (closed ? 'ok' : 'bad') + '" data-logs="doors">● ' + (closed ? 'Tout est fermé' : what) + '</button>' +
+      '<button class="' + (armed ? 'ok' : '') + '" data-logs="alarm">' + icon('shield') + (armed ? 'Alarme activée' : 'Alarme désactivée') + '</button>' +
+      '<button data-logs="people">' + icon(n ? 'home' : 'leave') + (n ? n + ' personne' + (n > 1 ? 's' : '') : 'Personne') + '</button></div>';
     // Chauffage
     var r = ntCurrentRoom();
     if (r) {
@@ -862,6 +943,7 @@
     Array.prototype.forEach.call(tabsEl.querySelectorAll('[data-tab]'), function (b) { b.classList.toggle('on', b.dataset.tab === TAB); });
     var mb = tabsEl.querySelector('[data-tab="more"]'); if (mb) mb.classList.toggle('dot', newVersion);
     if (!sheet.hidden && sheet.dataset.view === 'room' && !document.querySelector('#sheet .slide.dragging')) renderRoomSheet();
+    if (!sheet.hidden && sheet.dataset.view === 'logs') renderLogs();
     var v = TAB === 'cams' && liveCam && document.getElementById('v-' + liveCam);
     if (v) v.addEventListener('error', function () { toast('La vidéo en direct s\'ouvre dans Safari sur iPhone', true); });
   }
@@ -879,13 +961,14 @@
     else if (view === 'energy') renderEnergy();
     else if (view === 'timers') renderTimers();
     else if (view === 'plans') renderPlans();
+    else if (view === 'logs') renderLogs();
     else if (view === 'room') renderRoomSheet();
     else if (view === 'graph') renderGraph();
     else if (view === 'plan') renderPlan();
     else renderSettings();
   }
   function closeSheet() {
-    sheet.hidden = true; sheet.innerHTML = ''; liveCam = null; liveHd = true; REC = null; ENG = null; TED = null; PE = null; GR = null; roomSheet = null; document.body.classList.remove('noscroll');
+    sheet.hidden = true; sheet.innerHTML = ''; liveCam = null; liveHd = true; REC = null; ENG = null; TED = null; PE = null; GR = null; roomSheet = null; logsView = null; document.body.classList.remove('noscroll');
   }
 
   // ---------- Plannings Netatmo : liste, création, modification (comme l'appli Netatmo) ----------
@@ -1323,6 +1406,12 @@
     if ((b = e.target.closest('[data-opencams]'))) { if (!sheet.hidden) closeSheet(); liveCam = b.dataset.opencams; liveHd = true; TAB = 'cams'; store.set('maison.tab', TAB); loadCams(false); loadImou(false); render();
       var cc = document.getElementById('cc-' + liveCam); if (cc) cc.scrollIntoView({ block: 'center' }); return; }
     // Accès rapide de l'accueil
+    if ((b = e.target.closest('[data-logs]'))) return openLogs(b.dataset.logs);
+    if ((b = e.target.closest('[data-garmark]'))) {
+      var gs = b.dataset.garmark;
+      return api({ action: 'garage.mark', state: gs }).then(function (j) { GAR = j.garage; if (LOGS.doors) LOGS.doors.at = 0; render(); if (logsView) renderLogs(); toast('Porte de garage : ' + (gs === 'open' ? 'ouverte' : 'fermée')); })
+        .catch(function () { toast('Impossible d\'enregistrer, réessaie', true); });
+    }
     if ((b = e.target.closest('[data-yesno]'))) { var yid = +b.dataset.yesno; return send(yid, num(yid) === 1 ? 0 : 1); }
     if ((b = e.target.closest('[data-choice]'))) { var cp = b.dataset.choice.split(':'); return send(+cp[0], +cp[1]); }
     if ((b = e.target.closest('[data-graph]'))) return openGraph(b.dataset.graph);
@@ -1428,7 +1517,7 @@
   sheet.addEventListener('click', function (e) {
     var b;
     if (e.target.closest('[data-close]')) return closeSheet();
-    if (sheet.dataset.view === 'room') return appClick(e); // panneau d'une pièce : mêmes commandes que l'appli
+    if (sheet.dataset.view === 'room' || sheet.dataset.view === 'logs') return appClick(e); // panneaux : mêmes commandes que l'appli
     if ((b = e.target.closest('[data-live]'))) { liveCam = b.dataset.live; liveHd = true; return renderCams(); }
     if (e.target.closest('[data-hd]')) { liveHd = !liveHd; return renderCams(); }
     if ((b = e.target.closest('[data-rec]'))) return openRec(b.dataset.rec);

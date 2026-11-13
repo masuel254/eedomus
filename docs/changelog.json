@@ -1,7 +1,20 @@
 {
-  "version": "2.2.2",
-  "date": "2026-11-12",
+  "version": "2.3.0",
+  "date": "2026-11-13",
   "releases": [
+    {
+      "version": "2.3.0",
+      "date": "2026-11-13",
+      "time": "08:10",
+      "title": "Journaux et portes",
+      "changes": [
+        "Pastilles de l’accueil cliquables : historique des 3 derniers jours",
+        "Présence : qui est là, et qui est arrivé ou parti, jour par jour",
+        "Alarme : activations et désactivations des 3 derniers jours",
+        "Portes : porte d’entrée, porte du cellier, portail et porte de garage, avec leur historique",
+        "Porte de garage : état mémorisé, photo de la caméra pour vérifier et boutons « Elle est ouverte / fermée » ; après une commande, l’état passe à « À vérifier »"
+      ]
+    },
     {
       "version": "2.2.2",
       "date": "2026-11-12",
@@ -358,5 +371,5 @@
     "Graphiques supplémentaires : température extérieure, consommation sur la semaine",
     "Surveiller le forfait vidéo Imou avec « Tout en direct » activé"
   ],
-  "time": "21:45"
+  "time": "08:10"
 }

@@ -87,6 +87,14 @@ const CODE_CFG = {
   tokens: tokens.map((t) => t.v),
   settable,
   readable: [...readable],
+  // Modules suivis dans les journaux (3 jours) de l'accueil
+  logs: {
+    people: cfg.status.people.map((p) => ({ id: typeof p === 'object' ? p.id : p, name: '' })),
+    alarm: [{ id: cfg.status.alarm, name: 'Alarme' }],
+    doors: cfg.status.doors.map((id) => ({ id, name: (cfg.groups.flatMap((g) => g.rooms).flatMap((r) => r.items).find((it) => it.id === id) || {}).name || 'Porte' }))
+      .concat([{ id: cfg.dock.gate, name: 'Portail' }, { id: cfg.dock.garage, name: 'Porte de garage' }]),
+    garage: cfg.dock.garage,
+  },
   nt: env.NETATMO_REFRESH_TOKEN ? {
     id: env.NETATMO_CLIENT_ID,
     secret: env.NETATMO_CLIENT_SECRET,
@@ -138,6 +146,29 @@ async function eedomus(kind, query, attempt) {
     await new Promise((ok) => setTimeout(ok, attempt === 0 ? 600 : 1500));
     return eedomus(kind, query, attempt + 1);
   }
+}
+
+// ---------------- Porte de garage : état mémorisé (pas de capteur) ----------------
+// Par défaut fermée. Mis à jour par les commandes (appli ou eedomus) et par les corrections manuelles.
+function localNow() {
+  const p = {};
+  new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' })
+    .formatToParts(new Date()).forEach((x) => { p[x.type] = x.value; });
+  return p.year + '-' + p.month + '-' + p.day + ' ' + p.hour + ':' + p.minute + ':' + p.second;
+}
+function garageSet(state, src) {
+  const G = $getWorkflowStaticData('global');
+  G.garage = { state, date: localNow(), src };
+  G.garageLog = [{ state, date: G.garage.date, src }].concat(G.garageLog || []).slice(0, 40);
+}
+function garageState(events) {
+  const G = $getWorkflowStaticData('global');
+  let g = G.garage || { state: 'closed', date: '', src: 'défaut' };
+  // commandes passées par eedomus (appli eedomus, scènes…) plus récentes que l'état mémorisé
+  const cmd = (events || []).filter((e) => String(e.id) === String(CFG.logs.garage) && /ouverture|fermeture/i.test(e.text)).sort((a, b) => (a.date < b.date ? 1 : -1))[0];
+  // la commande du garage est un contact bref (chaque commande fait bouger la porte, dans un sens ou dans l'autre) : état à vérifier
+  if (cmd && cmd.date > g.date) g = { state: 'unknown', date: cmd.date, src: 'commande' };
+  return Object.assign({}, g, { log: G.garageLog || [] });
 }
 
 // ---------------- Netatmo ----------------
@@ -979,8 +1010,12 @@ try {
     const r = await eedomus('get', 'action=periph.history&periph_id=' + encodeURIComponent(id) + '&start_date=' + encodeURIComponent(fmtD(new Date(Date.now() - hours * 3600000))) + '&end_date=' + encodeURIComponent(fmtD(new Date())));
     if (r.success !== 1) return reply(502, { ok: false, error: 'eedomus', detail: r.body });
     const list = (r.body && (r.body.history || r.body)) || [];
-    const points = (Array.isArray(list) ? list : []).map((x) => Array.isArray(x) ? [x[1], Number(x[0])] : [x.date || x[1], Number(x.value != null ? x.value : x[0])])
-      .filter((p) => p[0] && !isNaN(p[1])).sort((a, b2) => (a[0] < b2[0] ? -1 : 1));
+    // eedomus renvoie [valeur ou texte, date] : on garde la valeur numérique (courbes) ET le texte (journaux)
+    const points = (Array.isArray(list) ? list : []).map((x) => {
+      const raw = Array.isArray(x) ? x[0] : (x.value != null ? x.value : x[0]), date = Array.isArray(x) ? x[1] : (x.date || x[1]);
+      const n = Number(raw);
+      return [date, isNaN(n) ? null : n, String(raw)];
+    }).filter((p) => p[0]).sort((a, b2) => (a[0] < b2[0] ? -1 : 1));
     const data = { ok: true, id, points };
     SD.hist[key] = { at: Date.now(), data };
     Object.keys(SD.hist).forEach((k) => { if (SD.hist[k].at < Date.now() - 3600000) delete SD.hist[k]; });
@@ -1002,7 +1037,43 @@ try {
     if (!allowed || !allowed.includes(value)) return reply(403, { ok: false, error: 'not_allowed' });
     const r = await eedomus('set', 'action=periph.value&periph_id=' + encodeURIComponent(id) + '&value=' + encodeURIComponent(value));
     if (r.success !== 1) return reply(502, { ok: false, error: 'eedomus', detail: r.body });
+    // Porte de garage : on retient l'état d'après la commande envoyée depuis l'appli
+    if (id === String(CFG.logs.garage) && (value === '1' || value === '2')) garageSet('unknown', 'commande');
     return reply(200, { ok: true, id, value });
+  }
+
+  // Journaux des 3 derniers jours : présence, alarme, portes (+ état de la porte de garage)
+  if (body.action === 'logs') {
+    const kind = String(body.kind || '');
+    const list = CFG.logs[kind];
+    if (!Array.isArray(list)) return reply(403, { ok: false, error: 'not_allowed' });
+    SD.logs = SD.logs || {};
+    const c = SD.logs[kind];
+    let events;
+    if (c && c.at > Date.now() - 60000) events = c.events;
+    else {
+      events = [];
+      const fmtD = (d) => { const p = {}; new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).formatToParts(d).forEach((x) => { p[x.type] = x.value; }); return p.year + '-' + p.month + '-' + p.day + ' ' + p.hour + ':' + p.minute + ':' + p.second; };
+      for (const it of list) {
+        // eedomus impose 0,5 s entre deux requêtes
+        await new Promise((ok) => setTimeout(ok, 550));
+        const r = await eedomus('get', 'action=periph.history&periph_id=' + it.id + '&start_date=' + encodeURIComponent(fmtD(new Date(Date.now() - 72 * 3600000))) + '&end_date=' + encodeURIComponent(fmtD(new Date())));
+        const h = (r.success === 1 && r.body && r.body.history) || [];
+        h.forEach((x) => events.push({ id: it.id, name: it.name, text: String(x[0]), date: x[1] }));
+      }
+      events.sort((x, y) => (x.date < y.date ? 1 : -1));
+      SD.logs[kind] = { at: Date.now(), events };
+    }
+    const out = { ok: true, kind, events };
+    if (kind === 'doors') out.garage = garageState(events);
+    return reply(200, out);
+  }
+  // Correction manuelle de l'état de la porte de garage (après vérification sur la caméra)
+  if (body.action === 'garage.mark') {
+    if (body.state !== 'open' && body.state !== 'closed') return reply(403, { ok: false, error: 'not_allowed' });
+    garageSet(body.state, 'manuel');
+    if (SD.logs) delete SD.logs.doors;
+    return reply(200, { ok: true, garage: garageState([]) });
   }
 
   if (String(body.action || '').startsWith('nt.')) {
