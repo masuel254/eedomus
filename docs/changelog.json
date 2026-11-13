@@ -1,7 +1,16 @@
 {
-  "version": "2.16.2",
+  "version": "2.16.3",
   "date": "2026-11-13",
   "releases": [
+    {
+      "version": "2.16.3",
+      "date": "2026-11-13",
+      "time": "22:49",
+      "title": "Température de la chambre corrigée",
+      "changes": [
+        "La tuile Chambre affichait 18,4° figés depuis 2023 (capteur eedomus de l’étage muet) : elle prend maintenant la Chambre Parentale de Netatmo"
+      ]
+    },
     {
       "version": "2.16.2",
       "date": "2026-11-13",
@@ -787,5 +796,5 @@
     "Révoquer à la fin : mot de passe TotalEnergies",
     "Révoquer à la fin : mot de passe EDF"
   ],
-  "time": "22:44"
+  "time": "22:49"
 }

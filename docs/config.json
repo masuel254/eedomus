@@ -213,7 +213,6 @@
         {
           "id": "chambre",
           "name": "Chambre",
-          "temp": 961070,
           "items": [
             {
               "id": 845428,
@@ -225,7 +224,8 @@
               "name": "Volet chambre droit",
               "type": "shutter"
             }
-          ]
+          ],
+          "ntTemp": "1904150594"
         },
         {
           "id": "sdb",
