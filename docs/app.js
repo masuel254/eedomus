@@ -807,6 +807,11 @@
     h += slideHTML('alarmtab').replace('<button class="sl-x" data-slidex>Annuler</button>', '');
     var grp = function (g, title) {
       var items = A.items.filter(function (it) { return it.group === g; }); if (!items.length) return '';
+      // détecteurs : mouvement en cours d'abord, puis du plus récent au plus ancien
+      if (g === 'motion') items = items.slice().sort(function (x, y) {
+        var mx = num(x.id) > 0, my = num(y.id) > 0; if (mx !== my) return mx ? -1 : 1;
+        var cx = (STATES[x.id] || {}).changed || '', cy = (STATES[y.id] || {}).changed || ''; return cx < cy ? 1 : cx > cy ? -1 : 0;
+      });
       return '<div class="lbl">' + title + '</div><div class="card2 flat">' + items.map(rowHTML).join('') + '</div>';
     };
     h += grp('mode', 'Paramétrage') + grp('zones', 'Zones surveillées') + grp('motion', 'Détecteurs de mouvement');

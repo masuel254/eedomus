@@ -1,7 +1,16 @@
 {
-  "version": "2.12.2",
+  "version": "2.12.3",
   "date": "2026-11-13",
   "releases": [
+    {
+      "version": "2.12.3",
+      "date": "2026-11-13",
+      "time": "15:15",
+      "title": "Détecteurs triés",
+      "changes": [
+        "Onglet Alarme : détecteurs de mouvement triés du plus récent (en haut) au plus ancien ; un mouvement en cours passe tout en haut"
+      ]
+    },
     {
       "version": "2.12.2",
       "date": "2026-11-13",
@@ -656,5 +665,5 @@
     "Révoquer à la fin : mot de passe TotalEnergies",
     "Révoquer à la fin : mot de passe EDF"
   ],
-  "time": "14:56"
+  "time": "15:15"
 }

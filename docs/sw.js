@@ -1,6 +1,6 @@
 // Service worker : réseau d'abord (toujours la dernière version), cache en secours hors ligne.
 // Les appels à la maison (n8n) ne passent jamais par le cache.
-var V = 'maison-2.12.2';
+var V = 'maison-2.12.3';
 var SHELL = ['./', './index.html', './app.css', './app.js', './config.json', './changelog.json', './manifest.webmanifest', './icons/icon-192-v2.png'];
 
 self.addEventListener('install', function (e) {
