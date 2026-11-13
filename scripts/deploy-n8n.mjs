@@ -172,7 +172,7 @@ function garageState(events) {
   if (cmd && cmd.date > g.date) { g = { state: 'unknown', date: cmd.date, src: 'commande' }; garageCheckSoon(); }
   const cam = G.garageCam || {}, refs = G.garageRefs || [];
   return Object.assign({}, g, { log: G.garageLog || [],
-    cam: { at: cam.at || null, state: cam.state || null, margin: cam.margin ?? null,
+    cam: { at: cam.at || null, state: cam.state || null, margin: cam.margin ?? null, today: (G.garageCamCount && G.garageCamCount.n) || 0, err: G.garageCamErr ? G.garageCamErr.code + ' ' + G.garageCamErr.msg : null,
       refs: { open: refs.filter((r) => r.state === 'open').length, closed: refs.filter((r) => r.state === 'closed').length } } });
 }
 // Demander des photos de contrôle du garage juste après une commande (puis on insiste tant que l'état n'est pas sûr)
@@ -187,13 +187,19 @@ async function garageCamDue() {
   const G = $getWorkflowStaticData('global');
   const now = Date.now(), last = (G.garageCam && G.garageCam.tryAt) || 0;
   const dues = (G.garageDues || []).filter((t) => t <= now);
-  if (!dues.length && now - last < 2 * 60000) return null;
+  // Photo toutes les minutes ; si Imou se met en erreur (quota…), on ralentit tout seul : 3 min, puis 10 min
+  const errs = (G.garageCamErr && G.garageCamErr.n) || 0, every = errs >= 6 ? 10 : errs >= 2 ? 3 : 1;
+  if (!dues.length && now - last < every * 60000 - 5000) return null;
   G.garageDues = (G.garageDues || []).filter((t) => t > now);
   G.garageCam = Object.assign({}, G.garageCam || {}, { tryAt: now });
   const d = (await imDevices()).find((x) => String(x.name).toLowerCase() === 'garage' && x.online);
   if (!d) return null;
   const r = await im('setDeviceSnapEnhanced', { deviceId: d.deviceId, channelId: d.channelId });
-  if (r.code !== '0' || !r.data || !r.data.url) return null;
+  const day = localNow().slice(0, 10);
+  if (!G.garageCamCount || G.garageCamCount.day !== day) G.garageCamCount = { day, n: 0 };
+  G.garageCamCount.n++; // compteur du jour (pour surveiller le quota Imou)
+  if (r.code !== '0' || !r.data || !r.data.url) { G.garageCamErr = { n: ((G.garageCamErr && G.garageCamErr.n) || 0) + 1, code: r.code, msg: String(r.msg || '').slice(0, 80), at: now }; return null; }
+  G.garageCamErr = null;
   await new Promise((ok) => setTimeout(ok, 2500)); // le temps que la photo soit disponible
   return r.data.url;
 }
