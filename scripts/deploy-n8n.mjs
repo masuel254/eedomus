@@ -187,8 +187,8 @@ async function garageCamDue() {
   const G = $getWorkflowStaticData('global');
   const now = Date.now(), last = (G.garageCam && G.garageCam.tryAt) || 0;
   const dues = (G.garageDues || []).filter((t) => t <= now);
-  // Photo toutes les minutes ; si Imou se met en erreur (quota…), on ralentit tout seul : 3 min, puis 10 min
-  const errs = (G.garageCamErr && G.garageCamErr.n) || 0, every = errs >= 6 ? 10 : errs >= 2 ? 3 : 1;
+  // Photo toutes les 2 min ; si Imou se met en erreur (quota…), on ralentit tout seul : 5 min, puis 10 min
+  const errs = (G.garageCamErr && G.garageCamErr.n) || 0, every = errs >= 6 ? 10 : errs >= 2 ? 5 : 2;
   if (!dues.length && now - last < every * 60000 - 5000) return null;
   G.garageDues = (G.garageDues || []).filter((t) => t > now);
   G.garageCam = Object.assign({}, G.garageCam || {}, { tryAt: now });
