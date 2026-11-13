@@ -762,3 +762,4 @@ svg.gsvg { display: block; width: 100%; height: auto; user-select: none; -webkit
 .wc-year b { font-size: 17px; font-weight: 500; }
 .wc-year span { color: var(--mu); font-size: 11.5px; }
 .wc-year .good b { color: var(--ok); } .wc-year .bad b { color: #FF6B6B; }
+.cost-hero .est-note { color: var(--mu); font-size: 12px; margin: 6px 0 0; }

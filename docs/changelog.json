@@ -1,7 +1,18 @@
 {
-  "version": "2.9.3",
+  "version": "2.9.4",
   "date": "2026-11-13",
   "releases": [
+    {
+      "version": "2.9.4",
+      "date": "2026-11-13",
+      "time": "10:32",
+      "title": "Projection sur l’année",
+      "changes": [
+        "Écran renommé « Énergie / Eau »",
+        "Onglet Année : projection jusqu’au 31 décembre ; les jours sans relevé sont estimés (gaz : même jour l’an dernier ; eau et prises : moyenne des jours mesurés), part estimée affichée, mois à venir en plus pâle",
+        "Écran Eau, onglet Année : projection sur l’année (moyenne des jours mesurés × 365)"
+      ]
+    },
     {
       "version": "2.9.3",
       "date": "2026-11-13",
@@ -581,5 +592,5 @@
     "Énergie : mettre le vrai prix du gaz (facture) et noter 2 relevés du compteur gaz à 1-2 semaines d’écart pour caler la puissance de la chaudière",
     "Révoquer à la fin : mot de passe Quandify"
   ],
-  "time": "10:25"
+  "time": "10:32"
 }
