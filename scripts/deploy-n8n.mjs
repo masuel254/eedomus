@@ -1,7 +1,8 @@
 // Crée ou met à jour le workflow n8n "Maison · API eedomus".
-// Les secrets sont lus dans .env (jamais publié) et injectés uniquement dans n8n.
+// Les secrets sont lus dans .env (jamais publié) ou, à défaut, dans les variables d'environnement
+// (session Claude Code dans le cloud), et injectés uniquement dans n8n.
 // Usage : node scripts/deploy-n8n.mjs
-import { readFileSync, writeFileSync, appendFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, appendFileSync, existsSync } from 'node:fs';
 import { randomBytes, randomUUID, createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -11,6 +12,11 @@ const envPath = join(root, '.env');
 
 function loadEnv() {
   const env = {};
+  if (!existsSync(envPath)) { // pas de fichier .env : on prend les variables d'environnement
+    for (const [k, v] of Object.entries(process.env)) if (/^[A-Z0-9_]+$/.test(k) && v) env[k] = v;
+    if (!env.MAISON_TOKEN || !env.N8N_API_KEY) throw new Error('Secrets absents : ajoute le contenu de .env dans les variables de l’environnement cloud');
+    return env;
+  }
   for (const line of readFileSync(envPath, 'utf8').replace(/^﻿/, '').split(/\r?\n/)) {
     const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
     if (m) env[m[1]] = m[2];
