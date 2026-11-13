@@ -1968,9 +1968,10 @@
       gsay('Envoi…', false, true);
       return api({ action: 'garage.mark', state: gs }).then(function (j) {
         GAR = j.garage; render();
-        gsay('✓ C’est noté : porte ' + (gs === 'open' ? 'ouverte' : 'fermée') + '. La caméra prend une photo de référence, le compteur ci-dessus se met à jour dans 30 secondes environ.');
+        gsay('✓ C’est noté : porte ' + (gs === 'open' ? 'ouverte' : 'fermée') + '. La caméra prend une photo de référence, le compteur ci-dessus se met à jour dans 40 secondes environ.');
         toast('Porte de garage : ' + (gs === 'open' ? 'ouverte' : 'fermée'));
-        setTimeout(function () { if (LOGS.doors) LOGS.doors.at = 0; loadLogs('doors', true); }, 30000);
+        setTimeout(function () { api({ action: 'garage.mark', state: gs }).catch(function () {}); }, 4000); // envoyé 2 fois : le serveur perd parfois une écriture
+        setTimeout(function () { if (LOGS.doors) LOGS.doors.at = 0; loadLogs('doors', true); }, 40000);
       }).catch(function () { gsay('Impossible d’enregistrer, réessaie.', true); });
     }
     if ((b = e.target.closest('[data-yesno]'))) { var yid = +b.dataset.yesno; return send(yid, num(yid) === 1 ? 0 : 1); }

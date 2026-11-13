@@ -1,7 +1,18 @@
 {
-  "version": "2.14.2",
+  "version": "2.14.3",
   "date": "2026-11-13",
   "releases": [
+    {
+      "version": "2.14.3",
+      "date": "2026-11-13",
+      "time": "18:33",
+      "title": "Garage : apprentissage de la caméra fiabilisé",
+      "changes": [
+        "Les photos enregistrées par erreur sous le mauvais état sont retirées automatiquement",
+        "La photo de référence est prise 25 s après la confirmation, quand la porte a fini de bouger",
+        "La confirmation est envoyée deux fois pour ne jamais être perdue"
+      ]
+    },
     {
       "version": "2.14.2",
       "date": "2026-11-13",
@@ -734,5 +745,5 @@
     "Révoquer à la fin : mot de passe TotalEnergies",
     "Révoquer à la fin : mot de passe EDF"
   ],
-  "time": "18:12"
+  "time": "18:33"
 }

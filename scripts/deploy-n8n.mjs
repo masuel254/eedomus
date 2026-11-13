@@ -1444,7 +1444,7 @@ try {
     garageSet(body.state, 'manuel');
     // la prochaine photo deviendra une référence pour cet état (apprentissage jour / nuit)
     SD.garageCalib = { state: body.state, until: Date.now() + 5 * 60000 };
-    SD.garageDues = [Date.now() + 5000];
+    SD.garageDues = [Date.now() + 25000];
     if (SD.logs) delete SD.logs.doors;
     return reply(200, { ok: true, garage: garageState([]) });
   }
@@ -1505,8 +1505,17 @@ const sd = Math.sqrt(keep.reduce((s, v) => s + (v - mean) * (v - mean), 0) / kee
 const vec = keep.map((v) => Math.round((v - mean) / sd * 1000) / 1000);
 const ncc = (a, b) => { let s = 0; for (let i = 0; i < a.length; i++) s += a[i] * b[i]; return s / a.length; };
 G.garageRefs = G.garageRefs || [];
+// Nettoyage unique : une photo enregistrée sous les deux états (porte encore en mouvement, mauvais bouton) brouille tout.
+// Pour chaque groupe de photos quasi identiques, on garde l'état le plus souvent confirmé.
+if (G.garageFix !== 1 && G.garageRefs.length) {
+  const same0 = (x, y) => x.v.length === y.v.length && ncc(x.v, y.v) > 0.97;
+  G.garageRefs = G.garageRefs.filter((r) => { const grp = G.garageRefs.filter((q) => same0(r, q)); const n = grp.filter((q) => q.state === r.state).length; return n * 2 >= grp.length; });
+  G.garageFix = 1;
+}
 // Apprentissage : la photo qui suit une confirmation manuelle devient une référence (6 au maximum par état)
 if (G.garageCalib && G.garageCalib.until > Date.now()) {
+  // la dernière confirmation gagne : on retire les photos identiques enregistrées sous l'autre état
+  G.garageRefs = G.garageRefs.filter((r) => r.state === G.garageCalib.state || r.v.length !== vec.length || ncc(vec, r.v) <= 0.97);
   G.garageRefs.push({ state: G.garageCalib.state, v: vec, at: Date.now(), bright: Math.round(mean) });
   const st = G.garageCalib.state, same = G.garageRefs.filter((r) => r.state === st);
   if (same.length > 6) G.garageRefs.splice(G.garageRefs.indexOf(same[0]), 1);

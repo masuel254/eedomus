@@ -19,7 +19,8 @@ const files = execSync('git diff --cached --name-only --diff-filter=ACMR', { cwd
 let bad = 0;
 for (const f of files) {
   const t = readFileSync(join(root, f), 'utf8');
-  for (const k of keys) for (const v of k === 'PEOPLE_NAMES' ? env[k].split(/[=,;]/).filter((x) => x.length > 3) : [env[k]]) if (t.includes(v)) { console.log('SECRET', k, 'dans', f); bad = 1; }
+  // PEOPLE_NAMES : seulement les prénoms affichés (à droite du =), le nom eedomus peut être un mot courant
+  for (const k of keys) for (const v of k === 'PEOPLE_NAMES' ? env[k].split(/[,;]/).map((x) => x.split('=').pop().trim()).filter((x) => x.length > 3) : [env[k]]) if (t.includes(v)) { console.log('SECRET', k, 'dans', f); bad = 1; }
   const m = t.match(priv); if (m) { console.log('DONNÉE PERSONNELLE dans', f, ':', m[0].slice(0, 2) + '…'); bad = 1; }
 }
 if (bad) { console.log('STOP : ne pas publier'); process.exit(1); }
