@@ -881,7 +881,7 @@
     var cams = roomCams(room);
     if (!cams.length) return '<div class="cam"><div>' + icon('cam') + '<br>' + ((room.camera && !CAMS) || (!IM) ? 'Chargement des caméras…' : 'Caméra indisponible') + '</div></div>';
     return '<div class="camstrip' + (cams.length === 1 ? ' one' : '') + '">' + cams.map(function (c) {
-      return '<button class="camthumb" data-opencams="' + esc(c.id) + '">' + (c.snapshot ? '<img alt="" src="' + esc(snapUrl(c)) + '">' : '') +
+      return '<button class="camthumb" data-opencams="' + esc(c.id) + '">' + (c.snapshot ? '<img alt="" src="' + esc(snapUrl(c)) + '" onerror="this.remove()">' : '') +
         '<span class="cname">' + esc(c.name) + '</span>' + (c.on ? '<span class="pill">LIVE</span>' : '<span class="pill off">Éteinte</span>') + '</button>';
     }).join('') + '</div>';
   }
@@ -1027,7 +1027,7 @@
     if (!sheet.hidden && sheet.dataset.view === 'room' && !document.querySelector('#sheet .slide.dragging')) renderRoomSheet();
     if (!sheet.hidden && sheet.dataset.view === 'logs') renderLogs();
     var v = TAB === 'cams' && liveCam && document.getElementById('v-' + liveCam);
-    if (v) v.addEventListener('error', function () { toast('La vidéo en direct s\'ouvre dans Safari sur iPhone', true); });
+    attachLives(v ? v.parentNode : null);
   }
 
   function setup() {
@@ -1238,9 +1238,32 @@
     }).catch(function (e) { toast(e.status === 403 ? 'Horaire invalide' : 'iAquaLink ne répond pas, réessaie', true); });
   }
   var autoLive = store.get('maison.autolive') === '1', camHd = {}, camsSig = '';
+  var camSlow = {}; try { camSlow = JSON.parse(localStorage.getItem('maison-camslow') || '{}') || {}; } catch (e) {}
+  var camTry = {};
+  // Direct vidéo : message d'attente, nouvel essai automatique, passage en SD si la HD ne passe pas
+  function attachLives(root) {
+    Array.prototype.forEach.call((root || document).querySelectorAll('video[id^="v-"]'), function (v) {
+      if (v.dataset.att) return; v.dataset.att = '1';
+      var id = v.id.slice(2), card = v.closest('.camcard'), ov = document.createElement('div');
+      ov.className = 'camwait'; ov.innerHTML = '<span class="spin"></span><span>' + (camTry[id] ? 'Nouvel essai (' + (camTry[id] + 1) + '/3)…' : 'Connexion à la caméra…') + '</span>';
+      if (card) card.appendChild(ov);
+      var done = false, t0 = Date.now();
+      var ok = function () { if (done) return; done = true; camTry[id] = 0; ov.remove(); if (Date.now() - t0 > 6000) { camSlow[id] = Date.now(); try { localStorage.setItem('maison-camslow', JSON.stringify(camSlow)); } catch (e) {} } };
+      var fail = function () {
+        if (done) return; done = true;
+        var n = camTry[id] = (camTry[id] || 0) + 1;
+        if (camHd[id] !== false && n === 1) { camHd[id] = false; camSlow[id] = Date.now(); try { localStorage.setItem('maison-camslow', JSON.stringify(camSlow)); } catch (e) {} }
+        if (n < 3) { ov.innerHTML = '<span class="spin"></span><span>La caméra répond lentement, nouvel essai…</span>'; setTimeout(function () { if (sheet.dataset.view === 'cams' && !sheet.hidden) renderCams(); else render(); }, 1500); }
+        else { camTry[id] = 0; ov.innerHTML = '<span>La caméra ne répond pas (Wi-Fi trop faible ?).</span><button class="act" data-live="' + id + '">Réessayer</button>'; }
+      };
+      v.addEventListener('playing', ok); v.addEventListener('loadeddata', ok);
+      v.addEventListener('error', fail);
+      setTimeout(function () { if (!done && v.isConnected) fail(); }, 30000); // les caméras éloignées mettent jusqu'à 15 s à répondre
+    });
+  }
   function camCardHTML(c) {
     var live = ((autoLive && TAB === 'cams') || liveCam === c.id) && c.live;
-    var hd = camHd[c.id] !== undefined ? camHd[c.id] : (!autoLive && liveCam === c.id);
+    var hd = camHd[c.id] !== undefined ? camHd[c.id] : (!autoLive && liveCam === c.id && !camSlow[c.id]);
     var src = c.src === 'imou' && hd && c.liveHd ? c.liveHd : c.live;
     return '<div class="camcard" id="cc-' + esc(c.id) + '">' +
       (live ? '<video id="v-' + esc(c.id) + '" src="' + esc(src) + '" autoplay muted playsinline controls></video>'
@@ -1793,7 +1816,7 @@
     sheet.innerHTML = '<div class="sh-in">' + h + '</div>';
     sheet.scrollTop = keep;
     var v = liveCam && document.getElementById('v-' + liveCam);
-    if (v) v.addEventListener('error', function () { toast('La vidéo en direct s\'ouvre dans Safari sur iPhone', true); });
+    attachLives(v ? v.parentNode : null);
     if (liveCam && sheet.dataset.jump === liveCam) { sheet.dataset.jump = ''; var cc = document.getElementById('cc-' + liveCam); if (cc) cc.scrollIntoView({ block: 'center' }); }
   }
   // ---------- Notifications iPhone ----------

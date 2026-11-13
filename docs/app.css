@@ -788,3 +788,10 @@ svg.gsvg { display: block; width: 100%; height: auto; user-select: none; -webkit
 .card2.lcols { margin: 12px 0 0; padding: 4px 14px; }
 .lcol button { width: 24px; height: 24px; }
 .lcol { gap: 7px; }
+
+/* direct vidéo : attente et nouvel essai */
+.camcard { position: relative; }
+.camwait { position: absolute; left: 0; right: 0; top: 0; aspect-ratio: 16 / 9; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: rgba(0,0,0,.55); color: #fff; font-size: 13.5px; text-align: center; padding: 16px; pointer-events: none; border-radius: 20px 20px 0 0; }
+.camwait .act { pointer-events: auto; }
+.camwait .spin { width: 26px; height: 26px; border-radius: 50%; border: 3px solid rgba(255,255,255,.25); border-top-color: #fff; animation: cwspin 0.9s linear infinite; }
+@keyframes cwspin { to { transform: rotate(360deg); } }

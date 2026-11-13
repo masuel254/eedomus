@@ -1,7 +1,17 @@
 {
-  "version": "2.13.0",
+  "version": "2.13.1",
   "date": "2026-11-13",
   "releases": [
+    {
+      "version": "2.13.1",
+      "date": "2026-11-13",
+      "time": "15:28",
+      "title": "Direct vidéo plus patient",
+      "changes": [
+        "Caméras : « Connexion à la caméra… » pendant le chargement, jusqu’à 30 s pour les caméras éloignées (Jardin, Piscine), puis nouvel essai automatique",
+        "Si la HD ne passe pas, passage automatique en SD (retenu pour la fois suivante) ; bouton Réessayer après 3 échecs"
+      ]
+    },
     {
       "version": "2.13.0",
       "date": "2026-11-13",
@@ -685,5 +695,5 @@
     "Révoquer à la fin : mot de passe TotalEnergies",
     "Révoquer à la fin : mot de passe EDF"
   ],
-  "time": "15:25"
+  "time": "15:28"
 }
