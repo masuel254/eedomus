@@ -488,6 +488,32 @@
     return s.zone || '';
   }
 
+  // ---------- Eau : compteur Quandify, fuites ----------
+  var WATER = null, waterAt = 0, waterBusy = false;
+  try { WATER = JSON.parse(localStorage.getItem('maison-water') || 'null'); } catch (e) {}
+  function loadWater(fresh) {
+    if (waterBusy || (!fresh && Date.now() - waterAt < 30000)) return; waterBusy = true; waterAt = Date.now();
+    api({ action: 'water.state', fresh: !!fresh }).then(function (j) {
+      WATER = j.devices || []; try { localStorage.setItem('maison-water', JSON.stringify(WATER)); } catch (e) {}
+      if (!busy()) render();
+    }).catch(function (e) { if (e.status === 503) WATER = []; }).then(function () { waterBusy = false; });
+  }
+  function waterLeak() { return (WATER || []).filter(function (d) { return d.leak; })[0] || null; }
+  function waterHTML() {
+    loadWater(false);
+    if (!WATER || !WATER.length) return '';
+    return WATER.map(function (d) {
+      var kind = { smallLeak: 'Petite fuite', mediumLeak: 'Fuite', largeLeak: 'Grosse fuite' }[d.leak] || 'Fuite';
+      var sub = d.leak ? kind + (d.flow ? ' · ' + fmt(d.flow, 0) + ' L/h' : '') + (d.since ? ' · ' + sinceDate(ymd(new Date(d.since)) + ' ' + new Date(d.since).toTimeString().slice(0, 8)) : '')
+        : d.offline ? 'Hors ligne depuis ' + (d.seen ? new Date(d.seen).toLocaleString('fr-FR', { weekday: 'short', hour: '2-digit', minute: '2-digit' }) : '…') + ' · surveillance arrêtée'
+        : 'Aucune fuite' + (d.temp != null ? ' · eau à ' + fmt(d.temp, 1) + '°' : '') + ' · surveillé chaque minute';
+      return '<div class="card2 water' + (d.leak ? ' leak' : d.offline ? ' off' : '') + '"><div class="row"><span class="ic">' + icon('drop') + '</span><span><b>Compteur d’eau</b><small>' + esc(sub) + '</small></span>' +
+        '<span class="' + (d.leak ? 'bad' : d.offline ? 'warn2' : 'ok') + '">' + (d.leak ? 'FUITE' : d.offline ? 'Hors ligne' : 'OK') + '</span></div>' +
+        (d.leak ? '<p class="wl-txt">Le Water Grip voit de l’eau couler en continu. Vérifie robinets, chasse d’eau, arrosage, piscine… et coupe l’arrivée d’eau au compteur si besoin.</p>' +
+          (d.ack ? '' : '<button class="act" data-waterack>J’ai vu, arrêter l’alarme du compteur</button>') : '') + '</div>';
+    }).join('');
+  }
+
   // ---------- Journaux des 3 derniers jours (présence, alarme, portes) ----------
   var LOGS = {}, GAR = null, logsView = null;
   function loadLogs(kind, quiet) {
@@ -588,7 +614,8 @@
     var garOpen = GAR && GAR.state === 'open', garUnk = GAR && GAR.state === 'unknown';
     var closed = !openDoors && !gateOpen && !garOpen && !garUnk;
     var what = gateOpen ? 'Portail ouvert' : garOpen ? 'Garage ouvert' : garUnk && !openDoors ? 'Garage à vérifier' : openDoors + ' porte' + (openDoors > 1 ? 's' : '') + ' ouverte' + (openDoors > 1 ? 's' : '');
-    var h = '<div class="status"><button class="' + (closed ? 'ok' : 'bad') + '" data-logs="doors">● ' + (closed ? 'Tout est fermé' : what) + '</button>' +
+    var wl = (loadWater(false), waterLeak());
+    var h = '<div class="status">' + (wl ? '<button class="bad" data-goto="more">💧 Fuite d’eau !</button>' : '') + '<button class="' + (closed ? 'ok' : 'bad') + '" data-logs="doors">● ' + (closed ? 'Tout est fermé' : what) + '</button>' +
       '<button class="' + (armed ? 'ok' : '') + '" data-logs="alarm">' + icon('shield') + (armed ? 'Alarme activée' : 'Alarme désactivée') + '</button>' +
       '<button data-logs="people">' + icon(n ? 'home' : 'leave') + (n ? n + ' personne' + (n > 1 ? 's' : '') : 'Personne') + '</button></div>';
     // Chauffage
@@ -805,6 +832,7 @@
   function moreHTML() {
     var pis = findRoom('piscine'), met = findRoom('meteo'), sdb = findRoom('sdb'), h = '';
     var ph = HISTE['3557564|168'];
+    var wh = waterHTML(); if (wh) h += '<div class="lbl">Eau</div>' + wh;
     h += '<div class="lbl">Piscine</div>';
     h += pis.items.filter(function (it) { return /^iaqua-/.test(it.type); }).map(rowHTML).join('');
     h += '<div class="card2"><div class="row-hd"><b>pH · sonde Ondilo · 7 jours</b><span class="mono">' + fmt(num(3557564), 2) + '</span></div>' +
@@ -1620,6 +1648,7 @@
       '<div class="row"><span class="ic">' + icon('garage') + '</span><span><b>Porte de garage ouverte</b><small>Alerte après ' + d + ' min, rappel toutes les 30 min</small></span>' +
       '<span class="stp2"><button data-push-delay="' + (PUSH_DELAYS[i - 1] || d) + '" aria-label="Moins">−</button><button data-push-delay="' + (PUSH_DELAYS[i + 1] || d) + '" aria-label="Plus">+</button></span></div>' +
       (PUSH.on ? '<button class="row" data-push-test><span class="ic">' + icon('play') + '</span><span><b>Envoyer une notification de test</b><small>Pour vérifier que tout marche</small></span><span class="val">›</span></button>' : '') +
+      '<div class="row"><span class="ic">' + icon('drop') + '</span><span><b>Fuite d’eau</b><small>Alerte immédiate, rappel toutes les 15 min, puis « fuite terminée ». Alerte aussi si le compteur ne répond plus depuis 3 h.</small></span><span class="ok">Toujours</span></div>' +
       '</div><p class="note-q">Le délai est le même pour toute la famille. Chacun active les alertes sur son propre iPhone.</p>';
     return h;
   }
@@ -1700,6 +1729,7 @@
       if (qa === 'alarm') return openSlide(alarmArmed() ? 'alarm-off' : 'alarm-on', 'home');
       if (qa === 'sauna') { if (tuOn('sauna')) { SLIDE = null; return saunaSet(false); } return openSlide('sauna-on', 'home'); }
     }
+    if (e.target.closest('[data-waterack]')) { return api({ action: 'water.ack' }).then(function (j) { WATER = j.devices; render(); toast('Alarme du compteur arrêtée'); }).catch(function () { toast('Impossible pour le moment, réessaie', true); }); }
     if ((b = e.target.closest('[data-slideopen]'))) { var so = b.dataset.slideopen.split(':'); return openSlide(so[0], so[1]); }
     if ((b = e.target.closest('[data-slidekey]'))) { SLIDE.key = b.dataset.slidekey; return render(); }
     if (e.target.closest('[data-slidex]')) { SLIDE = null; return render(); }
@@ -2051,7 +2081,11 @@
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(function () {});
     // toucher la notification « garage » ouvre le journal des portes
-    navigator.serviceWorker.addEventListener('message', function (ev) { if (ev.data && /logs=doors/.test(ev.data.open || '')) openLogs('doors'); });
+    navigator.serviceWorker.addEventListener('message', function (ev) {
+      if (ev.data && /logs=doors/.test(ev.data.open || '')) openLogs('doors');
+      if (ev.data && /#water/.test(ev.data.open || '')) { TAB = 'more'; loadWater(true); window.scrollTo(0, 0); render(); }
+    });
   }
   if (/logs=doors/.test(location.hash)) setTimeout(function () { openLogs('doors'); }, 600);
+  if (/#water/.test(location.hash)) { TAB = 'more'; setTimeout(function () { loadWater(true); }, 300); }
 })();

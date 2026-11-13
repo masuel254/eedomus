@@ -1,7 +1,18 @@
 {
-  "version": "2.8.0",
+  "version": "2.9.0",
   "date": "2026-11-13",
   "releases": [
+    {
+      "version": "2.9.0",
+      "date": "2026-11-13",
+      "time": "10:12",
+      "title": "Alerte fuite d’eau",
+      "changes": [
+        "Notification iPhone immédiate en cas de fuite d’eau (compteur Quandify surveillé chaque minute), rappel toutes les 15 min, puis « fuite terminée »",
+        "Alerte si le compteur d’eau ne répond plus depuis 3 h (la surveillance ne marche plus)",
+        "Accueil : pastille rouge « Fuite d’eau ! » ; onglet Plus : carte Eau (état, débit, bouton pour arrêter l’alarme du compteur)"
+      ]
+    },
     {
       "version": "2.8.0",
       "date": "2026-11-13",
@@ -520,7 +531,8 @@
     "Porte de garage : état détecté par la caméra (références de jour enregistrées le 13/11)",
     "Notifications iPhone : alerte « porte de garage ouverte » (délai réglable) avec pastille sur l’icône",
     "Coût de l’énergie (Plus › Énergie) : gaz estimé à partir des heures de chauffe Netatmo + électricité des prises Smart Life, en €",
-    "Eau : compteur Quandify (Water Grip) relié, litres par jour depuis l’installation, coût à 5,13 €/m³"
+    "Eau : compteur Quandify (Water Grip) relié, litres par jour depuis l’installation, coût à 5,13 €/m³",
+    "Fuite d’eau : surveillance du compteur Quandify chaque minute, notification iPhone immédiate"
   ],
   "todo": [
     "Tester la vidéo en direct sur iPhone (Imou et Netatmo)",
@@ -540,5 +552,5 @@
     "Énergie : mettre le vrai prix du gaz (facture) et noter 2 relevés du compteur gaz à 1-2 semaines d’écart pour caler la puissance de la chaudière",
     "Révoquer à la fin : mot de passe Quandify"
   ],
-  "time": "10:08"
+  "time": "10:12"
 }

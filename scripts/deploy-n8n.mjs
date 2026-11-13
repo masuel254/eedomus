@@ -832,6 +832,53 @@ async function waterDays() {
   SD.water.at = Date.now(); if (full) SD.water.full = Date.now();
   return SD.water;
 }
+// Surveillance des fuites (toutes les minutes par la minuterie) + notifications iPhone
+function hmParis(ms) { return new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit' }).format(new Date(ms)).replace(':', 'h'); }
+async function qdPost(path) {
+  const Q = await qdLogin(false);
+  return helpers.httpRequest({ method: 'POST', url: 'https://api.prod.quandify.com/organization/' + Q.org + '/' + path, json: false, timeout: 20000, headers: { Authorization: 'Bearer ' + Q.idt } });
+}
+async function waterWatch(force) {
+  if (!CFG.qd) return null;
+  SD.ww = SD.ww || { at: 0, devs: {} };
+  if (!force && SD.ww.at > Date.now() - 55000) return SD.ww;
+  SD.ww.at = Date.now();
+  if (!SD.water || !SD.water.dev) await waterDays();
+  for (const dev of SD.water.dev) {
+    const j = await qd('devices/' + dev.id);
+    const ls = j.leak_status || {}, st = j.status || {};
+    const cur = {
+      leak: ls.leak_state && ls.leak_state !== 'noLeak' ? String(ls.leak_state) : null,
+      since: ls.started_at ? Number(ls.started_at) * 1000 : null, flow: Number(ls.mean_flow_lph) || 0, ack: !!ls.acknowledged,
+      offline: !!j.is_offline, seen: j.last_seen ? Math.round(Number(j.last_seen) * 1000) : null,
+      temp: st.avg_water_temp != null ? Math.round(st.avg_water_temp * 10) / 10 : null, total: st.total_volume != null ? Number(st.total_volume) : null,
+      name: (j.node && j.node.name) || 'Compteur d’eau', at: Date.now(),
+    };
+    const prev = SD.ww.devs[dev.id] || {};
+    cur.alertAt = prev.alertAt || 0; cur.offAlert = !!prev.offAlert;
+    const kind = { smallLeak: 'une petite fuite', mediumLeak: 'une fuite', largeLeak: 'une grosse fuite' }[cur.leak] || 'une fuite';
+    if (cur.leak && (!prev.leak || Date.now() - cur.alertAt > 15 * 60000)) {
+      cur.alertAt = Date.now();
+      await pushNotify({ tag: 'water', title: prev.leak ? 'Toujours une fuite d’eau !' : 'Fuite d’eau détectée !', body: 'Le compteur voit ' + kind + (cur.flow ? ' (' + Math.round(cur.flow) + ' litres par heure)' : '') + (cur.since ? ' depuis ' + hmParis(cur.since) : '') + '. Coupe l’arrivée d’eau si besoin.', badge: 1 });
+    } else if (!cur.leak && prev.leak) {
+      cur.alertAt = 0;
+      await pushNotify({ tag: 'water', title: 'Fuite d’eau terminée', body: 'Le compteur ne voit plus de fuite (' + hmParis(Date.now()) + ').', badge: 0 });
+    }
+    // compteur muet depuis plus de 3 h (il ne donne pas de nouvelles à chaque minute) : la détection de fuite ne marche plus
+    const mute = cur.offline || (cur.seen && Date.now() - cur.seen > 3 * 3600000);
+    if (mute && !cur.offAlert && cur.seen && Date.now() - cur.seen > 3 * 3600000) {
+      cur.offAlert = true;
+      await pushNotify({ tag: 'wateroff', title: 'Compteur d’eau hors ligne', body: 'Plus de nouvelles depuis ' + hmParis(cur.seen) + ' : la détection de fuite ne marche plus. Vérifie le Wi-Fi ou l’alimentation du Water Grip.', badge: null });
+    }
+    if (!mute) cur.offAlert = false;
+    SD.ww.devs[dev.id] = cur;
+  }
+  return SD.ww;
+}
+function waterOut() {
+  const W = SD.ww || { devs: {} };
+  return Object.keys(W.devs).map((id) => { const d = W.devs[id]; return { id, name: d.name, leak: d.leak, since: d.since, flow: d.flow, ack: d.ack, offline: !!(d.offline || (d.seen && Date.now() - d.seen > 3 * 3600000)), seen: d.seen, temp: d.temp, total: d.total, at: d.at }; });
+}
 function costCfg() {
   SD.cost = Object.assign({ gasPrice: 0.12, kw: 10, kwSrc: 'défaut', elecPrice: 0.20, waterPrice: 5.13, budget: 250, meters: [] }, SD.cost || {});
   return SD.cost;
@@ -1164,10 +1211,18 @@ try {
     await enSample();
     // Porte de garage : photo de la caméra si c'est le moment (toutes les 5 min, ou juste après une commande / une confirmation)
     try { await garageAlert(); } catch (e) {}
+    try { await waterWatch(false); } catch (e) {}
     let gu = null; try { gu = await garageCamDue(); } catch (e) {}
     return gu ? [{ json: { garageUrl: gu } }] : []; // aucune réponse HTTP à envoyer
   }
   if (body.action === 'ping') return reply(200, { ok: true });
+  // ---- Eau : état du compteur et des fuites ----
+  if (body.action === 'water.state' || body.action === 'water.ack') {
+    if (!CFG.qd) return reply(503, { ok: false, error: 'water_not_configured' });
+    if (body.action === 'water.ack') { for (const dev of (SD.water && SD.water.dev) || []) await qdPost('devices/' + dev.id + '/commands/acknowledge-alarm'); await waterWatch(true); }
+    else await waterWatch(!!body.fresh && !(SD.ww && SD.ww.at > Date.now() - 15000));
+    return reply(200, { ok: true, devices: waterOut() });
+  }
   // ---- Coût de l'énergie ----
   if (body.action === 'cost' || body.action === 'cost.cfg' || body.action === 'cost.meter') {
     const C = costCfg();
