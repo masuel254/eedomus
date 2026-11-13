@@ -492,11 +492,13 @@
   var LOGS = {}, GAR = null, logsView = null;
   function loadLogs(kind, quiet) {
     var ttl = kind === 'doors' && GAR && GAR.state === 'unknown' ? 12000 : 120000; // garage à vérifier : on redemande souvent
+    if (!LOGS[kind]) { try { var sv = JSON.parse(localStorage.getItem('maison-logs-' + kind) || 'null'); if (sv && sv.events) LOGS[kind] = { at: 0, data: sv }; } catch (e) {} } // dernier journal connu, affiché tout de suite
     var c = LOGS[kind]; if (c && (c.loading || Date.now() - c.at < ttl)) return;
     LOGS[kind] = { loading: true, at: Date.now(), data: c ? c.data : null };
     api({ action: 'logs', kind: kind }).then(function (j) {
       LOGS[kind] = { at: j.partial ? Date.now() - 105000 : Date.now(), data: j }; if (j.garage) GAR = j.garage; // incomplet : on redemande ~15 s plus tard
       if (j.partial) setTimeout(function () { loadLogs(kind, true); }, 16000);
+      try { var keep = { events: j.events, kind: j.kind }; localStorage.setItem('maison-logs-' + kind, JSON.stringify(keep)); } catch (e) {}
       if (!busy()) render(); if (logsView === kind && !sheet.hidden) renderLogs();
     }).catch(function () { LOGS[kind] = { at: Date.now() - 90000, data: c ? c.data : null }; if (!quiet) toast('eedomus ne répond pas, réessaie', true); });
   }

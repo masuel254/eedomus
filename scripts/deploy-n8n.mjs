@@ -1059,6 +1059,8 @@ try {
     for (const p of r.body) {
       states[p.periph_id] = { value: p.last_value, text: p.last_value_text, unit: (p.unit || '').trim(), changed: p.last_value_change };
     }
+    // mémorisé pour les journaux : ils ne relisent que les modules qui ont changé
+    SD.lastChange = {}; Object.keys(states).forEach((k) => { SD.lastChange[String(k)] = states[k].changed; }); SD.lastChangeAt = Date.now();
     return reply(200, { ok: true, states, at: new Date().toISOString() });
   }
 
@@ -1079,27 +1081,35 @@ try {
     const list = CFG.logs[kind];
     if (!Array.isArray(list)) return reply(403, { ok: false, error: 'not_allowed' });
     SD.logs = SD.logs || {};
+    SD.logHist = SD.logHist || {};
     const c = SD.logs[kind];
     let events;
-    if (c && c.at > Date.now() - 60000) events = c.events;
+    if (c && c.at > Date.now() - 15000) events = c.events;
     else {
-      events = []; let failed = 0;
+      let failed = 0, calls = 0;
       const fmtD = (d) => { const p = {}; new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).formatToParts(d).forEach((x) => { p[x.type] = x.value; }); return p.year + '-' + p.month + '-' + p.day + ' ' + p.hour + ':' + p.minute + ':' + p.second; };
+      const pause = async () => { if (calls++) await new Promise((ok) => setTimeout(ok, 550)); }; // eedomus impose 0,5 s entre deux requêtes
+      const ask = async (q) => { let r = null; for (let k = 0; k < 3 && !(r && r.success === 1); k++) { if (k) await new Promise((ok) => setTimeout(ok, 1500 * k)); try { r = await eedomus('get', q); } catch (e) { r = null; } } return r && r.success === 1 ? r : null; };
+      // 1) Une seule question à eedomus : date du dernier changement de chaque module (ou celle que l'appli vient de lire)
+      let lc = SD.lastChange && SD.lastChangeAt > Date.now() - 20000 ? SD.lastChange : null;
+      if (!lc) { await pause(); const r0 = await ask('action=periph.caract&periph_id=' + list.map((x) => x.id).join(',')); if (r0) { lc = {}; [].concat(r0.body).forEach((p) => { lc[String(p.periph_id)] = p.last_value_change; }); } }
+      const now = Date.now(), from72 = fmtD(new Date(now - 72 * 3600000));
+      // 2) On ne relit que les modules qui ont changé, et seulement la partie récente (le reste est déjà en mémoire)
       for (const it of list) {
-        // eedomus impose 0,5 s entre deux requêtes
-        await new Promise((ok) => setTimeout(ok, 550));
-        const q = 'action=periph.history&periph_id=' + it.id + '&start_date=' + encodeURIComponent(fmtD(new Date(Date.now() - 72 * 3600000))) + '&end_date=' + encodeURIComponent(fmtD(new Date()));
-        let r = null;
-        // eedomus refuse parfois (trop de requêtes en même temps que l'appli) : on réessaie calmement
-        for (let k = 0; k < 3 && !(r && r.success === 1); k++) { if (k) await new Promise((ok) => setTimeout(ok, 1500 * k)); try { r = await eedomus('get', q); } catch (e) { r = null; } }
-        if (!r || r.success !== 1) failed++;
-        const h = (r && r.success === 1 && r.body && r.body.history) || [];
-        h.forEach((x) => events.push({ id: it.id, name: it.name, text: String(x[0]), date: x[1] }));
+        const id = String(it.id), old = SD.logHist[id], fresh = old && old.at > now - 6 * 3600000;
+        if (fresh && lc && lc[id] && lc[id] <= old.upTo) continue; // rien de nouveau depuis la dernière lecture
+        const from = fresh ? fmtD(new Date(old.at - 120000)) : from72;
+        await pause();
+        const r = await ask('action=periph.history&periph_id=' + id + '&start_date=' + encodeURIComponent(from) + '&end_date=' + encodeURIComponent(fmtD(new Date())));
+        if (!r) { failed++; continue; }
+        const seen = {}, ev = [];
+        ((r.body && r.body.history) || []).map((x) => [String(x[0]), x[1]]).concat(fresh ? old.ev : []).forEach((x) => { const k = x[1] + '|' + x[0]; if (!seen[k] && x[1] >= from72) { seen[k] = 1; ev.push(x); } });
+        SD.logHist[id] = { at: now, upTo: fmtD(new Date(now)), ev };
       }
+      events = [];
+      list.forEach((it) => { const H = SD.logHist[String(it.id)]; (H ? H.ev : []).forEach((x) => { if (x[1] >= from72) events.push({ id: it.id, name: it.name, text: x[0], date: x[1] }); }); });
       events.sort((x, y) => (x.date < y.date ? 1 : -1));
-      // en cas d'échec, on ne garde pas un journal vide en mémoire
-      if (!failed) SD.logs[kind] = { at: Date.now(), events };
-      else if (c && c.events && c.events.length && !events.length) events = c.events;
+      SD.logs[kind] = { at: Date.now(), events };
       SD.logsFail = SD.logsFail || {}; SD.logsFail[kind] = failed;
     }
     const out = { ok: true, kind, events, partial: !!(SD.logsFail && SD.logsFail[kind]) };
