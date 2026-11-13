@@ -1,7 +1,17 @@
 {
-  "version": "2.12.3",
+  "version": "2.12.4",
   "date": "2026-11-13",
   "releases": [
+    {
+      "version": "2.12.4",
+      "date": "2026-11-13",
+      "time": "15:19",
+      "title": "Caméras plus rapides",
+      "changes": [
+        "Caméras : la dernière liste et les dernières images sont gardées sur l’iPhone et affichées tout de suite",
+        "Caméras préchargées en arrière-plan dès l’ouverture de l’appli ; caméras Imou interrogées toutes en même temps"
+      ]
+    },
     {
       "version": "2.12.3",
       "date": "2026-11-13",
@@ -665,5 +675,5 @@
     "Révoquer à la fin : mot de passe TotalEnergies",
     "Révoquer à la fin : mot de passe EDF"
   ],
-  "time": "15:15"
+  "time": "15:19"
 }

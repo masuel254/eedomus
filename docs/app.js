@@ -90,10 +90,13 @@
     api({ action: 'nt.heating' }).then(function (j) { NT = j; ntErr = false; presenceGuard(j); if (!busy()) render(); })
       .catch(function () { ntErr = true; if (!NT) render(); });
   }
+  // dernière liste de caméras gardée sur l'iPhone (affichée tout de suite, rechargée derrière)
+  (function () { try { var c = JSON.parse(localStorage.getItem('maison-cams') || 'null'); if (c && Date.now() - c.at < 3600000) { CAMS = c.nt || null; IM = c.im || null; } } catch (e) {} })();
+  function saveCams() { try { localStorage.setItem('maison-cams', JSON.stringify({ at: Date.now(), nt: CAMS && !CAMS.error ? CAMS : null, im: IM && !IM.error ? IM : null })); } catch (e) {} }
   function loadCams(force) {
     if (camsLoading || (!force && CAMS && Date.now() - camsAt < 60000)) return;
     camsLoading = true;
-    api({ action: 'nt.cameras', fresh: !!force }).then(function (j) { CAMS = j; camsAt = Date.now(); })
+    api({ action: 'nt.cameras', fresh: !!force }).then(function (j) { CAMS = j; camsAt = Date.now(); saveCams(); })
       .catch(function () { if (!CAMS) CAMS = { error: true, cameras: [], events: [] }; })
       .then(function () { camsLoading = false; if (!busy()) render(); if (!sheet.hidden && sheet.dataset.view === 'cams' && !sheet.querySelector('video')) renderCams(); });
   }
@@ -178,7 +181,7 @@
   function loadImou(force) {
     if (imLoading || (!force && IM && Date.now() - imAt < 120000)) return;
     imLoading = true;
-    api({ action: 'im.cameras', snaps: true }).then(function (j) { IM = j; imAt = Date.now(); })
+    api({ action: 'im.cameras', snaps: true }).then(function (j) { IM = j; imAt = Date.now(); saveCams(); })
       .catch(function () { if (!IM) IM = { error: true, cameras: [] }; })
       .then(function () { imLoading = false; if (!busy()) render(); if (!sheet.hidden && sheet.dataset.view === 'cams' && !sheet.querySelector('video')) renderCams(); });
   }
@@ -2266,7 +2269,9 @@
     setInterval(function () { if (!document.hidden && !ntPend) refreshHeating(); }, 30000);
     setInterval(function () { if (!document.hidden) refreshTuya(); }, 30000);
     setInterval(function () { if (!document.hidden && lastOk && !busy()) render(); }, 30000);
-    document.addEventListener('visibilitychange', function () { if (!document.hidden) { refresh(); refreshHeating(); refreshTuya(true); } });
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) { refresh(); refreshHeating(); refreshTuya(true); setTimeout(function () { loadCams(false); loadImou(false); }, 2500); } });
+    // caméras préchargées en arrière-plan : l'onglet Caméras s'affiche tout de suite
+    setTimeout(function () { loadCams(false); loadImou(false); }, 2500);
   }).catch(function () { app.innerHTML = '<div class="setup"><h1>Maison</h1><p>Impossible de charger la configuration. Vérifie ta connexion.</p></div>'; });
 
   if ('serviceWorker' in navigator) {

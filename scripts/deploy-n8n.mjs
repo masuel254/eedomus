@@ -559,15 +559,16 @@ async function imou(b) {
   if (!CFG.im) throw fail(503, 'imou_not_configured');
   if (b.action === 'im.cameras') {
     const devs = await imDevices();
-    const cams = [];
-    for (const d of devs) {
+    // toutes les caméras en même temps (au lieu d'une par une)
+    const cams = await Promise.all(devs.map(async (d) => {
       const cam = { id: d.id, name: d.name, model: d.model, on: d.online, live: null, liveHd: null, snapshot: null };
       if (d.online) {
-        try { const l = await imLive(d); cam.live = l.sd; cam.liveHd = l.hd; } catch (e) {}
-        if (b.snaps) { try { cam.snapshot = await imSnap(d); } catch (e) {} }
+        const [l, sn] = await Promise.all([imLive(d).catch(() => null), b.snaps ? imSnap(d).catch(() => null) : null]);
+        if (l) { cam.live = l.sd; cam.liveHd = l.hd; }
+        cam.snapshot = sn;
       }
-      cams.push(cam);
-    }
+      return cam;
+    }));
     return { ok: true, cameras: cams, at: new Date().toISOString() };
   }
   // Enregistrements de la carte SD d'une caméra, pour une journée (format AAAA-MM-JJ)
