@@ -866,9 +866,10 @@
   function alarmHTML() {
     var A = CFG.alarm || { items: [] }, v = num(A.status), st = ALARM_STATE[v] || [(STATES[A.status] || {}).text || '—', ''], armed = v != null && v !== 0;
     var h = '<div class="acard ' + st[1] + '"><span class="aic">' + icon('shield') + '</span><span><b>Alarme ' + esc(st[0].toLowerCase()) + '</b><small>' + esc(since(A.status)) + '</small></span></div>';
-    SLIDE = SLIDE && SLIDE.where === 'alarmtab' ? SLIDE : { key: armed ? 'alarm-off' : 'alarm-on', where: 'alarmtab' };
-    SLIDE.key = armed ? 'alarm-off' : 'alarm-on';
-    h += slideHTML('alarmtab').replace('<button class="sl-x" data-slidex>Annuler</button>', '');
+    // boutons ON / OFF (un seul appui), comme dans l'accès rapide
+    h += '<div class="card2 alarm-onoff"><span><b>' + (armed ? 'Désactiver l’alarme' : 'Activer l’alarme') + '</b><small>Un appui sur ON ou OFF</small></span>' +
+      '<span class="seg2 qseg"><button class="' + (armed ? 'on ok' : '') + '" data-qgo="alarm-on">' + (qBusy['alarm-on'] ? 'Envoi…' : 'ON') + '</button>' +
+      '<button class="' + (!armed ? 'on' : '') + '" data-qgo="alarm-off">' + (qBusy['alarm-off'] ? 'Envoi…' : 'OFF') + '</button></span></div>';
     var grp = function (g, title) {
       var items = A.items.filter(function (it) { return it.group === g; }); if (!items.length) return '';
       // détecteurs : mouvement en cours d'abord, puis du plus récent au plus ancien
@@ -879,7 +880,7 @@
       return '<div class="lbl">' + title + '</div><div class="card2 flat">' + items.map(rowHTML).join('') + '</div>';
     };
     h += smokeHTML() + grp('mode', 'Paramétrage') + grp('zones', 'Zones surveillées') + grp('motion', 'Détecteurs de mouvement');
-    h += '<p class="note-q">Les réglages s\'appliquent tout de suite. Seule l\'activation de l\'alarme demande de glisser le bouton.</p>';
+    h += '<p class="note-q">Les réglages et les boutons ON / OFF s\'appliquent tout de suite, en un seul appui.</p>';
     return h;
   }
 

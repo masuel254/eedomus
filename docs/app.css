@@ -867,3 +867,8 @@ body { padding: 0 !important; }
 .row.smoke-on { background: rgba(248,113,113,.12); }
 .row .ic.bad { color: var(--warn); }
 #app > .note-q { padding: 0 20px; }
+
+/* onglet Alarme : ON / OFF */
+.alarm-onoff { display: grid; grid-template-columns: 1fr 150px; align-items: center; gap: 12px; }
+.alarm-onoff b { display: block; font-size: 15px; } .alarm-onoff small { color: var(--mu); font-size: 12.5px; }
+.alarm-onoff { margin-top: 10px !important; }
