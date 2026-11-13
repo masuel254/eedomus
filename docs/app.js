@@ -491,7 +491,8 @@
   // ---------- Journaux des 3 derniers jours (présence, alarme, portes) ----------
   var LOGS = {}, GAR = null, logsView = null;
   function loadLogs(kind, quiet) {
-    var c = LOGS[kind]; if (c && (c.loading || Date.now() - c.at < 120000)) return;
+    var ttl = kind === 'doors' && GAR && GAR.state === 'unknown' ? 12000 : 120000; // garage à vérifier : on redemande souvent
+    var c = LOGS[kind]; if (c && (c.loading || Date.now() - c.at < ttl)) return;
     LOGS[kind] = { loading: true, at: Date.now(), data: c ? c.data : null };
     api({ action: 'logs', kind: kind }).then(function (j) {
       LOGS[kind] = { at: Date.now(), data: j }; if (j.garage) GAR = j.garage;
@@ -1731,6 +1732,7 @@
     if (TAB === 'more') { loadEnergyToday(); loadHistE(3557564, 168); }
     setInterval(function () { if (!document.hidden) refreshIq(false); }, 60000);
     setInterval(function () { if (!document.hidden) refresh(); }, 10000);
+    setInterval(function () { if (!document.hidden && GAR && GAR.state === 'unknown') loadLogs('doors', true); }, 15000);
     setInterval(function () { if (!document.hidden && !ntPend) refreshHeating(); }, 30000);
     setInterval(function () { if (!document.hidden) refreshTuya(); }, 30000);
     setInterval(function () { if (!document.hidden && lastOk && !busy()) render(); }, 30000);

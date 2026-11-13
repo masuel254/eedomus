@@ -173,10 +173,11 @@ function garageState(events) {
     cam: { at: cam.at || null, state: cam.state || null, margin: cam.margin ?? null,
       refs: { open: refs.filter((r) => r.state === 'open').length, closed: refs.filter((r) => r.state === 'closed').length } } });
 }
-// Demander une photo de contrôle du garage dans ~40 s puis ~100 s
+// Demander des photos de contrôle du garage juste après une commande (puis on insiste tant que l'état n'est pas sûr)
 function garageCheckSoon() {
   const G = $getWorkflowStaticData('global');
-  G.garageDues = [Date.now() + 40000, Date.now() + 100000];
+  G.garageDues = [Date.now() + 20000, Date.now() + 45000, Date.now() + 75000];
+  G.garageRetry = 8;
 }
 // Faut-il prendre une photo maintenant ? Si oui, renvoie l'adresse d'une photo toute fraîche de la caméra du garage
 async function garageCamDue() {
@@ -695,6 +696,7 @@ async function enSample() {
   const sauna = SD.en && SD.en.sauna, heating = sauna && sauna.p > 50;
   const lastAt = SD.tuState ? SD.tuState.at : 0;
   if (!heating && Date.now() - lastAt < 14 * 60000) return;
+  if (heating && Date.now() - lastAt < 55000) return; // la minuterie tourne toutes les 30 s : relevé au plus 1 fois par minute
   await tuState(true);
 }
 function enSeries(k) {
@@ -1179,6 +1181,8 @@ if (best.open !== null && best.closed !== null) {
   if (margin > 0.08) state = 'open'; else if (margin < -0.08) state = 'closed';
 }
 G.garageCam = { at: Date.now(), tryAt: (G.garageCam && G.garageCam.tryAt) || Date.now(), state, margin, best, bright: Math.round(mean) };
+// Porte encore en mouvement ou état pas sûr juste après une commande : nouvelle photo 30 s plus tard
+if (!state && G.garage && G.garage.state === 'unknown' && (G.garageRetry || 0) > 0) { G.garageRetry--; G.garageDues = (G.garageDues || []).concat([Date.now() + 20000]); }
 // État confirmé par la caméra : on met à jour l'état mémorisé s'il change (ou s'il était « à vérifier »)
 if (state && (!G.garage || G.garage.state !== state)) {
   G.garage = { state, date: localNow(), src: 'camera' };
@@ -1212,7 +1216,7 @@ const workflow = {
     },
     {
       // Minuterie : relevés d'énergie Smart Life toutes les 5 minutes (le code décide s'il faut vraiment interroger Tuya)
-      parameters: { rule: { interval: [{ field: 'minutes', minutesInterval: 1 }] } },
+      parameters: { rule: { interval: [{ field: 'seconds', secondsInterval: 30 }] } },
       id: randomUUID(),
       name: 'Relevés énergie',
       type: 'n8n-nodes-base.scheduleTrigger',
