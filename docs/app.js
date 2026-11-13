@@ -744,6 +744,7 @@
     var t0 = new Date(); t0.setHours(0, 0, 0, 0);
     var days = Math.round((t0 - new Date(dt.getFullYear(), dt.getMonth(), dt.getDate())) / 86400000);
     var when = days <= 0 ? 'à ' + hm : days === 1 ? 'hier à ' + hm : 'le ' + dt.getDate() + '/' + String(dt.getMonth() + 1).padStart(2, '0') + ' à ' + hm;
+    if (days > 0) return when; // pas aujourd'hui : juste le jour et l'heure, sans durée
     var dur;
     if (m < 60) dur = m + ' min';
     else if (m < 48 * 60) { var hh = Math.floor(m / 60), mm = m % 60; dur = hh + ' h' + (hh < 10 && mm ? ' ' + String(mm).padStart(2, '0') : ''); }

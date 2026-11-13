@@ -1,7 +1,16 @@
 {
-  "version": "2.4.6",
+  "version": "2.4.7",
   "date": "2026-11-13",
   "releases": [
+    {
+      "version": "2.4.7",
+      "date": "2026-11-13",
+      "time": "08:36",
+      "title": "Heures plus lisibles",
+      "changes": [
+        "États d’aujourd’hui : « à 09h04 · depuis 36 min ». États plus anciens : seulement le jour et l’heure (« hier à 21h10 », « le 10/11 à 08h00 »)"
+      ]
+    },
     {
       "version": "2.4.6",
       "date": "2026-11-13",
