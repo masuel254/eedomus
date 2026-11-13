@@ -1,7 +1,18 @@
 {
-  "version": "2.10.0",
+  "version": "2.11.0",
   "date": "2026-11-13",
   "releases": [
+    {
+      "version": "2.11.0",
+      "date": "2026-11-13",
+      "time": "14:22",
+      "title": "Électricité calée sur le Linky",
+      "changes": [
+        "Électricité : vraies données du compteur Linky (EDF, jour par jour depuis le 1/11/2025) ; ces jours-là, le coût est exact",
+        "Prix réel 0,196 €/kWh TTC (heures pleines/creuses), abonnement 19,72 €/mois (Tarif Bleu HP/HC 9 kVA)",
+        "Les jours sans relevé : appareils estimés recalés sur le Linky ; nouvelle ligne « Abonnement électricité » et carte « Électricité réelle »"
+      ]
+    },
     {
       "version": "2.10.0",
       "date": "2026-11-13",
@@ -593,7 +604,8 @@
     "Coût de l’énergie (Plus › Énergie) : gaz estimé à partir des heures de chauffe Netatmo + électricité des prises Smart Life, en €",
     "Eau : compteur Quandify (Water Grip) relié, litres par jour depuis l’installation, coût à 5,13 €/m³",
     "Fuite d’eau : surveillance du compteur Quandify chaque minute, notification iPhone immédiate",
-    "Gaz calé sur les vraies factures TotalEnergies (12 mois, 18 223 kWh, 2 171 €) : prix, abonnement, puissance chaudière, eau chaude"
+    "Gaz calé sur les vraies factures TotalEnergies (12 mois, 18 223 kWh, 2 171 €) : prix, abonnement, puissance chaudière, eau chaude",
+    "Électricité calée sur le compteur Linky (EDF, 377 jours réels) : prix 0,196 €/kWh, abonnement 19,72 €/mois"
   ],
   "todo": [
     "Tester la vidéo en direct sur iPhone (Imou et Netatmo)",
@@ -611,8 +623,8 @@
     "Option : capteur d'ouverture sur la porte de garage (fiable à 100 %, même si la caméra est hors ligne)",
     "Notifications : activer « Alertes sur cet iPhone » dans Réglages (sur chaque iPhone de la famille) puis toucher « Envoyer une notification de test »",
     "Révoquer à la fin : mot de passe Quandify",
-    "Électricité : dire qui est le fournisseur et le prix du kWh (TotalEnergies ne fournit que le gaz)",
-    "Révoquer à la fin : mot de passe TotalEnergies"
+    "Révoquer à la fin : mot de passe TotalEnergies",
+    "Révoquer à la fin : mot de passe EDF"
   ],
-  "time": "10:59"
+  "time": "14:22"
 }

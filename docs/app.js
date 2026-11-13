@@ -1411,9 +1411,10 @@
     { k: 'pac', name: 'Pompe à chaleur piscine', icon: 'thermo', color: '#FFC24B' },
     { k: 'elec', name: 'Électrolyseur + pompe', icon: 'bolt', color: '#5BA8FF' },
     { k: 'sauna', name: 'Sauna', icon: 'towel', color: '#B48CFF' },
-    { k: 'other', name: 'Autres appareils (estimés)', icon: 'home', color: '#4CD38A' },
+    { k: 'other', name: 'Reste de la maison (électricité)', icon: 'home', color: '#4CD38A' },
     { k: 'gasx', name: 'Eau chaude + cuisine (gaz, estimés)', icon: 'flame', color: '#FFB38F', gas: true },
     { k: 'gasfix', name: 'Abonnement gaz + taxes fixes', icon: 'cal', color: '#C9A38F', gas: true },
+    { k: 'elecfix', name: 'Abonnement électricité', icon: 'cal', color: '#8FB3E0' },
     { k: 'water', name: 'Eau', icon: 'drop', color: '#38BDF8', water: true }
   ];
   function costLoad(body) {
@@ -1456,8 +1457,26 @@
     }
     return 1;
   }
+  function linkyOf(D, d) { var L = D.cfg.elecDays; return L && L[d] ? L[d] : null; }
+  function measDay(D, d) { var s = 0; ['pac', 'elec', 'sauna'].forEach(function (k) { if (!D.elec[k]) return; var e = D.elec[k].days[d]; if (e == null) e = costAvgOf(D, k); s += e || 0; }); return s; }
+  function applElecDay(D, d) { var o = 0; APPL.forEach(function (it) { if (!it.gas) o += applDay(D, it, d); }); return o; }
+  // rapport « reste de la maison mesuré par le Linky » / « estimation des appareils », sur les jours connus
+  function elecCal(D) {
+    if (D._ec != null) return D._ec;
+    var L = D.cfg.elecDays || {}, r = 0, e = 0;
+    Object.keys(L).forEach(function (d) { r += Math.max(0, L[d][0] - measDay(D, d)); e += applElecDay(D, d); });
+    return (D._ec = e > 0 && r > 0 ? r / e : 1);
+  }
   function costDay(D, k) {
-    var c = D.cfg, out = { kwh: 0, eur: 0, h: 0, any: false }, est = false;
+    var c = D.cfg, out = { kwh: 0, eur: 0, h: 0, any: false }, est = false, LK = linkyOf(D, COST_CUR);
+    if (k === 'elecfix') { var fx = LK ? LK[2] : (c.elecFixed || 0) * 12 / 365; if (fx) { out.eur = fx; out.any = true; out.est = !LK; } return out; }
+    if (k === 'other') {
+      if (LK) {
+        var mk = measDay(D, COST_CUR), ok2 = Math.max(0, LK[0] - mk);
+        out.kwh = ok2; out.eur = Math.max(0, LK[1] - LK[2] - mk * c.elecPrice); out.any = true; out.real = true; return out;
+      }
+      out.kwh = applElecDay(D, COST_CUR) * elecCal(D); out.eur = out.kwh * c.elecPrice; out.any = true; out.est = true; return out;
+    }
     if (k === 'water') {
       if (!D.water) return out;
       var lt = D.water.days[COST_CUR]; if (lt == null) { lt = costAvgOf(D, 'water'); est = true; }
@@ -1469,7 +1488,7 @@
       if (h != null) { out.h = h; out.kwh = h * c.kw * gasScale(D, COST_CUR); out.eur = out.kwh * c.gasPrice; out.any = true; out.est = est; }
     }
     else if (k === 'gasfix') { if (c.gasFixed) { out.eur = c.gasFixed * 12 / 365; out.any = true; } }
-    else if (k === 'other' || k === 'gasx') { var o = 0; APPL.forEach(function (it) { if (!it.gas === (k === 'other')) o += applDay(D, it, COST_CUR); }); if (k === 'gasx') o *= gasScale(D, COST_CUR); out.kwh = o; out.eur = o * (k === 'gasx' ? c.gasPrice : c.elecPrice); out.any = true; }
+    else if (k === 'gasx') { var o = 0; APPL.forEach(function (it) { if (it.gas) o += applDay(D, it, COST_CUR); }); o *= gasScale(D, COST_CUR); out.kwh = o; out.eur = o * c.gasPrice; out.any = true; }
     else {
       var e = D.elec[k] && D.elec[k].days[COST_CUR]; if (e == null && D.elec[k]) { e = costAvgOf(D, k); est = e != null; }
       if (e != null) { out.kwh = e; out.eur = e * c.elecPrice; out.any = true; out.est = est; }
@@ -1540,7 +1559,7 @@
       '<div><i style="background:var(--mu)"></i><small>Par jour</small><b class="mono">' + eur(total / nDays, total / nDays < 10 ? 2 : 0) + '</b><span>moyenne</span></div>') + '</div></div>';
     // Graphique empilé gaz / électricité
     if (P.groups.length) {
-      var vals = P.groups.map(function (g) { var ga = costSum(D, g.days, 'gas').eur + costSum(D, g.days, 'gasx').eur, el = 0; ['pac', 'elec', 'sauna', 'other'].forEach(function (k) { el += costSum(D, g.days, k).eur; }); return [ga, el, D.water ? costSum(D, g.days, 'water').eur : 0]; });
+      var vals = P.groups.map(function (g) { var ga = costSum(D, g.days, 'gas').eur + costSum(D, g.days, 'gasx').eur + costSum(D, g.days, 'gasfix').eur, el = 0; ['pac', 'elec', 'sauna', 'other', 'elecfix'].forEach(function (k) { el += costSum(D, g.days, k).eur; }); return [ga, el, D.water ? costSum(D, g.days, 'water').eur : 0]; });
       var W = 320, H = 140, base = 116, n = vals.length, gap = n > 20 ? 2 : 5, bw = (W - gap * (n - 1)) / n, max = Math.max.apply(null, vals.map(function (v) { return v[0] + v[1] + v[2]; }).concat([0.01]));
       var s = '<svg class="bars" viewBox="0 0 ' + W + ' ' + H + '"><line x1="0" x2="' + W + '" y1="' + base + '" y2="' + base + '" class="axis"/>';
       vals.forEach(function (v, i) {
@@ -1557,12 +1576,13 @@
     var mx = Math.max.apply(null, items.map(function (it) { return tot[it.k].eur; }).concat([0.01]));
     h += '<div class="lbl">Détail</div><div class="card2 flat cost-list">' + items.map(function (it) {
       var s = tot[it.k], sub = it.k === 'gas' ? fmt(s.h, 0) + ' h de chauffe · ' + fmt(s.kwh, 0) + ' kWh' : (s.any ? kwh(s.kwh) + ' kWh' : 'pas encore de relevé');
-      if (it.k === 'other') sub = '≈ ' + kwh(s.kwh) + ' kWh · réfrigérateurs, lumières, TV, linge…';
+      if (it.k === 'other') sub = kwh(s.kwh) + ' kWh · ' + (c.elecDays && Object.keys(c.elecDays).length ? 'compteur Linky moins les appareils mesurés' : 'réfrigérateurs, lumières, TV, linge…');
       if (it.k === 'gasx') sub = '≈ ' + kwh(s.kwh) + ' kWh de gaz · non vus par Netatmo';
       if (it.k === 'water') sub = (s.any ? fmt(s.l, 0) + ' litres · ' + fmt(s.l / 1000, 2) + ' m³' : 'pas encore de relevé') + ' · compteur Quandify';
       if (it.k === 'water') tag = 'div';
       if (it.k === 'gasfix') { sub = fmt(c.gasFixed, 2) + ' € par mois (d’après tes factures)'; tag = 'div'; }
-      var tag = it.k === 'gas' || it.k === 'water' || it.k === 'gasfix' ? 'div' : 'button';
+      if (it.k === 'elecfix') { sub = fmt(c.elecFixed || 0, 2) + ' € par mois' + (c.elecContract ? ' · ' + c.elecContract : ''); tag = 'div'; }
+      var tag = it.k === 'gas' || it.k === 'water' || it.k === 'gasfix' || it.k === 'elecfix' ? 'div' : 'button';
       return '<' + tag + ' class="row"' + (tag === 'div' ? '' : it.k === 'other' || it.k === 'gasx' ? ' data-costappl' : ' data-energy="' + it.k + '" data-ename="' + esc(it.name) + '"') + '><span class="ic" style="color:' + it.color + '">' + icon(it.icon) + '</span>' +
         '<span><b>' + esc(it.name) + '</b><small>' + esc(sub) + '</small><span class="cbar"><i style="width:' + (s.eur / mx * 100).toFixed(0) + '%;background:' + it.color + '"></i></span></span>' +
         '<span class="val mono">' + eur(s.eur) + '</span></' + tag + '>';
@@ -1584,7 +1604,8 @@
       st('gasPrice', 'Prix du gaz', 'TTC, en €/kWh' + (c.gasBills && c.gasBills.length ? ' (d’après tes factures ✓)' : ''), fmt(c.gasPrice, 3), 0.005) +
       st('gasFixed', 'Abonnement gaz + taxes fixes', 'en € par mois', fmt(c.gasFixed || 0, 2) + ' €', 1) +
       st('kw', 'Puissance de la chaudière', c.kwSrc === 'compteur' ? 'calculée avec ton compteur ✓' : c.kwSrc === 'factures' ? 'calculée avec tes factures ✓' : 'moyenne quand elle chauffe', fmt(c.kw, 1) + ' kW', 0.5) +
-      st('elecPrice', 'Prix de l’électricité', 'en €/kWh', fmt(c.elecPrice, 3), 0.005) +
+      st('elecPrice', 'Prix de l’électricité', 'TTC, en €/kWh' + (c.elecDays && Object.keys(c.elecDays).length ? ' (moyenne heures pleines/creuses d’après EDF ✓)' : ''), fmt(c.elecPrice, 3), 0.005) +
+      st('elecFixed', 'Abonnement électricité', 'en € par mois', fmt(c.elecFixed || 0, 2) + ' €', 1) +
       (D.water ? st('waterPrice', 'Prix de l’eau', 'en €/m³ (abonnement et taxes compris)', fmt(c.waterPrice, 2) + ' €', 0.05) : '') +
       st('budget', 'Budget mensuel', 'pour la jauge', fmt(c.budget, 0) + ' €', 10) + '</div>';
     // Factures de gaz réelles
@@ -1594,6 +1615,14 @@
       var d0 = GB[0].s, d1 = GB[GB.length - 1].e, dd = function (s) { return (+s.slice(6, 8)) + '/' + s.slice(4, 6) + '/' + s.slice(0, 4); };
       h += '<div class="lbl">Factures de gaz réelles</div><div class="card2 flat cost-list"><div class="row"><span><b>' + GB.length + ' mois facturés</b><small>du ' + dd(d0) + ' au ' + dd(d1) + ' · relevés sur ton espace client' + (c.billsAt ? ' le ' + new Date(c.billsAt).toLocaleDateString('fr-FR') : '') + '</small></span><span class="val mono">' + eur(be, 0) + '</span></div>' +
         '<div class="row"><span><b>' + fmt(bk, 0) + ' kWh de gaz</b><small>les jours de ces périodes sont recalés pour retomber exactement sur tes factures</small></span><span></span></div></div>';
+    }
+    // Électricité réelle (Linky)
+    var EK = Object.keys(c.elecDays || {}).sort();
+    if (EK.length) {
+      var ek = 0, ee = 0; EK.forEach(function (d) { ek += c.elecDays[d][0]; ee += c.elecDays[d][1]; });
+      var df = function (s) { return (+s.slice(6, 8)) + '/' + s.slice(4, 6) + '/' + s.slice(0, 4); };
+      h += '<div class="lbl">Électricité réelle (compteur Linky)</div><div class="card2 flat cost-list"><div class="row"><span><b>' + EK.length + ' jours mesurés</b><small>du ' + df(EK[0]) + ' au ' + df(EK[EK.length - 1]) + ' · relevés sur ton espace EDF' + (c.elecAt ? ' le ' + new Date(c.elecAt).toLocaleDateString('fr-FR') : '') + '</small></span><span class="val mono">' + eur(ee, 0) + '</span></div>' +
+        '<div class="row"><span><b>' + fmt(ek, 0) + ' kWh</b><small>ces jours-là, l’électricité est exacte ; les autres jours sont estimés et recalés sur le Linky (× ' + fmt(elecCal(D), 2) + ')</small></span><span></span></div></div>';
     }
     // Relevé du compteur gaz
     var ms = c.meters || [], cal = D.calib;
@@ -1620,7 +1649,7 @@
       '<h2 class="sh-t">Autres appareils</h2>' +
       '<div class="en-card cost-hero"><span class="est">≈ estimation</span><div class="appl-tot"><b class="mono">' + eur((totE + totG) / 12, 0) + '</b><small>par mois en moyenne · ≈ ' + eur(totE + totG, 0) + '/an (électricité ' + eur(totE, 0) + ', gaz ' + eur(totG, 0) + ')</small></div></div>' +
       '<div class="lbl">Ajuste le nombre de chaque appareil</div><div class="card2 flat cost-list appl">' + rows + '</div>' +
-      '<p class="note-q">Consommations moyennes d’appareils récents pour un foyer de 3 personnes. Les sèche-serviettes ne comptent que les jours où le chauffage a tourné (Netatmo) ; l’éclairage compte plus en hiver. Pas de ballon électrique : l’eau chaude vient de la chaudière gaz, que Netatmo ne compte que pour le chauffage. La piscine et le sauna sont mesurés à part.</p>';
+      (D.cfg.elecDays && Object.keys(D.cfg.elecDays).length ? '<p class="note-q">Les jours connus du compteur Linky, l’électricité est exacte. Pour les autres jours, cette liste est multipliée par ' + fmt(elecCal(D), 2) + ' pour coller au Linky.</p>' : '') + '<p class="note-q">Consommations moyennes d’appareils récents pour un foyer de 3 personnes. Les sèche-serviettes ne comptent que les jours où le chauffage a tourné (Netatmo) ; l’éclairage compte plus en hiver. Pas de ballon électrique : l’eau chaude vient de la chaudière gaz, que Netatmo ne compte que pour le chauffage. La piscine et le sauna sont mesurés à part.</p>';
     var keep = sheet.scrollTop; sheet.innerHTML = '<div class="sh-in">' + h + '</div>'; sheet.scrollTop = keep;
   }
 

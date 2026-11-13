@@ -1247,9 +1247,17 @@ try {
   if (body.action === 'cost' || body.action === 'cost.cfg' || body.action === 'cost.meter') {
     const C = costCfg();
     if (body.action === 'cost.cfg') {
-      const lim = { gasPrice: [0.03, 0.5], kw: [2, 40], elecPrice: [0.05, 0.6], waterPrice: [0.5, 20], budget: [10, 2000], gasFixed: [0, 200], ecsKwh: [0, 10000] };
+      const lim = { gasPrice: [0.03, 0.5], kw: [2, 40], elecPrice: [0.05, 0.6], waterPrice: [0.5, 20], budget: [10, 2000], gasFixed: [0, 200], ecsKwh: [0, 10000], elecFixed: [0, 200] };
       Object.keys(lim).forEach((k) => { const v = Number(body[k]); if (body[k] != null && isFinite(v) && v >= lim[k][0] && v <= lim[k][1]) { C[k] = Math.round(v * 1000) / 1000; if (k === 'kw') C.kwSrc = body.kwSrc === 'factures' ? 'factures' : 'manuel'; } });
       // factures de gaz réelles (relevées sur l'espace client du fournisseur) : [{ s: AAAAMMJJ, e: AAAAMMJJ, kwh, ttc }]
+      // électricité réelle du compteur Linky (relevée sur l'espace client EDF) : { AAAAMMJJ: [kWh, € TTC, € abonnement] }
+      if (body.elecDays && typeof body.elecDays === 'object') {
+        const ed = Object.assign({}, C.elecDays || {});
+        Object.keys(body.elecDays).forEach((d) => { const v = body.elecDays[d]; if (/^[0-9]{8}$/.test(d) && Array.isArray(v) && v.length === 3 && v.every((x) => isFinite(x))) ed[d] = v.map(Number); });
+        const cut = Object.keys(ed).sort().slice(-800)[0]; Object.keys(ed).forEach((d) => { if (d < cut) delete ed[d]; });
+        C.elecDays = ed; C.elecAt = Date.now();
+        if (body.elecContract && typeof body.elecContract === 'string') C.elecContract = body.elecContract.slice(0, 80);
+      }
       if (Array.isArray(body.gasBills)) C.billsAt = Date.now();
       if (Array.isArray(body.gasBills)) C.gasBills = body.gasBills.filter((x) => x && /^[0-9]{8}$/.test(x.s) && /^[0-9]{8}$/.test(x.e) && isFinite(x.kwh) && isFinite(x.ttc)).slice(0, 36).map((x) => ({ s: x.s, e: x.e, kwh: Number(x.kwh), ttc: Number(x.ttc) }));
       // nombre de chaque appareil non mesuré (estimation de l'électricité)
@@ -1273,7 +1281,7 @@ try {
     const calib = costCalibrate();
     const elec = {};
     if (CFG.tu) Object.keys(CFG.tu.devices).forEach((k) => { const s = enSeries(k); const o = {}; s.days.forEach((x) => { o[x.k] = x.kwh; }); elec[k] = { days: o, since: s.since }; });
-    return reply(200, { ok: true, cfg: { gasPrice: C.gasPrice, kw: C.kw, kwSrc: C.kwSrc, elecPrice: C.elecPrice, waterPrice: C.waterPrice, budget: C.budget, meters: C.meters, appl: C.appl || {}, gasFixed: C.gasFixed || 0, ecsKwh: C.ecsKwh || null, gasBills: C.gasBills || [], billsAt: C.billsAt || null },
+    return reply(200, { ok: true, cfg: { gasPrice: C.gasPrice, kw: C.kw, kwSrc: C.kwSrc, elecPrice: C.elecPrice, waterPrice: C.waterPrice, budget: C.budget, meters: C.meters, appl: C.appl || {}, gasFixed: C.gasFixed || 0, ecsKwh: C.ecsKwh || null, gasBills: C.gasBills || [], billsAt: C.billsAt || null, elecFixed: C.elecFixed || 0, elecDays: C.elecDays || {}, elecAt: C.elecAt || null, elecContract: C.elecContract || null },
       water: CFG.qd ? { days: SD.water ? SD.water.d : {}, err: waterErr } : null, calib, gas: { days: SD.gas ? SD.gas.d : {}, err: gasErr }, elec });
   }
   // ---- Notifications ----
