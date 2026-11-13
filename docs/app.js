@@ -545,8 +545,14 @@
       h += '<div class="card2 flat rs-list">' + rows.join('') + '</div>';
       // Vérification par la caméra du garage
       var gc = IM && IM.cameras ? IM.cameras.filter(function (c) { return norm(c.name) === 'garage'; })[0] : null;
-      h += '<div class="garcheck"><div class="gc-hd"><b>Vérifier la porte de garage</b><small>Regarde la photo, puis confirme l\'état si besoin.</small></div>' +
+      // Contrôle automatique par la caméra (n8n compare la photo aux références ouverte / fermée)
+      var cam = GAR && GAR.cam, camTxt = '';
+      if (cam && cam.at) camTxt = 'Dernier contrôle par la caméra à ' + new Date(cam.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) + ' : ' +
+        (cam.state === 'open' ? 'ouverte' : cam.state === 'closed' ? 'fermée' : 'image pas assez claire');
+      var learn = cam && cam.refs ? 'Photos de référence : ' + cam.refs.open + ' ouverte, ' + cam.refs.closed + " fermée. Confirme aussi l'état une fois de nuit pour que la caméra le reconnaisse dans le noir." : '';
+      h += '<div class="garcheck"><div class="gc-hd"><b>Vérifier la porte de garage</b><small>' + esc(camTxt || 'La caméra contrôle la porte toutes les 5 minutes et juste après chaque commande.') + '</small></div>' +
         (gc && gc.snapshot ? '<button class="gc-img" data-opencams="' + esc(gc.id) + '"><img alt="Caméra du garage" src="' + esc(gc.snapshot) + '"><span>Voir en direct ›</span></button>' : '<p class="muted">Photo de la caméra en cours de chargement…</p>') +
+        (learn ? '<small class="gc-learn">' + esc(learn) + '</small>' : '') +
         '<div class="gc-btns"><button class="act' + (go2 ? ' on' : '') + '" data-garmark="open">Elle est ouverte</button><button class="act' + (GAR && !go2 ? ' on' : '') + '" data-garmark="closed">Elle est fermée</button></div></div>';
     }
     // Journal

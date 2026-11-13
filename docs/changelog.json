@@ -1,7 +1,16 @@
 {
-  "version": "2.4.0",
+  "version": "2.4.1",
   "date": "2026-11-13",
   "releases": [
+    {
+      "version": "2.4.1",
+      "date": "2026-11-13",
+      "time": "08:18",
+      "title": "Contrôle caméra visible",
+      "changes": [
+        "Panneau Portes : heure et résultat du dernier contrôle de la porte de garage par la caméra, nombre de photos de référence"
+      ]
+    },
     {
       "version": "2.4.0",
       "date": "2026-11-13",
