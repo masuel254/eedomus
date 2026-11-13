@@ -1,7 +1,17 @@
 {
-  "version": "2.7.1",
+  "version": "2.7.2",
   "date": "2026-11-13",
   "releases": [
+    {
+      "version": "2.7.2",
+      "date": "2026-11-13",
+      "time": "10:02",
+      "title": "Cuisine et eau chaude",
+      "changes": [
+        "Piano de cuisson : feux au gaz (estimés), four et plancha électriques ; plus de plaques électriques",
+        "Eau chaude par la chaudière gaz (pas de ballon électrique) ajoutée en estimation : Netatmo ne compte que le chauffage"
+      ]
+    },
     {
       "version": "2.7.1",
       "date": "2026-11-13",
@@ -518,5 +528,5 @@
     "Notifications : activer « Alertes sur cet iPhone » dans Réglages (sur chaque iPhone de la famille) puis toucher « Envoyer une notification de test »",
     "Énergie : mettre le vrai prix du gaz (facture) et noter 2 relevés du compteur gaz à 1-2 semaines d’écart pour caler la puissance de la chaudière"
   ],
-  "time": "09:56"
+  "time": "10:02"
 }

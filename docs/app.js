@@ -1346,8 +1346,10 @@
     { id: 'llinge', name: 'Lave-linge', sub: '≈ 5 lavages par semaine', kwh: 200, q: 1 },
     { id: 'lvaiss', name: 'Lave-vaisselle', sub: '≈ 5 lavages par semaine', kwh: 230, q: 1 },
     { id: 'tv', name: 'TV OLED 60 pouces', sub: '≈ 3 h par jour + veille', kwh: 150, q: 3 },
-    { id: 'plaques', name: 'Plaques de cuisson', sub: 'induction · mets 0 si tu cuisines au gaz', kwh: 350, q: 1 },
-    { id: 'four', name: 'Four', sub: 'mets 0 s’il est au gaz', kwh: 120, q: 1 },
+    { id: 'four', name: 'Four électrique du piano', sub: 'grand four, ≈ 3 fois par semaine', kwh: 150, q: 1 },
+    { id: 'plancha', name: 'Plancha électrique', sub: '≈ 2 fois par semaine, 30 min', kwh: 125, q: 1 },
+    { id: 'ecs', name: 'Eau chaude (chaudière gaz)', sub: 'douches, bains, vaisselle à la main… pour 4 personnes', kwh: 2500, q: 1, gas: true },
+    { id: 'feux', name: 'Feux du piano (gaz)', sub: 'cuisson de tous les jours', kwh: 250, q: 1, gas: true },
     { id: 'cafe', name: 'Machine à café', sub: 'avec la veille', kwh: 100, q: 1 },
     { id: 'micro', name: 'Micro-ondes', sub: '', kwh: 60, q: 1 },
     { id: 'hotte', name: 'Hotte', sub: 'moteur + éclairage', kwh: 40, q: 1 },
@@ -1371,11 +1373,12 @@
   function applYear(D, it) { return it.heat ? 0.75 * 3 * 210 : it.kwh; }
   var COST = null; // { tab, off, data, loading, error }
   var COST_ITEMS = [
-    { k: 'gas', name: 'Chauffage (gaz)', icon: 'flame', color: '#FF8A5B' },
+    { k: 'gas', name: 'Chauffage (gaz)', icon: 'flame', color: '#FF8A5B', gas: true },
     { k: 'pac', name: 'Pompe à chaleur piscine', icon: 'thermo', color: '#FFC24B' },
     { k: 'elec', name: 'Électrolyseur + pompe', icon: 'bolt', color: '#5BA8FF' },
     { k: 'sauna', name: 'Sauna', icon: 'drop', color: '#B48CFF' },
-    { k: 'other', name: 'Autres appareils (estimés)', icon: 'home', color: '#4CD38A' }
+    { k: 'other', name: 'Autres appareils (estimés)', icon: 'home', color: '#4CD38A' },
+    { k: 'gasx', name: 'Eau chaude + cuisine (gaz, estimés)', icon: 'drop', color: '#FFB38F', gas: true }
   ];
   function costLoad(body) {
     if (!COST) return;
@@ -1396,7 +1399,7 @@
   function costDay(D, k) {
     var c = D.cfg, out = { kwh: 0, eur: 0, h: 0, any: false };
     if (k === 'gas') { var h = D.gas.days[COST_CUR]; if (h != null) { out.h = h; out.kwh = h * c.kw; out.eur = out.kwh * c.gasPrice; out.any = true; } }
-    else if (k === 'other') { var o = 0; APPL.forEach(function (it) { o += applDay(D, it, COST_CUR); }); out.kwh = o; out.eur = o * c.elecPrice; out.any = true; }
+    else if (k === 'other' || k === 'gasx') { var o = 0; APPL.forEach(function (it) { if (!it.gas === (k === 'other')) o += applDay(D, it, COST_CUR); }); out.kwh = o; out.eur = o * (k === 'gasx' ? c.gasPrice : c.elecPrice); out.any = true; }
     else { var e = D.elec[k] && D.elec[k].days[COST_CUR]; if (e != null) { out.kwh = e; out.eur = e * c.elecPrice; out.any = true; } }
     return out;
   }
@@ -1441,7 +1444,7 @@
     if (!D) { sheet.innerHTML = '<div class="sh-in">' + h + '<p class="muted">' + (COST.error ? 'La maison ne répond pas, réessaie dans un instant.' : 'Calcul en cours…') + '</p></div>'; return; }
     var P = costPeriod(), c = D.cfg;
     var tot = {}, total = 0, gasE = 0, elE = 0, gasK = 0, elK = 0;
-    COST_ITEMS.forEach(function (it) { var s = costSum(D, P.days, it.k); tot[it.k] = s; total += s.eur; if (it.k === 'gas') { gasE += s.eur; gasK += s.kwh; } else { elE += s.eur; elK += s.kwh; } });
+    COST_ITEMS.forEach(function (it) { var s = costSum(D, P.days, it.k); tot[it.k] = s; total += s.eur; if (it.gas) { gasE += s.eur; gasK += s.kwh; } else { elE += s.eur; elK += s.kwh; } });
     var budget = c.budget * (COST.tab === 'day' ? 1 / 30 : COST.tab === 'week' ? 7 / 30 : COST.tab === 'month' ? 1 : 12);
     // Jauge : gaz puis électricité, par rapport au budget
     var R = 70, CC = 2 * Math.PI * R, fg = Math.min(1, gasE / budget), fe = Math.min(1 - fg, elE / budget);
@@ -1458,7 +1461,7 @@
       '<div><i style="background:var(--mu)"></i><small>Par jour</small><b class="mono">' + eur(total / nDays, total / nDays < 10 ? 2 : 0) + '</b><span>moyenne</span></div></div></div>';
     // Graphique empilé gaz / électricité
     if (P.groups.length) {
-      var vals = P.groups.map(function (g) { var ga = costSum(D, g.days, 'gas').eur, el = 0; ['pac', 'elec', 'sauna', 'other'].forEach(function (k) { el += costSum(D, g.days, k).eur; }); return [ga, el]; });
+      var vals = P.groups.map(function (g) { var ga = costSum(D, g.days, 'gas').eur + costSum(D, g.days, 'gasx').eur, el = 0; ['pac', 'elec', 'sauna', 'other'].forEach(function (k) { el += costSum(D, g.days, k).eur; }); return [ga, el]; });
       var W = 320, H = 140, base = 116, n = vals.length, gap = n > 20 ? 2 : 5, bw = (W - gap * (n - 1)) / n, max = Math.max.apply(null, vals.map(function (v) { return v[0] + v[1]; }).concat([0.01]));
       var s = '<svg class="bars" viewBox="0 0 ' + W + ' ' + H + '"><line x1="0" x2="' + W + '" y1="' + base + '" y2="' + base + '" class="axis"/>';
       vals.forEach(function (v, i) {
@@ -1475,8 +1478,9 @@
     h += '<div class="lbl">Détail</div><div class="card2 flat cost-list">' + COST_ITEMS.map(function (it) {
       var s = tot[it.k], sub = it.k === 'gas' ? fmt(s.h, 0) + ' h de chauffe · ' + fmt(s.kwh, 0) + ' kWh' : (s.any ? kwh(s.kwh) + ' kWh' : 'pas encore de relevé');
       if (it.k === 'other') sub = '≈ ' + kwh(s.kwh) + ' kWh · réfrigérateurs, lumières, TV, linge…';
+      if (it.k === 'gasx') sub = '≈ ' + kwh(s.kwh) + ' kWh de gaz · non vus par Netatmo';
       var tag = it.k === 'gas' ? 'div' : 'button';
-      return '<' + tag + ' class="row"' + (it.k === 'gas' ? '' : it.k === 'other' ? ' data-costappl' : ' data-energy="' + it.k + '" data-ename="' + esc(it.name) + '"') + '><span class="ic" style="color:' + it.color + '">' + icon(it.icon) + '</span>' +
+      return '<' + tag + ' class="row"' + (it.k === 'gas' ? '' : it.k === 'other' || it.k === 'gasx' ? ' data-costappl' : ' data-energy="' + it.k + '" data-ename="' + esc(it.name) + '"') + '><span class="ic" style="color:' + it.color + '">' + icon(it.icon) + '</span>' +
         '<span><b>' + esc(it.name) + '</b><small>' + esc(sub) + '</small><span class="cbar"><i style="width:' + (s.eur / mx * 100).toFixed(0) + '%;background:' + it.color + '"></i></span></span>' +
         '<span class="val mono">' + eur(s.eur) + '</span></' + tag + '>';
     }).join('') + '</div>';
@@ -1514,16 +1518,16 @@
   // Écran « Autres appareils » : liste réglable, consommation et coût par an
   function renderCostAppl() {
     var D = COST && COST.data; if (!D) return;
-    var c = D.cfg, tot = 0, rows = APPL.map(function (it) {
-      var q = applQ(D, it), y = applYear(D, it) * q; tot += y;
-      return '<div class="row"><span><b>' + esc(it.name) + '</b>' + (it.sub ? '<small>' + esc(it.sub) + '</small>' : '') + '<small class="ay">' + (q ? fmt(y, 0) + ' kWh/an · ≈ ' + eur(y * c.elecPrice, 0) + ' par an' : 'non compté') + '</small></span>' +
+    var c = D.cfg, tot = 0, totE = 0, totG = 0, rows = APPL.map(function (it) {
+      var q = applQ(D, it), y = applYear(D, it) * q, pr = it.gas ? c.gasPrice : c.elecPrice; tot += y; if (it.gas) totG += y * pr; else totE += y * pr;
+      return '<div class="row"><span><b>' + esc(it.name) + '</b>' + (it.sub ? '<small>' + esc(it.sub) + '</small>' : '') + '<small class="ay">' + (q ? fmt(y, 0) + ' kWh/an' + (it.gas ? ' de gaz' : '') + ' · ≈ ' + eur(y * pr, 0) + ' par an' : 'non compté') + '</small></span>' +
         '<span class="cset"><b class="mono">× ' + q + '</b><span class="stp2"><button data-applq="' + it.id + ':-1" aria-label="Moins">−</button><button data-applq="' + it.id + ':1" aria-label="Plus">+</button></span></span></div>';
     }).join('');
     var h = '<div class="sh-hd"><button class="back" data-costback>' + icon('down') + ' Énergie</button><button class="close" data-close aria-label="Fermer">×</button></div>' +
       '<h2 class="sh-t">Autres appareils</h2>' +
-      '<div class="en-card cost-hero"><span class="est">≈ estimation</span><div class="appl-tot"><b class="mono">' + eur(tot * c.elecPrice / 12, 0) + '</b><small>par mois en moyenne · ' + fmt(tot, 0) + ' kWh/an · ≈ ' + eur(tot * c.elecPrice, 0) + '/an</small></div></div>' +
+      '<div class="en-card cost-hero"><span class="est">≈ estimation</span><div class="appl-tot"><b class="mono">' + eur((totE + totG) / 12, 0) + '</b><small>par mois en moyenne · ≈ ' + eur(totE + totG, 0) + '/an (électricité ' + eur(totE, 0) + ', gaz ' + eur(totG, 0) + ')</small></div></div>' +
       '<div class="lbl">Ajuste le nombre de chaque appareil</div><div class="card2 flat cost-list appl">' + rows + '</div>' +
-      '<p class="note-q">Consommations moyennes d’appareils récents pour une famille de 4. Les sèche-serviettes ne comptent que les jours où le chauffage a tourné (Netatmo) ; l’éclairage compte plus en hiver. Un ballon d’eau chaude électrique ou une piscine sont à part (la piscine est déjà mesurée).</p>';
+      '<p class="note-q">Consommations moyennes d’appareils récents pour une famille de 4. Les sèche-serviettes ne comptent que les jours où le chauffage a tourné (Netatmo) ; l’éclairage compte plus en hiver. Pas de ballon électrique : l’eau chaude vient de la chaudière gaz, que Netatmo ne compte que pour le chauffage. La piscine et le sauna sont mesurés à part.</p>';
     var keep = sheet.scrollTop; sheet.innerHTML = '<div class="sh-in">' + h + '</div>'; sheet.scrollTop = keep;
   }
   function stepEnergy(dir) {
