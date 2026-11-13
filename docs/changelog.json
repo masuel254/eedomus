@@ -1,7 +1,16 @@
 {
-  "version": "2.17.5",
+  "version": "2.17.6",
   "date": "2026-11-13",
   "releases": [
+    {
+      "version": "2.17.6",
+      "date": "2026-11-13",
+      "time": "23:41",
+      "title": "Réglages uniquement sur l’accueil",
+      "changes": [
+        "« Réglages et nouveautés » est retiré du bas de l’onglet Plus : on y accède par le rond en haut à droite de l’accueil"
+      ]
+    },
     {
       "version": "2.17.5",
       "date": "2026-11-13",
@@ -853,5 +862,5 @@
     "Révoquer à la fin : mot de passe TotalEnergies",
     "Révoquer à la fin : mot de passe EDF"
   ],
-  "time": "23:37"
+  "time": "23:41"
 }
