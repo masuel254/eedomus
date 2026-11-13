@@ -103,6 +103,7 @@ const CODE_CFG = {
     seed: createHash('sha256').update(env.NETATMO_REFRESH_TOKEN.split('|')[0]).digest('hex').slice(0, 16),
   } : null,
   deployedAt: Date.now(),
+  qd: env.QUANDIFY_EMAIL ? { email: env.QUANDIFY_EMAIL, password: env.QUANDIFY_PASSWORD } : null,
   push: env.VAPID_PRIVATE ? { d: env.VAPID_PRIVATE, pub: env.VAPID_PUBLIC, sub: env.APP_URL || 'https://example.invalid/' } : null,
   iq: env.IAQUA_EMAIL ? { email: env.IAQUA_EMAIL, password: env.IAQUA_PASSWORD, exo: env.IAQUA_EXO_SN || null, hpm: env.IAQUA_HPM_SN || null } : null,
   im: env.IMOU_APP_ID ? { id: env.IMOU_APP_ID, secret: env.IMOU_APP_SECRET } : null,
@@ -787,8 +788,52 @@ async function gasDays() {
   SD.gas.at = Date.now(); if (full) SD.gas.full = Date.now();
   return SD.gas;
 }
+// ---------------- Quandify (compteur d'eau Water Grip) ----------------
+// API de l'appli Quandify (celle de leur intégration Home Assistant officielle et de leur portail web).
+async function qdLogin(force) {
+  SD.qd = SD.qd || {};
+  if (!force && SD.qd.idt && SD.qd.exp > Date.now() + 120000) return SD.qd;
+  let L = null;
+  if (SD.qd.rt && !force) { try { L = parse(await helpers.httpRequest({ method: 'POST', url: 'https://auth.prod.quandify.com/login/refresh', json: false, timeout: 15000, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refresh_token: SD.qd.rt }) })); } catch (e) { L = null; } }
+  if (!L || !L.id_token) L = parse(await helpers.httpRequest({ method: 'POST', url: 'https://auth.prod.quandify.com/login/email', json: false, timeout: 15000, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: CFG.qd.email, password: CFG.qd.password }) }));
+  if (!L || !L.id_token) throw fail(502, 'quandify_auth');
+  SD.qd.idt = L.id_token; SD.qd.rt = L.refresh_token || SD.qd.rt; SD.qd.org = L.organization_id || SD.qd.org;
+  SD.qd.exp = Date.now() + Number(L.expires_in || 3600) * 1000;
+  return SD.qd;
+}
+async function qd(path, query, retry) {
+  const Q = await qdLogin(false);
+  const qs = query ? '?' + Object.keys(query).map((k) => k + '=' + encodeURIComponent(query[k])).join('&') : '';
+  try { return parse(await helpers.httpRequest({ method: 'GET', url: 'https://api.prod.quandify.com/organization/' + Q.org + '/' + path + qs, json: false, timeout: 20000, headers: { Authorization: 'Bearer ' + Q.idt } })); }
+  catch (e) {
+    const st = String(e.httpCode || (e.response && e.response.status) || '');
+    if (!retry && (st === '401' || st === '403')) { await qdLogin(true); return qd(path, query, true); }
+    throw e;
+  }
+}
+// Eau : litres par jour gardés en mémoire (1re lecture depuis l'installation, ensuite les 3 derniers jours ; tout relu 1 fois par semaine)
+async function waterDays() {
+  SD.water = SD.water || { d: {}, at: 0, full: 0 };
+  if (SD.water.at > Date.now() - 10 * 60000) return SD.water;
+  if (!SD.water.dev || SD.water.devAt < Date.now() - 86400000) {
+    const L = await qd('devices/');
+    const dv = ((L && L.data) || []).filter((x) => !x.deleted_at);
+    SD.water.dev = dv.map((x) => ({ id: x.id, node: x.node_id, since: Math.floor(Number(x.created_at) || 0) }));
+    SD.water.devAt = Date.now();
+  }
+  const now = Math.floor(Date.now() / 1000), full = !(SD.water.full > Date.now() - 7 * 86400000);
+  const d = {};
+  for (const dev of SD.water.dev) {
+    const from = full ? Math.max(dev.since - 86400, now - 800 * 86400) : now - 3 * 86400;
+    const rows = await qd('devices/' + dev.id + '/consumption', { truncate: 'day', timezone: 'Europe/Paris', from, to: now });
+    (Array.isArray(rows) ? rows : []).forEach((r) => { const k = enKey(Number(r.ts) * 1000 + 3600000).slice(0, 8); d[k] = Math.round(((d[k] || 0) + Number(r.value || 0)) * 10) / 10; });
+  }
+  Object.assign(SD.water.d, d);
+  SD.water.at = Date.now(); if (full) SD.water.full = Date.now();
+  return SD.water;
+}
 function costCfg() {
-  SD.cost = Object.assign({ gasPrice: 0.12, kw: 10, kwSrc: 'défaut', elecPrice: 0.20, budget: 250, meters: [] }, SD.cost || {});
+  SD.cost = Object.assign({ gasPrice: 0.12, kw: 10, kwSrc: 'défaut', elecPrice: 0.20, waterPrice: 5.13, budget: 250, meters: [] }, SD.cost || {});
   return SD.cost;
 }
 // Calibrage : 2 relevés du compteur gaz (m³) + heures de chauffe entre les deux = puissance moyenne réelle
@@ -1127,7 +1172,7 @@ try {
   if (body.action === 'cost' || body.action === 'cost.cfg' || body.action === 'cost.meter') {
     const C = costCfg();
     if (body.action === 'cost.cfg') {
-      const lim = { gasPrice: [0.03, 0.5], kw: [2, 40], elecPrice: [0.05, 0.6], budget: [10, 2000] };
+      const lim = { gasPrice: [0.03, 0.5], kw: [2, 40], elecPrice: [0.05, 0.6], waterPrice: [0.5, 20], budget: [10, 2000] };
       Object.keys(lim).forEach((k) => { const v = Number(body[k]); if (body[k] != null && isFinite(v) && v >= lim[k][0] && v <= lim[k][1]) { C[k] = Math.round(v * 1000) / 1000; if (k === 'kw') C.kwSrc = 'manuel'; } });
       // nombre de chaque appareil non mesuré (estimation de l'électricité)
       if (body.appl && typeof body.appl === 'object') { C.appl = C.appl || {}; Object.keys(body.appl).slice(0, 40).forEach((id) => { const q = Number(body.appl[id]); if (/^[a-z0-9]{2,12}$/.test(id) && Number.isInteger(q) && q >= 0 && q <= 60) C.appl[id] = q; }); }
@@ -1145,10 +1190,13 @@ try {
     }
     let gasErr = null;
     if (CFG.nt) { try { await gasDays(); } catch (e) { gasErr = String(e && e.message || e).slice(0, 80); } }
+    let waterErr = null;
+    if (CFG.qd) { try { await waterDays(); } catch (e) { waterErr = String(e && e.message || e).slice(0, 80); } }
     const calib = costCalibrate();
     const elec = {};
     if (CFG.tu) Object.keys(CFG.tu.devices).forEach((k) => { const s = enSeries(k); const o = {}; s.days.forEach((x) => { o[x.k] = x.kwh; }); elec[k] = { days: o, since: s.since }; });
-    return reply(200, { ok: true, cfg: { gasPrice: C.gasPrice, kw: C.kw, kwSrc: C.kwSrc, elecPrice: C.elecPrice, budget: C.budget, meters: C.meters, appl: C.appl || {} }, calib, gas: { days: SD.gas ? SD.gas.d : {}, err: gasErr }, elec });
+    return reply(200, { ok: true, cfg: { gasPrice: C.gasPrice, kw: C.kw, kwSrc: C.kwSrc, elecPrice: C.elecPrice, waterPrice: C.waterPrice, budget: C.budget, meters: C.meters, appl: C.appl || {} },
+      water: CFG.qd ? { days: SD.water ? SD.water.d : {}, err: waterErr } : null, calib, gas: { days: SD.gas ? SD.gas.d : {}, err: gasErr }, elec });
   }
   // ---- Notifications ----
   if (String(body.action || '').startsWith('push.')) {

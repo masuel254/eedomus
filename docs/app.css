@@ -727,3 +727,4 @@ svg.gsvg { display: block; width: 100%; height: auto; user-select: none; -webkit
 .cost-list.appl .row > span:first-child { grid-column: auto; }
 .cost-list small.ay { color: var(--tx); opacity: .8; margin-top: 2px; }
 .cost-list small.ay { display: block; color: var(--ok); opacity: 1; font-weight: 600; }
+.cost-hero .crc small + small { margin-top: 2px; font-size: 11px; }
