@@ -1,7 +1,17 @@
 {
-  "version": "2.13.2",
+  "version": "2.14.0",
   "date": "2026-11-13",
   "releases": [
+    {
+      "version": "2.14.0",
+      "date": "2026-11-13",
+      "time": "17:59",
+      "title": "Accès rapide : boutons au lieu de glisser",
+      "changes": [
+        "Portail : bouton « Actionner » ; Garage : « Ouvrir » ou « Fermer » selon l’état ; Sauna et Alarme : ON / OFF",
+        "Un seul appui suffit, plus besoin de glisser"
+      ]
+    },
     {
       "version": "2.13.2",
       "date": "2026-11-13",
@@ -705,5 +715,5 @@
     "Révoquer à la fin : mot de passe TotalEnergies",
     "Révoquer à la fin : mot de passe EDF"
   ],
-  "time": "17:34"
+  "time": "17:59"
 }

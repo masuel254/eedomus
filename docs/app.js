@@ -408,7 +408,7 @@
 
   // ---------- Glisser pour confirmer ----------
   // SLIDE = { key, where } : curseur affiché sous une tuile ou une ligne. Clés : gate, garage-1, garage-2, alarm-on, alarm-off, sauna-on
-  var SLIDE = null, slideT = null;
+  var SLIDE = null, slideT = null, qBusy = {};
   var SLIDE_LABEL = {
     gate: 'Glisser pour actionner le portail', garage: 'Ouvrir / fermer la porte de garage', 'garage-1': 'Glisser pour ouvrir le garage', 'garage-2': 'Glisser pour fermer le garage',
     'alarm-on': "Glisser pour activer l'alarme", 'alarm-off': "Glisser pour désactiver l'alarme", 'sauna-on': 'Glisser pour allumer le sauna'
@@ -660,12 +660,17 @@
     var tile = function (k, ic, name, st, on) {
       return '<button class="q' + (on ? ' on' : '') + (SLIDE && SLIDE.where === 'home' && SLIDE.key.indexOf(k) === 0 ? ' sel' : '') + '" data-qa="' + k + '"><span class="ic">' + icon(ic) + '</span>' + name + '<small>' + esc(st) + '</small></button>';
     };
-    h += '<div class="lbl">Accès rapide</div><div class="quick">' +
-      tile('gate', 'gate', 'Portail', gate.text || '—', gateOpen) +
-      tile('garage', 'garage', 'Garage', GAR ? (GAR.state === 'open' ? 'Ouverte' : GAR.state === 'closed' ? 'Fermée' : 'À vérifier') : '…', GAR && GAR.state === 'open') +
-      tile('sauna', 'flame', 'Sauna', !sd ? '…' : son ? (sd.power > 50 ? watts(sd.power) : 'Allumé') : 'Éteint', son) +
-      tile('alarm', 'shield', 'Alarme', armed ? 'Activée' : 'Off', armed) +
-      '</div>' + slideHTML('home');
+    // Accès rapide : de vrais boutons, un seul appui (plus besoin de glisser)
+    var qrow = function (ic, cls, name, st, ctl) { return '<div class="qrow"><span class="ic ' + cls + '">' + icon(ic) + '</span><span class="qn"><b>' + name + '</b><small>' + esc(st) + '</small></span>' + ctl + '</div>'; };
+    var qbtn = function (k, label) { return '<button class="qbtn' + (qBusy[k] ? ' busy' : '') + '" data-qgo="' + k + '">' + (qBusy[k] ? 'Envoi…' : label) + '</button>'; };
+    var qseg = function (k, on, cls) { return '<span class="seg2 qseg"><button class="' + (on ? 'on ' + cls : '') + '" data-qgo="' + k + '-on">ON</button><button class="' + (!on ? 'on' : '') + '" data-qgo="' + k + '-off">OFF</button></span>'; };
+    var gst = GAR ? GAR.state : null;
+    h += '<div class="lbl">Accès rapide</div><div class="qlist">' +
+      qrow('gate', 'cool', 'Portail', gate.text || '—', qbtn('gate', 'Actionner')) +
+      qrow('garage', 'cool', 'Garage', gst === 'open' ? 'Ouverte' : gst === 'closed' ? 'Fermée' : GAR ? 'À vérifier' : '…', qbtn('garage', gst === 'open' ? 'Fermer' : gst === 'closed' ? 'Ouvrir' : 'Ouvrir / fermer')) +
+      qrow('flame', 'warm', 'Sauna', !sd ? '…' : son ? (sd.power > 50 ? watts(sd.power) : 'Allumé') : 'Éteint', qseg('sauna', son, 'warm')) +
+      qrow('shield', armed ? 'okc' : 'cool', 'Alarme', armed ? 'Activée' : 'Off', qseg('alarm', armed, 'ok')) +
+      '</div>';
     // Favoris
     var salon = findRoom('salon'), lit = salon ? salon.items.filter(function (it) { return it.type === 'light' && isOn(it); }).length : 0;
     var shut = [], allRooms = [];
@@ -1940,6 +1945,14 @@
     if ((b = e.target.closest('[data-choice]'))) { var cp = b.dataset.choice.split(':'); return send(+cp[0], +cp[1]); }
     if ((b = e.target.closest('[data-graph]'))) return openGraph(b.dataset.graph);
     if ((b = e.target.closest('[data-nt-homeroom]'))) return resetRoom(b.dataset.ntHomeroom);
+    if ((b = e.target.closest('[data-qgo]'))) {
+      var qg = b.dataset.qgo;
+      if (b.classList.contains('on') || qBusy[qg]) return; // déjà dans cet état / déjà envoyé
+      if (qg === 'sauna-on') return saunaSet(true);
+      if (qg === 'sauna-off') return saunaSet(false);
+      qBusy[qg] = true; setTimeout(function () { delete qBusy[qg]; render(); }, 2500);
+      return doSlide(qg); // gate, garage, alarm-on, alarm-off
+    }
     if ((b = e.target.closest('[data-qa]'))) {
       var qa = b.dataset.qa;
       if (qa === 'gate') return openSlide('gate', 'home');

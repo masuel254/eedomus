@@ -800,3 +800,19 @@ svg.gsvg { display: block; width: 100%; height: auto; user-select: none; -webkit
 .toast { z-index: 60; }
 .gc-msg { background: rgba(46,204,64,.14); color: var(--ok); border-radius: 12px; padding: 10px 12px; font-size: 13px; line-height: 1.4; }
 .gc-msg.err { background: rgba(255,90,90,.14); color: var(--warn); }
+
+/* accès rapide : liste avec boutons (un seul appui) */
+.qlist { background: var(--s1); border: 1px solid var(--ln); border-radius: 20px; margin: 0 16px; }
+.qrow { display: grid; grid-template-columns: 42px 1fr 132px; gap: 12px; align-items: center; padding: 12px 14px; }
+.qrow + .qrow { border-top: 1px solid var(--ln); }
+.qrow .ic { width: 42px; height: 42px; border-radius: 50%; background: var(--s2, #20242B); display: flex; align-items: center; justify-content: center; color: var(--cool); }
+.qrow .ic.warm { color: #FF8A5B; } .qrow .ic.okc { color: var(--ok); }
+.qrow .ic svg { width: 22px; height: 22px; }
+.qn b { display: block; font-size: 15px; } .qn small { color: var(--mu); font-size: 12.5px; }
+.qbtn { width: 100%; text-align: center; background: var(--cool); color: #0B1424; border-radius: 14px; padding: 12px 0; font-weight: 800; font-size: 14px; }
+.qbtn.busy { opacity: .6; }
+.qbtn:active, .qseg button:active { transform: scale(.96); }
+.qseg { background: var(--bg); }
+.qseg button { font-size: 14px; font-weight: 800; padding: 9px 0; }
+.qseg button.on.ok { background: var(--ok); color: #06210F; }
+.qseg button.on.warm { background: #FF8A5B; color: #1A0B04; }
