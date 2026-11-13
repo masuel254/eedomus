@@ -495,7 +495,8 @@
     var c = LOGS[kind]; if (c && (c.loading || Date.now() - c.at < ttl)) return;
     LOGS[kind] = { loading: true, at: Date.now(), data: c ? c.data : null };
     api({ action: 'logs', kind: kind }).then(function (j) {
-      LOGS[kind] = { at: Date.now(), data: j }; if (j.garage) GAR = j.garage;
+      LOGS[kind] = { at: j.partial ? Date.now() - 105000 : Date.now(), data: j }; if (j.garage) GAR = j.garage; // incomplet : on redemande ~15 s plus tard
+      if (j.partial) setTimeout(function () { loadLogs(kind, true); }, 16000);
       if (!busy()) render(); if (logsView === kind && !sheet.hidden) renderLogs();
     }).catch(function () { LOGS[kind] = { at: Date.now() - 90000, data: c ? c.data : null }; if (!quiet) toast('eedomus ne répond pas, réessaie', true); });
   }
@@ -561,7 +562,8 @@
     if (!d) h += '<p class="muted">Lecture de l\'historique eedomus…</p>';
     else {
       var evs = d.events.filter(function (e) { return !(kind === 'doors' && /en attente/i.test(e.text)); });
-      if (!evs.length) h += '<p class="muted">Aucun changement sur les 3 derniers jours.</p>';
+      if (d.partial) h += '<p class="muted">eedomus n’a pas tout envoyé, nouvel essai dans quelques secondes…</p>';
+      else if (!evs.length) h += '<p class="muted">Aucun changement sur les 3 derniers jours.</p>';
       var cur = '';
       evs.forEach(function (e) {
         var dl = dayLabel(e.date); if (dl !== cur) { if (cur) h += '</div>'; h += '<div class="lday">' + esc(dl) + '</div><div class="card2 flat logs">'; cur = dl; }

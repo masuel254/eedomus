@@ -1083,19 +1083,26 @@ try {
     let events;
     if (c && c.at > Date.now() - 60000) events = c.events;
     else {
-      events = [];
+      events = []; let failed = 0;
       const fmtD = (d) => { const p = {}; new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).formatToParts(d).forEach((x) => { p[x.type] = x.value; }); return p.year + '-' + p.month + '-' + p.day + ' ' + p.hour + ':' + p.minute + ':' + p.second; };
       for (const it of list) {
         // eedomus impose 0,5 s entre deux requêtes
         await new Promise((ok) => setTimeout(ok, 550));
-        const r = await eedomus('get', 'action=periph.history&periph_id=' + it.id + '&start_date=' + encodeURIComponent(fmtD(new Date(Date.now() - 72 * 3600000))) + '&end_date=' + encodeURIComponent(fmtD(new Date())));
-        const h = (r.success === 1 && r.body && r.body.history) || [];
+        const q = 'action=periph.history&periph_id=' + it.id + '&start_date=' + encodeURIComponent(fmtD(new Date(Date.now() - 72 * 3600000))) + '&end_date=' + encodeURIComponent(fmtD(new Date()));
+        let r = null;
+        // eedomus refuse parfois (trop de requêtes en même temps que l'appli) : on réessaie calmement
+        for (let k = 0; k < 3 && !(r && r.success === 1); k++) { if (k) await new Promise((ok) => setTimeout(ok, 1500 * k)); try { r = await eedomus('get', q); } catch (e) { r = null; } }
+        if (!r || r.success !== 1) failed++;
+        const h = (r && r.success === 1 && r.body && r.body.history) || [];
         h.forEach((x) => events.push({ id: it.id, name: it.name, text: String(x[0]), date: x[1] }));
       }
       events.sort((x, y) => (x.date < y.date ? 1 : -1));
-      SD.logs[kind] = { at: Date.now(), events };
+      // en cas d'échec, on ne garde pas un journal vide en mémoire
+      if (!failed) SD.logs[kind] = { at: Date.now(), events };
+      else if (c && c.events && c.events.length && !events.length) events = c.events;
+      SD.logsFail = SD.logsFail || {}; SD.logsFail[kind] = failed;
     }
-    const out = { ok: true, kind, events };
+    const out = { ok: true, kind, events, partial: !!(SD.logsFail && SD.logsFail[kind]) };
     if (kind === 'doors') out.garage = garageState(events);
     return reply(200, out);
   }
