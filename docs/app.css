@@ -862,3 +862,8 @@ body { padding: 0 !important; }
 /* température extérieure sur la carte chauffage */
 .hc-mid .big em.hc-out { display: flex; align-items: center; gap: 5px; color: var(--mu); margin-top: 5px; }
 .hc-out .wic { flex: none; }
+
+/* détecteurs de fumée */
+.row.smoke-on { background: rgba(248,113,113,.12); }
+.row .ic.bad { color: var(--warn); }
+#app > .note-q { padding: 0 20px; }

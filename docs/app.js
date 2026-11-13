@@ -657,7 +657,8 @@
     var closed = !openDoors && !gateOpen && !garOpen && !garUnk;
     var what = gateOpen ? 'Portail ouvert' : garOpen ? 'Garage ouvert' : garUnk && !openDoors ? 'Garage à vérifier' : openDoors + ' porte' + (openDoors > 1 ? 's' : '') + ' ouverte' + (openDoors > 1 ? 's' : '');
     var wl = (loadWater(false), waterLeak());
-    var h = '<div class="status">' + (wl ? '<button class="bad" data-goto="more">💧 Fuite d’eau !</button>' : '') + '<button class="' + (closed ? 'ok' : 'bad') + '" data-logs="doors">● ' + (closed ? 'Tout est fermé' : what) + '</button>' +
+    var sm = smokeOn();
+    var h = '<div class="status">' + (sm.length ? '<button class="bad" data-goto="alarm">🔥 Fumée : ' + esc(sm.map(function (x) { return x.name; }).join(', ')) + ' !</button>' : '') + (wl ? '<button class="bad" data-goto="more">💧 Fuite d’eau !</button>' : '') + '<button class="' + (closed ? 'ok' : 'bad') + '" data-logs="doors">● ' + (closed ? 'Tout est fermé' : what) + '</button>' +
       '<button class="' + (armed ? 'ok' : '') + '" data-logs="alarm">' + icon('shield') + (armed ? 'Alarme activée' : 'Alarme désactivée') + '</button>' +
       '<button data-logs="people">' + icon(n ? 'home' : 'leave') + (n ? n + ' personne' + (n > 1 ? 's' : '') : 'Personne') + '</button></div>';
     // Chauffage
@@ -850,6 +851,18 @@
     else { var dd = Math.round(m / 1440); dur = dd < 60 ? dd + ' jours' : Math.round(dd / 30) + ' mois'; }
     return when + ' · depuis ' + dur;
   }
+  // Détecteurs de fumée (eedomus : 0 = OK, 100 = alarme)
+  function smokeItems() { return ((CFG.alarm || {}).items || []).filter(function (it) { return it.type === 'smoke'; }); }
+  function smokeOn() { return smokeItems().filter(function (it) { return String((STATES[it.id] || {}).value) === '100'; }); }
+  function smokeHTML() {
+    var items = smokeItems(); if (!items.length) return '';
+    return '<div class="lbl">Détecteurs de fumée</div><div class="card2 flat">' + items.map(function (it) {
+      var st = STATES[it.id] || {}, v = String(st.value == null ? '' : st.value), on = v === '100', none = v === '';
+      return '<div class="row' + (on ? ' smoke-on' : '') + '"><span class="ic' + (on ? ' bad' : '') + '">' + icon('flame') + '</span><span><b>' + esc(it.name) + '</b><small>' +
+        esc(none ? 'Aucun signal reçu par eedomus · à vérifier' : (it.sub ? it.sub + ' · ' : '') + since(it.id)) + '</small></span>' +
+        '<span class="' + (on ? 'bad' : none ? 'mu2' : 'ok') + '">' + (on ? 'FUMÉE !' : none ? '—' : 'OK') + '</span></div>';
+    }).join('') + '</div><p class="note-q">En cas de fumée, une notification part tout de suite sur les iPhone (et un rappel toutes les 3 minutes tant que l’alarme dure).</p>';
+  }
   function alarmHTML() {
     var A = CFG.alarm || { items: [] }, v = num(A.status), st = ALARM_STATE[v] || [(STATES[A.status] || {}).text || '—', ''], armed = v != null && v !== 0;
     var h = '<div class="acard ' + st[1] + '"><span class="aic">' + icon('shield') + '</span><span><b>Alarme ' + esc(st[0].toLowerCase()) + '</b><small>' + esc(since(A.status)) + '</small></span></div>';
@@ -865,7 +878,7 @@
       });
       return '<div class="lbl">' + title + '</div><div class="card2 flat">' + items.map(rowHTML).join('') + '</div>';
     };
-    h += grp('mode', 'Paramétrage') + grp('zones', 'Zones surveillées') + grp('motion', 'Détecteurs de mouvement');
+    h += smokeHTML() + grp('mode', 'Paramétrage') + grp('zones', 'Zones surveillées') + grp('motion', 'Détecteurs de mouvement');
     h += '<p class="note-q">Les réglages s\'appliquent tout de suite. Seule l\'activation de l\'alarme demande de glisser le bouton.</p>';
     return h;
   }
@@ -2466,11 +2479,13 @@
     // toucher la notification « garage » ouvre le journal des portes
     navigator.serviceWorker.addEventListener('message', function (ev) {
       if (ev.data && /logs=doors/.test(ev.data.open || '')) openLogs('doors');
+      if (ev.data && /#smoke/.test(ev.data.open || '')) { TAB = 'alarm'; app.scrollTop = 0; render(); }
       if (ev.data && /#meteo/.test(ev.data.open || '')) { TAB = 'more'; render(); openMeteo(); loadMeteo(true); }
       if (ev.data && /#water/.test(ev.data.open || '')) { TAB = 'more'; loadWater(true); app.scrollTop = 0; render(); }
     });
   }
   if (/logs=doors/.test(location.hash)) setTimeout(function () { openLogs('doors'); }, 600);
+  if (/#smoke/.test(location.hash)) TAB = 'alarm';
   if (/#meteo/.test(location.hash)) { TAB = 'more'; setTimeout(function () { openMeteo(); loadMeteo(true); }, 600); }
   if (/#water/.test(location.hash)) { TAB = 'more'; setTimeout(function () { loadWater(true); }, 300); }
 })();

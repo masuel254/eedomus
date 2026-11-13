@@ -457,6 +457,27 @@
         "name": "Abri de piscine",
         "type": "motion",
         "group": "motion"
+      },
+      {
+        "id": 3538738,
+        "name": "Cellier",
+        "sub": "Alarme Incendie 1",
+        "type": "smoke",
+        "group": "smoke"
+      },
+      {
+        "id": 3538741,
+        "name": "Étage",
+        "sub": "Alarme Incendie 2",
+        "type": "smoke",
+        "group": "smoke"
+      },
+      {
+        "id": 846110,
+        "name": "Cellier (ancien détecteur)",
+        "sub": "Détecteur Fumée",
+        "type": "smoke",
+        "group": "smoke"
       }
     ]
   },

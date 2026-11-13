@@ -1,7 +1,18 @@
 {
-  "version": "2.16.3",
+  "version": "2.17.0",
   "date": "2026-11-13",
   "releases": [
+    {
+      "version": "2.17.0",
+      "date": "2026-11-13",
+      "time": "22:57",
+      "title": "Détecteurs de fumée",
+      "changes": [
+        "Onglet Alarme : nouvelle section Détecteurs de fumée (Cellier, Étage, ancien détecteur du cellier) avec leur état",
+        "En cas de fumée : notification immédiate sur l’iPhone, rappel toutes les 3 minutes, et pastille rouge sur l’accueil",
+        "Le détecteur de l’étage n’a jamais envoyé de signal à eedomus : il est signalé « à vérifier »"
+      ]
+    },
     {
       "version": "2.16.3",
       "date": "2026-11-13",
@@ -796,5 +807,5 @@
     "Révoquer à la fin : mot de passe TotalEnergies",
     "Révoquer à la fin : mot de passe EDF"
   ],
-  "time": "22:49"
+  "time": "22:57"
 }

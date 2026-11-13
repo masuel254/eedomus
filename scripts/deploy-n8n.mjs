@@ -112,6 +112,7 @@ const CODE_CFG = {
   // « nom dans eedomus = prénom affiché », gardé dans .env (pas dans les fichiers publics)
   // position de la météo (commune), gardée dans .env : METEO_POS=lat,lon,Nom
   meteoPos: env.METEO_POS ? (([la, lo, ...n]) => ({ lat: Number(la), lon: Number(lo), name: n.join(',').trim() || null }))(env.METEO_POS.split(',')) : null,
+  smoke: ((cfg.alarm && cfg.alarm.items) || []).filter((t) => t.type === 'smoke').map((t) => ({ id: String(t.id), name: t.name })),
   names: Object.fromEntries(String(env.PEOPLE_NAMES || '').split(',').map((x) => x.split('=').map((s) => s.trim())).filter((x) => x[0] && x[1])),
   qd: env.QUANDIFY_EMAIL ? { email: env.QUANDIFY_EMAIL, password: env.QUANDIFY_PASSWORD } : null,
   push: env.VAPID_PRIVATE ? { d: env.VAPID_PRIVATE, pub: env.VAPID_PUBLIC, sub: env.APP_URL || 'https://example.invalid/' } : null,
@@ -504,6 +505,28 @@ async function meteoWatch() {
     M.windKey = w.key;
     const when = meteoWhen(w.first, d.hours.length ? d.hours[0].t.slice(0, 10) : w.key);
     await pushNotify({ tag: 'meteo', title: 'Rafales à ' + w.gust + ' km/h prévues', body: when.charAt(0).toUpperCase() + when.slice(1) + ' · replier la pergola et bien fermer le dôme de la piscine' });
+  }
+}
+// ---------------- Détecteurs de fumée ----------------
+// Lus toutes les 30 s (un seul appel eedomus pour tous). Passage à 100 = alarme : notification immédiate,
+// rappel toutes les 3 min tant que ça dure, puis message de fin d'alerte.
+async function smokeWatch() {
+  const list = CFG.smoke || [];
+  if (!list.length) return;
+  const r = await eedomus('get', 'action=periph.caract&periph_id=' + list.map((x) => x.id).join(','));
+  if (r.success !== 1) return;
+  const S = SD.smoke = SD.smoke || {};
+  const hm = () => localNow().slice(11, 16).replace(':', 'h');
+  for (const b of [].concat(r.body)) {
+    const it = list.find((x) => x.id === String(b.periph_id)); if (!it) continue;
+    const on = String(b.last_value) === '100', p = S[it.id] || {};
+    if (on && (!p.on || (p.remind && Date.now() - p.remind > 180000))) {
+      await pushNotify({ tag: 'smoke', title: '🔥 Alerte fumée : ' + it.name, body: (p.on ? 'Toujours en alarme' : 'Détecteur déclenché à ' + hm()) + ' · vérifie la maison tout de suite !', badge: 1 });
+      S[it.id] = { on: true, since: p.on ? p.since : Date.now(), remind: Date.now() };
+    } else if (!on && p.on) {
+      await pushNotify({ tag: 'smoke', title: 'Fin d’alerte fumée : ' + it.name, body: 'Le détecteur est revenu à la normale à ' + hm(), badge: 0 });
+      S[it.id] = { on: false };
+    }
   }
 }
 async function ntCameras(fresh) {
@@ -1341,6 +1364,7 @@ try {
     try { await waterWatch(false); } catch (e) {}
     try { await presenceCheck(false); } catch (e) {}
     try { await meteoWatch(); } catch (e) {}
+    try { await smokeWatch(); } catch (e) {}
     let gu = null; try { gu = await garageCamDue(); } catch (e) {}
     return gu ? [{ json: { garageUrl: gu } }] : []; // aucune réponse HTTP à envoyer
   }
