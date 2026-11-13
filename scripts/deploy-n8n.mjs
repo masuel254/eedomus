@@ -386,9 +386,42 @@ async function ntHeating(fresh) {
   // Mode général de la maison : déduit des pièces (away / hg / schedule)
   const modes = data.rooms.map((r) => r.mode);
   data.mode = modes.length && modes.every((m) => m === 'away') ? 'away' : modes.length && modes.every((m) => m === 'hg') ? 'hg' : 'schedule';
+  data.presence = presenceOut();
   SD.ntHeat = { at: Date.now(), data };
   return data;
 }
+// ---------------- Chauffage « Sur présence » ----------------
+// Plus personne à la maison (présences eedomus) → Netatmo en mode Absent ; quelqu'un revient → planning « Défaut ».
+// L'absence doit être vue 2 fois de suite (≈ 1 min) pour éviter un aller-retour si un téléphone perd le Wi-Fi un instant.
+async function presenceCheck(force) {
+  const P = SD.presence = SD.presence || { on: false, state: null, at: null, log: [] };
+  if (!P.on || !CFG.nt) return P;
+  if (!force && P.checkAt && P.checkAt > Date.now() - 55000) return P;
+  P.checkAt = Date.now();
+  const ids = (CFG.logs.people || []).map((x) => x.id);
+  if (!ids.length) return P;
+  const r = await eedomus('get', 'action=periph.caract&periph_id=' + ids.join(','));
+  if (r.success !== 1) return P;
+  const anyone = [].concat(r.body).some((x) => String(x.last_value) !== '0' && x.last_value !== '' && x.last_value != null);
+  const want = anyone ? 'home' : 'away';
+  if (want === 'away' && P.state !== 'away' && !force) { P.awaySeen = (P.awaySeen || 0) + 1; if (P.awaySeen < 2) return P; }
+  P.awaySeen = 0;
+  if (want === P.state && !force) return P;
+  const H = await ntHomes();
+  if (!H.heat) return P;
+  if (want === 'away') await nt('POST', 'setthermmode', { home_id: H.heat.id, mode: 'away' });
+  else {
+    await nt('POST', 'setthermmode', { home_id: H.heat.id, mode: 'schedule' });
+    const def = H.heat.schedules.find((s) => /^d[ée]faut$/i.test(String(s.name).trim())) || H.heat.schedules.find((s) => s.isDefault);
+    const sel = H.heat.schedules.find((s) => s.selected);
+    if (def && (!sel || sel.id !== def.id)) { await nt('POST', 'switchhomeschedule', { home_id: H.heat.id, schedule_id: def.id }); SD.ntHomes = null; }
+  }
+  P.state = want; P.at = localNow();
+  P.log = [{ state: want, date: P.at }].concat(P.log || []).slice(0, 30);
+  SD.ntHeat = null;
+  return P;
+}
+function presenceOut() { const P = SD.presence || {}; return { on: !!P.on, state: P.state || null, at: P.at || null, log: (P.log || []).slice(0, 10) }; }
 async function ntCameras(fresh) {
   if (!fresh && SD.ntCams && SD.ntCams.at > Date.now() - 30000) return SD.ntCams.data;
   const H = await ntHomes();
@@ -1199,6 +1232,13 @@ async function netatmo(b) {
     SD.ntHomes = null; // le planning « sélectionné » a changé
     return ntHeating(true);
   }
+  if (b.action === 'nt.presence') {
+    SD.presence = SD.presence || { on: false, state: null, at: null, log: [] };
+    SD.presence.on = !!b.on;
+    SD.presence.state = null; SD.presence.awaySeen = 0;
+    if (SD.presence.on) await presenceCheck(true); // on applique tout de suite selon qui est là
+    return ntHeating(true);
+  }
   if (b.action === 'nt.mode') {
     if (!['schedule', 'away', 'hg'].includes(b.mode)) throw fail(403, 'not_allowed');
     const H = await ntHomes();
@@ -1214,6 +1254,7 @@ try {
     // Porte de garage : photo de la caméra si c'est le moment (toutes les 5 min, ou juste après une commande / une confirmation)
     try { await garageAlert(); } catch (e) {}
     try { await waterWatch(false); } catch (e) {}
+    try { await presenceCheck(false); } catch (e) {}
     let gu = null; try { gu = await garageCamDue(); } catch (e) {}
     return gu ? [{ json: { garageUrl: gu } }] : []; // aucune réponse HTTP à envoyer
   }

@@ -1,7 +1,17 @@
 {
-  "version": "2.11.0",
+  "version": "2.12.0",
   "date": "2026-11-13",
   "releases": [
+    {
+      "version": "2.12.0",
+      "date": "2026-11-13",
+      "time": "14:28",
+      "title": "Chauffage sur présence",
+      "changes": [
+        "Carte Chauffage de l’accueil : nouveau réglage « Sur présence » Oui / Non",
+        "Oui : dès que plus personne n’est à la maison (présences eedomus, confirmé après ≈ 1 min), Netatmo passe en mode Absent ; au retour de quelqu’un, retour au planning « Défaut »"
+      ]
+    },
     {
       "version": "2.11.0",
       "date": "2026-11-13",
@@ -626,5 +636,5 @@
     "Révoquer à la fin : mot de passe TotalEnergies",
     "Révoquer à la fin : mot de passe EDF"
   ],
-  "time": "14:22"
+  "time": "14:28"
 }

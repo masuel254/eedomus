@@ -323,6 +323,13 @@
 
   // ---------- Rendu : chauffage (Netatmo) ----------
   var MODE_LABEL = { schedule: 'Planning', home: 'Planning', manual: 'Manuel', max: 'Boost', away: 'Absent', hg: 'Hors-gel', off: 'Arrêt' };
+  // Chauffage « Sur présence » : Oui / Non
+  function presenceHTML() {
+    var P = (NT && NT.presence) || { on: false };
+    var sub = !P.on ? 'Non : le chauffage suit le planning' : P.state === 'away' ? 'Personne à la maison · mode Absent' + (P.at ? ' depuis ' + sinceDate(P.at).replace(/ · depuis.*/, '') : '') : P.state === 'home' ? 'Quelqu’un est là · planning Défaut' + (P.at ? ' (' + sinceDate(P.at).replace(/ · depuis.*/, '') + ')' : '') : 'Absent quand plus personne, Défaut au retour';
+    return '<div class="hc-pres"><span><b>Sur présence</b><small>' + esc(sub) + '</small></span>' +
+      '<div class="seg2"><button class="' + (P.on ? 'on' : '') + '" data-presence="1">Oui</button><button class="' + (!P.on ? 'on' : '') + '" data-presence="0">Non</button></div></div>';
+  }
   function heroHTML() {
     var h = CFG.heating;
     var row3 = '<div class="row3"><span><b>' + fmt(num(h.outside), 1) + '°</b>Dehors</span><span><b>' + fmt(num(h.humidity), 0) + ' %</b>Humidité</span>';
@@ -628,7 +635,7 @@
       var sp = ntPend && String(ntPend.room) === String(r.id) ? ntPend.temp : r.setpoint, hp = HISTN[r.id];
       h += '<div class="hcard"><button class="hc-top" data-graph="' + esc(r.id) + '"><span>Chauffage · ' + esc(r.name) + '</span><span class="' + (r.heating ? 'heat' : 'mu') + '">' + icon('flame') + (r.heating ? 'Chauffe' : NT.boiler ? 'Chaudière en marche' : 'Au repos') + '</span></button>' +
         '<button class="hc-mid" data-graph="' + esc(r.id) + '"><div class="big">' + fmt(r.temp, 1) + '°<em id="ntsp">Consigne ' + fmt(sp, 1) + '°</em></div>' +
-        '<div class="hc-sp">' + spark(hp && hp.points ? hp.points : null, { w: 180, h: 60, ref: sp }) + '</div></button>' + manualHTML(r) +
+        '<div class="hc-sp">' + spark(hp && hp.points ? hp.points : null, { w: 180, h: 60, ref: sp }) + '</div></button>' + manualHTML(r) + presenceHTML() +
         '<div class="hc-plan"><span><b>' + esc(NT.schedule || 'Planning') + '</b> · ' + esc(schedWhen()) + '</span>' +
         '<span class="stp2"><button data-nt-step="-0.5" aria-label="Baisser">−</button><button data-nt-step="0.5" aria-label="Monter">+</button></span></div></div>';
     } else {
@@ -1888,6 +1895,13 @@
     }
     if (e.target.closest('[data-waterack]')) { return api({ action: 'water.ack' }).then(function (j) { WATER = j.devices; render(); toast('Alarme du compteur arrêtée'); }).catch(function () { toast('Impossible pour le moment, réessaie', true); }); }
     if (e.target.closest('[data-water]')) return openWater();
+    if ((b = e.target.closest('[data-presence]'))) {
+      var pon = b.dataset.presence === '1', P0 = (NT && NT.presence) || {};
+      if (!!P0.on === pon) return;
+      NT.presence = { on: pon, state: null }; render();
+      return api({ action: 'nt.presence', on: pon }).then(function (j) { NT = j; render(); toast(pon ? 'Chauffage sur présence : activé' : 'Chauffage sur présence : désactivé'); })
+        .catch(function () { NT.presence = P0; render(); toast('Netatmo ne répond pas, réessaie', true); });
+    }
     if ((b = e.target.closest('[data-slideopen]'))) { var so = b.dataset.slideopen.split(':'); return openSlide(so[0], so[1]); }
     if ((b = e.target.closest('[data-slidekey]'))) { SLIDE.key = b.dataset.slidekey; return render(); }
     if (e.target.closest('[data-slidex]')) { SLIDE = null; return render(); }
