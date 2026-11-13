@@ -1380,7 +1380,7 @@
     { id: 'tv', name: 'TV OLED 60 pouces', sub: '≈ 3 h par jour + veille', kwh: 150, q: 3 },
     { id: 'four', name: 'Four électrique du piano', sub: 'grand four, ≈ 3 fois par semaine', kwh: 150, q: 1 },
     { id: 'plancha', name: 'Plancha électrique', sub: '≈ 2 fois par semaine, 30 min', kwh: 125, q: 1 },
-    { id: 'ecs', name: 'Eau chaude (chaudière gaz)', sub: 'douches, bains, vaisselle à la main… pour 3 personnes', kwh: 1900, q: 1, gas: true },
+    { id: 'ecs', name: 'Eau chaude (chaudière gaz)', sub: 'douches, bains, vaisselle à la main… pour 3 personnes (moins l’été)', kwh: 1900, q: 1, gas: true, season: true },
     { id: 'feux', name: 'Feux du piano (gaz)', sub: 'cuisson de tous les jours', kwh: 250, q: 1, gas: true },
     { id: 'cafe', name: 'Machine à café', sub: 'avec la veille', kwh: 100, q: 1 },
     { id: 'micro', name: 'Micro-ondes', sub: '', kwh: 60, q: 1 },
@@ -1390,6 +1390,7 @@
     { id: 'divers', name: 'Ordinateurs, chargeurs, aspirateur, veilles…', sub: 'petits appareils', kwh: 300, q: 1 }
   ];
   var LIGHT_M = [1.35, 1.2, 1, 0.85, 0.7, 0.6, 0.6, 0.7, 0.85, 1.05, 1.25, 1.4]; // éclairage selon le mois
+  var ECS_M = [1.25, 1.25, 1.15, 1, 0.85, 0.7, 0.6, 0.6, 0.75, 0.95, 1.15, 1.25]; // eau chaude : moins l'été (eau du réseau plus chaude, douches plus fraîches)
   function applQ(D, it) { var a = D.cfg.appl || {}; return a[it.id] != null ? a[it.id] : it.q; }
   // kWh estimés d'un appareil pour un jour (AAAAMMJJ) ; le jour même est compté au prorata de l'heure
   function applDay(D, it, dk) {
@@ -1398,7 +1399,7 @@
     if (it.heat) {
       var gh = D.gas.days[dk], heating = gh != null ? gh > 0.5 : (m <= 3 || m >= 9);
       v = heating ? 0.75 * 3 : 0;
-    } else v = it.kwh / 365 * (it.light ? LIGHT_M[m] : 1);
+    } else v = it.kwh / 365 * (it.light ? LIGHT_M[m] : it.season ? ECS_M[m] : 1);
     if (dk === ymdK(new Date())) { var t = new Date(); v *= (t.getHours() + t.getMinutes() / 60) / 24; }
     return v * q;
   }

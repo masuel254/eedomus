@@ -1,7 +1,16 @@
 {
-  "version": "2.9.4",
+  "version": "2.9.5",
   "date": "2026-11-13",
   "releases": [
+    {
+      "version": "2.9.5",
+      "date": "2026-11-13",
+      "time": "10:35",
+      "title": "Gaz selon la saison",
+      "changes": [
+        "Eau chaude au gaz : moins l’été que l’hiver (eau du réseau plus chaude, douches plus fraîches) ; le chauffage suit déjà les vraies heures Netatmo (0 h de juin à septembre)"
+      ]
+    },
     {
       "version": "2.9.4",
       "date": "2026-11-13",
@@ -592,5 +601,5 @@
     "Énergie : mettre le vrai prix du gaz (facture) et noter 2 relevés du compteur gaz à 1-2 semaines d’écart pour caler la puissance de la chaudière",
     "Révoquer à la fin : mot de passe Quandify"
   ],
-  "time": "10:32"
+  "time": "10:35"
 }
