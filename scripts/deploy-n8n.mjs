@@ -421,7 +421,7 @@ async function presenceCheck(force) {
   SD.ntHeat = null;
   return P;
 }
-function presenceOut() { const P = SD.presence || {}; return { on: !!P.on, state: P.state || null, at: P.at || null, log: (P.log || []).slice(0, 10) }; }
+function presenceOut() { const P = SD.presence || {}; return { on: !!P.on, setAt: P.setAt || 0, state: P.state || null, at: P.at || null, log: (P.log || []).slice(0, 10) }; }
 async function ntCameras(fresh) {
   if (!fresh && SD.ntCams && SD.ntCams.at > Date.now() - 30000) return SD.ntCams.data;
   const H = await ntHomes();
@@ -1234,7 +1234,7 @@ async function netatmo(b) {
   }
   if (b.action === 'nt.presence') {
     SD.presence = SD.presence || { on: false, state: null, at: null, log: [] };
-    SD.presence.on = !!b.on;
+    SD.presence.on = !!b.on; SD.presence.setAt = Date.now();
     SD.presence.state = null; SD.presence.awaySeen = 0;
     if (SD.presence.on) await presenceCheck(true); // on applique tout de suite selon qui est là
     return ntHeating(true);

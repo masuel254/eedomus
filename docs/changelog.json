@@ -1,7 +1,18 @@
 {
-  "version": "2.12.0",
+  "version": "2.12.1",
   "date": "2026-11-13",
   "releases": [
+    {
+      "version": "2.12.1",
+      "date": "2026-11-13",
+      "time": "14:53",
+      "title": "Coût total et présence fiable",
+      "changes": [
+        "Sur présence : si le serveur perd le réglage (enregistrement simultané), l’iPhone qui l’a choisi le renvoie tout seul",
+        "Sur présence : état affiché en petit sur une seule ligne (« Présence · Défaut · 14h45 »)",
+        "Onglet Plus : « Coût total » ; écran Énergie / Eau : ligne de total (jour, semaine, mois ou année) en bas du détail"
+      ]
+    },
     {
       "version": "2.12.0",
       "date": "2026-11-13",
@@ -636,5 +647,5 @@
     "Révoquer à la fin : mot de passe TotalEnergies",
     "Révoquer à la fin : mot de passe EDF"
   ],
-  "time": "14:28"
+  "time": "14:53"
 }

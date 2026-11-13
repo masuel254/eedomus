@@ -77,9 +77,17 @@
       if (fails >= 2) { offline = true; render(); } else setTimeout(refresh, 3000); // une seule erreur : on réessaie vite, sans alarmer
     }).then(function () { refreshing = false; });
   }
+  // « Sur présence » : si le serveur a perdu le choix fait sur cet iPhone (enregistrement concurrent), on le renvoie
+  var presFix = 0;
+  function presenceGuard(j) {
+    var L = null; try { L = JSON.parse(localStorage.getItem('maison-presence') || 'null'); } catch (e) {}
+    var P = j && j.presence; if (!L || !P || P.on === L.on || (P.setAt || 0) >= L.at || Date.now() - L.at > 7 * 86400000 || Date.now() - presFix < 20000) return;
+    presFix = Date.now();
+    api({ action: 'nt.presence', on: L.on }).then(function (k) { NT = k; if (!busy()) render(); }).catch(function () {});
+  }
   function refreshHeating() {
     if (!token) return;
-    api({ action: 'nt.heating' }).then(function (j) { NT = j; ntErr = false; if (!busy()) render(); })
+    api({ action: 'nt.heating' }).then(function (j) { NT = j; ntErr = false; presenceGuard(j); if (!busy()) render(); })
       .catch(function () { ntErr = true; if (!NT) render(); });
   }
   function loadCams(force) {
@@ -326,7 +334,7 @@
   // Chauffage « Sur présence » : Oui / Non
   function presenceHTML() {
     var P = (NT && NT.presence) || { on: false };
-    var sub = !P.on ? 'Non : le chauffage suit le planning' : P.state === 'away' ? 'Personne à la maison · mode Absent' + (P.at ? ' depuis ' + sinceDate(P.at).replace(/ · depuis.*/, '') : '') : P.state === 'home' ? 'Quelqu’un est là · planning Défaut' + (P.at ? ' (' + sinceDate(P.at).replace(/ · depuis.*/, '') + ')' : '') : 'Absent quand plus personne, Défaut au retour';
+    var sub = !P.on ? 'Suit le planning' : P.state === 'away' ? 'Absent' + (P.at ? ' · ' + P.at.slice(11, 16).replace(':', 'h') : '') : P.state === 'home' ? 'Présence · Défaut' + (P.at ? ' · ' + P.at.slice(11, 16).replace(':', 'h') : '') : 'Absent si personne, Défaut au retour';
     return '<div class="hc-pres"><span><b>Sur présence</b><small>' + esc(sub) + '</small></span>' +
       '<div class="seg2"><button class="' + (P.on ? 'on' : '') + '" data-presence="1">Oui</button><button class="' + (!P.on ? 'on' : '') + '" data-presence="0">Non</button></div></div>';
   }
@@ -844,7 +852,7 @@
     var ph = HISTE['3557564|168'];
     var wh = waterHTML(); if (wh) h += '<div class="lbl">Eau</div>' + wh;
     h += '<div class="lbl">Énergie</div><div class="card2 flat">' +
-      '<button class="row" data-cost><span class="ic" style="color:#FF8A5B">' + icon('flame') + '</span><span><b>Coût énergie / eau</b><small>Gaz, électricité et eau · en €</small></span><span class="val">›</span></button>' +
+      '<button class="row" data-cost><span class="ic" style="color:#FF8A5B">' + icon('flame') + '</span><span><b>Coût total</b><small>Gaz, électricité et eau · en €</small></span><span class="val">›</span></button>' +
       pis.items.filter(function (it) { return it.type === 'tuya-meter'; }).map(rowHTML).join('') +
       sdb.items.filter(function (it) { return it.type === 'tuya-meter'; }).map(rowHTML).join('') + '</div>';
     h += '<div class="lbl">Piscine</div>';
@@ -1593,7 +1601,7 @@
       return '<' + tag + ' class="row"' + (tag === 'div' ? '' : it.k === 'other' || it.k === 'gasx' ? ' data-costappl' : ' data-energy="' + it.k + '" data-ename="' + esc(it.name) + '"') + '><span class="ic" style="color:' + it.color + '">' + icon(it.icon) + '</span>' +
         '<span><b>' + esc(it.name) + '</b><small>' + esc(sub) + '</small><span class="cbar"><i style="width:' + (s.eur / mx * 100).toFixed(0) + '%;background:' + it.color + '"></i></span></span>' +
         '<span class="val mono">' + eur(s.eur) + '</span></' + tag + '>';
-    }).join('') + '</div>';
+    }).join('') + '<div class="row ctot"><span><b>Total ' + esc(COST.tab === 'day' ? 'du jour' : COST.tab === 'week' ? 'de la semaine' : COST.tab === 'month' ? 'du mois' : 'de l’année') + '</b><small>' + esc(P.title) + ' · gaz ' + eur(gasE, 0) + ' · électricité ' + eur(elE, 0) + (D.water ? ' · eau ' + eur(waE, 0) : '') + '</small></span><span class="val mono">' + eur(total, total < 10 ? 2 : 0) + '</span></div></div>';
     // Jours les plus chers
     if (COST.tab === 'month' || COST.tab === 'year') {
       var top = P.days.filter(function (d) { return d <= ymdK(new Date()); }).map(function (d) { var e = 0, gh = 0; items.forEach(function (it) { var v = costSum(D, [d], it.k); e += v.eur; if (it.k === 'gas') gh = v.h; }); return { d: d, e: e, h: gh }; })
@@ -1899,6 +1907,7 @@
       var pon = b.dataset.presence === '1', P0 = (NT && NT.presence) || {};
       if (!!P0.on === pon) return;
       NT.presence = { on: pon, state: null }; render();
+      try { localStorage.setItem('maison-presence', JSON.stringify({ on: pon, at: Date.now() })); } catch (e) {}
       return api({ action: 'nt.presence', on: pon }).then(function (j) { NT = j; render(); toast(pon ? 'Chauffage sur présence : activé' : 'Chauffage sur présence : désactivé'); })
         .catch(function () { NT.presence = P0; render(); toast('Netatmo ne répond pas, réessaie', true); });
     }

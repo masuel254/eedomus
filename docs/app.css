@@ -769,3 +769,9 @@ svg.gsvg { display: block; width: 100%; height: auto; user-select: none; -webkit
 .hc-pres b { display: block; font-size: 14px; }
 .hc-pres small { color: var(--mu); font-size: 12px; line-height: 1.35; }
 .hc-pres .seg2 button.on[data-presence="1"] { background: var(--ok); color: #06210F; }
+.hc-pres small { display: block; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hc-pres > span { min-width: 0; }
+.hc-pres { grid-template-columns: 1fr 112px; }
+.cost-list .row.ctot { grid-template-columns: 1fr auto; background: var(--s2); }
+.cost-list .row.ctot > span:first-child { grid-column: auto; }
+.cost-list .row.ctot .val { font-size: 18px; color: var(--tx); }
