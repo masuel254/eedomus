@@ -1,7 +1,17 @@
 {
-  "version": "2.4.1",
+  "version": "2.4.2",
   "date": "2026-11-13",
   "releases": [
+    {
+      "version": "2.4.2",
+      "date": "2026-11-13",
+      "time": "08:21",
+      "title": "Garage : un seul geste",
+      "changes": [
+        "Porte de garage : un seul curseur « Ouvrir / fermer la porte de garage » (les boutons Ouvrir et Fermer sont retirés)",
+        "Tuile Garage de l’accueil : affiche l’état vu par la caméra (Ouverte / Fermée / À vérifier)"
+      ]
+    },
     {
       "version": "2.4.1",
       "date": "2026-11-13",
@@ -394,5 +404,5 @@
     "Garage : confirmer une fois de nuit « Elle est ouverte » et « Elle est fermée » (références infrarouge)",
     "Option : capteur d'ouverture sur la porte de garage (fiable à 100 %, même si la caméra est hors ligne)"
   ],
-  "time": "08:18"
+  "time": "08:21"
 }

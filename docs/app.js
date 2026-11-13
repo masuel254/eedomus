@@ -267,8 +267,7 @@
     if (it.type === 'garage') {
       var st = STATES[id] ? STATES[id].text : '';
       return '<div class="row"><span class="ic">' + icon('garage') + '</span><span><b>' + esc(it.name) + '</b><small>' + esc(st || '—') + '</small></span><span class="btns">' +
-        '<button class="act" data-slideopen="garage-1:item-garage">Ouvrir</button>' +
-        '<button class="act" data-slideopen="garage-2:item-garage">Fermer</button></span></div>' + slideHTML('item-garage');
+        '<button class="act" data-slideopen="garage:item-garage">Ouvrir / fermer</button></span></div>' + slideHTML('item-garage');
     }
     if (it.type === 'action') {
       return '<div class="row"><span class="ic">' + icon(it.icon || 'home') + '</span><span><b>' + esc(it.name) + '</b><small>' + (STATES[id] ? esc(STATES[id].text) : '') + '</small></span>' +
@@ -390,7 +389,7 @@
   // SLIDE = { key, where } : curseur affiché sous une tuile ou une ligne. Clés : gate, garage-1, garage-2, alarm-on, alarm-off, sauna-on
   var SLIDE = null, slideT = null;
   var SLIDE_LABEL = {
-    gate: 'Glisser pour actionner le portail', 'garage-1': 'Glisser pour ouvrir le garage', 'garage-2': 'Glisser pour fermer le garage',
+    gate: 'Glisser pour actionner le portail', garage: 'Ouvrir / fermer la porte de garage', 'garage-1': 'Glisser pour ouvrir le garage', 'garage-2': 'Glisser pour fermer le garage',
     'alarm-on': "Glisser pour activer l'alarme", 'alarm-off': "Glisser pour désactiver l'alarme", 'sauna-on': 'Glisser pour allumer le sauna'
   };
   function openSlide(key, where) {
@@ -400,7 +399,7 @@
   }
   function slideHTML(where) {
     if (!SLIDE || SLIDE.where !== where) return '';
-    var k = SLIDE.key, garage = /^garage-/.test(k);
+    var k = SLIDE.key, garage = false; // plus de choix Ouvrir / Fermer : une seule commande pour la porte de garage
     return '<div class="slidebox">' +
       (garage ? '<div class="seg2"><button class="' + (k === 'garage-1' ? 'on' : '') + '" data-slidekey="garage-1">Ouvrir</button><button class="' + (k === 'garage-2' ? 'on' : '') + '" data-slidekey="garage-2">Fermer</button></div>' : '') +
       '<div class="slide' + (/alarm|sauna/.test(k) ? ' warm' : '') + '" data-slide="' + k + '"><span class="fill"></span><span class="knob">' + icon('chev') + '</span><span class="sl-t">' + esc(SLIDE_LABEL[k]) + '</span></div>' +
@@ -409,6 +408,7 @@
   function doSlide(key) {
     SLIDE = null; clearTimeout(slideT);
     if (key === 'gate') send(CFG.dock.gate, 100, { optimistic: false, msg: 'Portail : commande envoyée' });
+    else if (key === 'garage') { send(CFG.dock.garage, 1, { optimistic: false, msg: 'Porte de garage : commande envoyée' }); GAR = { state: 'unknown', date: '', src: 'commande', log: [], cam: GAR && GAR.cam }; setTimeout(function () { if (LOGS.doors) LOGS.doors.at = 0; loadLogs('doors', true); }, 3000); setTimeout(function () { if (LOGS.doors) LOGS.doors.at = 0; loadLogs('doors', true); }, 50000); }
     else if (key === 'garage-1' || key === 'garage-2') { send(CFG.dock.garage, key === 'garage-1' ? 1 : 2, { optimistic: false, msg: key === 'garage-1' ? 'Garage : ouverture envoyée' : 'Garage : fermeture envoyée' }); GAR = { state: 'unknown', date: '', src: 'commande', log: [] }; setTimeout(function () { if (LOGS.doors) LOGS.doors.at = 0; loadLogs('doors', true); }, 3000); }
     else if (key === 'alarm-on' || key === 'alarm-off') send(CFG.status.alarm, key === 'alarm-on' ? 12 : 0, { msg: key === 'alarm-on' ? 'Alarme activée' : 'Alarme désactivée' });
     else if (key === 'sauna-on') saunaSet(true);
@@ -605,7 +605,7 @@
     };
     h += '<div class="lbl">Accès rapide</div><div class="quick">' +
       tile('gate', 'gate', 'Portail', gate.text || '—', gateOpen) +
-      tile('garage', 'garage', 'Garage', gar.text && gar.text !== 'En attente' ? gar.text : 'Ouvrir / fermer', false) +
+      tile('garage', 'garage', 'Garage', GAR ? (GAR.state === 'open' ? 'Ouverte' : GAR.state === 'closed' ? 'Fermée' : 'À vérifier') : '…', GAR && GAR.state === 'open') +
       tile('sauna', 'flame', 'Sauna', !sd ? '…' : son ? (sd.power > 50 ? watts(sd.power) : 'Allumé') : 'Éteint', son) +
       tile('alarm', 'shield', 'Alarme', armed ? 'Activée' : 'Off', armed) +
       '</div>' + slideHTML('home');
@@ -1425,7 +1425,7 @@
     if ((b = e.target.closest('[data-qa]'))) {
       var qa = b.dataset.qa;
       if (qa === 'gate') return openSlide('gate', 'home');
-      if (qa === 'garage') return openSlide('garage-1', 'home');
+      if (qa === 'garage') return openSlide('garage', 'home');
       if (qa === 'alarm') return openSlide(alarmArmed() ? 'alarm-off' : 'alarm-on', 'home');
       if (qa === 'sauna') { if (tuOn('sauna')) { SLIDE = null; return saunaSet(false); } return openSlide('sauna-on', 'home'); }
     }
