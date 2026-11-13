@@ -858,3 +858,7 @@ body { padding: 0 !important; }
 .gst { color: var(--amber); font-weight: 700; }
 .mu2 { color: var(--mu); }
 #app { overflow-x: hidden; }
+
+/* température extérieure sur la carte chauffage */
+.hc-mid .big em.hc-out { display: flex; align-items: center; gap: 5px; color: var(--mu); margin-top: 5px; }
+.hc-out .wic { flex: none; }

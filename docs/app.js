@@ -336,6 +336,12 @@
   // ---------- Rendu : chauffage (Netatmo) ----------
   var MODE_LABEL = { schedule: 'Planning', home: 'Planning', manual: 'Manuel', max: 'Boost', away: 'Absent', hg: 'Hors-gel', off: 'Arrêt' };
   // Chauffage « Sur présence » : Oui / Non
+  // température extérieure en direct (météo de la maison) sur la carte chauffage de l'accueil
+  function hcOut() {
+    loadMeteo(false);
+    var n = METEO && METEO.now; if (!n || n.t == null) return '';
+    return '<em class="hc-out">' + wIcon(n.code, n.day, 16) + 'Dehors ' + fmt(n.t, 1) + '°</em>';
+  }
   function presenceHTML() {
     var P = (NT && NT.presence) || { on: false };
     var sub = !P.on ? 'Suit le planning' : P.state === 'away' ? 'Absent' + (P.at ? ' · ' + P.at.slice(11, 16).replace(':', 'h') : '') : P.state === 'home' ? 'Présence · Défaut' + (P.at ? ' · ' + P.at.slice(11, 16).replace(':', 'h') : '') : 'Absent si personne, Défaut au retour';
@@ -660,7 +666,7 @@
       loadRoomHist(r.id);
       var sp = ntPend && String(ntPend.room) === String(r.id) ? ntPend.temp : r.setpoint, hp = HISTN[r.id];
       h += '<div class="hcard"><button class="hc-top" data-graph="' + esc(r.id) + '"><span>Chauffage · ' + esc(r.name) + '</span><span class="' + (r.heating ? 'heat' : 'mu') + '">' + icon('flame') + (r.heating ? 'Chauffe' : NT.boiler ? 'Chaudière en marche' : 'Au repos') + '</span></button>' +
-        '<button class="hc-mid" data-graph="' + esc(r.id) + '"><div class="big">' + fmt(r.temp, 1) + '°<em id="ntsp">Consigne ' + fmt(sp, 1) + '°</em></div>' +
+        '<button class="hc-mid" data-graph="' + esc(r.id) + '"><div class="big">' + fmt(r.temp, 1) + '°<em id="ntsp">Consigne ' + fmt(sp, 1) + '°</em>' + hcOut() + '</div>' +
         '<div class="hc-sp">' + spark(hp && hp.points ? hp.points : null, { w: 180, h: 60, ref: sp }) + '</div></button>' + manualHTML(r) + presenceHTML() +
         '<div class="hc-plan"><span><b>' + esc(NT.schedule || 'Planning') + '</b> · ' + esc(schedWhen()) + '</span>' +
         '<span class="stp2"><button data-nt-step="-0.5" aria-label="Baisser">−</button><button data-nt-step="0.5" aria-label="Monter">+</button></span></div></div>';

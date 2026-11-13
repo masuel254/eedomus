@@ -1,7 +1,16 @@
 {
-  "version": "2.16.1",
+  "version": "2.16.2",
   "date": "2026-11-13",
   "releases": [
+    {
+      "version": "2.16.2",
+      "date": "2026-11-13",
+      "time": "22:44",
+      "title": "Température extérieure sur l’accueil",
+      "changes": [
+        "La carte chauffage de l’accueil affiche la température dehors (météo de la maison), avec une petite icône du temps"
+      ]
+    },
     {
       "version": "2.16.1",
       "date": "2026-11-13",
@@ -778,5 +787,5 @@
     "Révoquer à la fin : mot de passe TotalEnergies",
     "Révoquer à la fin : mot de passe EDF"
   ],
-  "time": "22:39"
+  "time": "22:44"
 }
