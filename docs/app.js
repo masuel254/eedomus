@@ -87,7 +87,7 @@
   }
   function refreshHeating() {
     if (!token) return;
-    api({ action: 'nt.heating' }).then(function (j) { NT = j; ntErr = false; presenceGuard(j); if (!busy()) render(); })
+    api({ action: 'nt.heating' }).then(function (j) { NT = j; ntErr = false; presenceGuard(j); if (!busy()) render(); setTimeout(preloadGraphs, 4000); })
       .catch(function () { ntErr = true; if (!NT) render(); });
   }
   // dernière liste de caméras gardée sur l'iPhone (affichée tout de suite, rechargée derrière)
@@ -709,13 +709,35 @@
   var GR = null; // { room, range, end, data, idx, loading }
   var GR_RANGES = [['6h', '6H', 6 * 3600], ['1d', '1J', 86400], ['1w', '1S', 7 * 86400], ['1m', '1M', 30 * 86400], ['1y', '1A', 365 * 86400]];
   function openGraph(room) { GR = { room: String(room), range: '1d', end: null, data: null, idx: null }; sheet.scrollTop = 0; openSheet('graph'); loadGraph(); }
+  // Courbes déjà vues gardées sur l'iPhone : affichées tout de suite, puis mises à jour en arrière-plan
+  var GRC = {}; try { GRC = JSON.parse(localStorage.getItem('maison-gr') || '{}') || {}; } catch (e) {}
+  function grSave(k, j) {
+    GRC[k] = { at: Date.now(), data: j };
+    var ks = Object.keys(GRC).sort(function (x, y) { return GRC[y].at - GRC[x].at; });
+    ks.slice(40).forEach(function (x) { delete GRC[x]; });
+    try { localStorage.setItem('maison-gr', JSON.stringify(GRC)); } catch (e) {}
+  }
   function loadGraph() {
-    if (!GR) return; var g = GR, want = g.room + '|' + g.range + '|' + g.end;
-    g.loading = true; renderGraph();
+    if (!GR) return; var g = GR, want = g.room + '|' + g.range + '|' + g.end, ck = g.end ? null : g.room + '|' + g.range;
+    var c = ck && GRC[ck];
+    g.data = c ? c.data : null; g.idx = null; g.error = false;
+    g.loading = !(c && Date.now() - c.at < 120000); renderGraph();
+    if (!g.loading) return; // vue il y a moins de 2 min : rien à redemander
     api({ action: 'nt.roomgraph', room: g.room, range: g.range, end: g.end || undefined }).then(function (j) {
+      if (ck) grSave(ck, j);
       if (!GR || GR.room + '|' + GR.range + '|' + GR.end !== want) return;
       GR.data = j; GR.idx = null; GR.loading = false; renderGraph();
     }).catch(function () { if (GR) { GR.loading = false; GR.error = true; renderGraph(); } });
+  }
+  // Préchargement discret des courbes du jour de toutes les pièces (une à la fois)
+  var grPre = false;
+  function preloadGraphs() {
+    if (grPre || !NT || !NT.rooms || document.hidden) return; grPre = true;
+    var ids = NT.rooms.map(function (x) { return String(x.id); }).filter(function (id) { var c = GRC[id + '|1d']; return !c || Date.now() - c.at > 600000; });
+    (function next() {
+      var id = ids.shift(); if (!id) { grPre = false; return; }
+      api({ action: 'nt.roomgraph', room: id, range: '1d' }).then(function (j) { grSave(id + '|1d', j); }).catch(function () {}).then(function () { setTimeout(next, 300); });
+    })();
   }
   function graphSVG(d, idx) {
     if (!d) return '<p class="muted">Chargement…</p>';
@@ -2323,9 +2345,10 @@
     setInterval(function () { if (!document.hidden && !ntPend) refreshHeating(); }, 30000);
     setInterval(function () { if (!document.hidden) refreshTuya(); }, 30000);
     setInterval(function () { if (!document.hidden && lastOk && !busy()) render(); }, 30000);
-    document.addEventListener('visibilitychange', function () { if (!document.hidden) { refresh(); refreshHeating(); refreshTuya(true); setTimeout(function () { loadCams(false); loadImou(false); }, 2500); } });
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) { refresh(); refreshHeating(); refreshTuya(true); setTimeout(function () { loadCams(false); loadImou(false); }, 2500); setTimeout(preloadGraphs, 6000); } });
     // caméras préchargées en arrière-plan : l'onglet Caméras s'affiche tout de suite
     setTimeout(function () { loadCams(false); loadImou(false); }, 2500);
+    setTimeout(preloadGraphs, 6000);
   }).catch(function () { app.innerHTML = '<div class="setup"><h1>Maison</h1><p>Impossible de charger la configuration. Vérifie ta connexion.</p></div>'; });
 
   if ('serviceWorker' in navigator) {

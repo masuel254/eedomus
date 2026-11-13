@@ -1,7 +1,17 @@
 {
-  "version": "2.14.0",
+  "version": "2.14.1",
   "date": "2026-11-13",
   "releases": [
+    {
+      "version": "2.14.1",
+      "date": "2026-11-13",
+      "time": "18:02",
+      "title": "Courbes du chauffage tout de suite",
+      "changes": [
+        "Les courbes du jour de toutes les pièces sont préparées en arrière-plan à l’ouverture de l’appli",
+        "Une courbe déjà vue s’affiche immédiatement, puis se met à jour toute seule"
+      ]
+    },
     {
       "version": "2.14.0",
       "date": "2026-11-13",
@@ -715,5 +725,5 @@
     "Révoquer à la fin : mot de passe TotalEnergies",
     "Révoquer à la fin : mot de passe EDF"
   ],
-  "time": "17:59"
+  "time": "18:02"
 }
