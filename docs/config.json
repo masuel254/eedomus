@@ -471,13 +471,6 @@
         "sub": "Alarme Incendie 2",
         "type": "smoke",
         "group": "smoke"
-      },
-      {
-        "id": 846110,
-        "name": "Cellier (ancien détecteur)",
-        "sub": "Détecteur Fumée",
-        "type": "smoke",
-        "group": "smoke"
       }
     ]
   },
