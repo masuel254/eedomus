@@ -1074,7 +1074,7 @@
         if (s.sh.length) q += '<button class="qb v" data-shutall="' + r.id + ':100" aria-label="Ouvrir les volets">' + icon('up') + '</button><button class="qb v" data-shutall="' + r.id + ':0" aria-label="Fermer les volets">' + icon('down') + '</button>';
         else s.acts.forEach(function (it) { q += '<button class="qb v" data-action="' + it.id + '" data-v="' + esc(it.value) + '" data-msg="' + esc(it.name) + '" aria-label="' + esc(it.name) + '">' + icon(it.icon) + '</button>'; });
         return '<div class="rc' + (s.on ? ' lit' : '') + (s.openD ? ' warn' : '') + '" data-roomopen="' + r.id + '" role="button" tabindex="0">' +
-          '<div class="rc-hd"><b>' + esc(r.name) + '</b><span>' + (t == null ? '' : fmt(t, 1) + '°') + (cam ? icon('cam') : '') + '</span></div>' +
+          '<div class="rc-hd"><b>' + esc(r.name) + '</b><span' + (r.temps ? ' class="rc-ts"' : '') + '>' + (r.temps ? roomTs(r).map(function (x) { return '<i>' + esc(x) + '</i>'; }).join('') : t == null ? '' : fmt(t, 1) + '°') + (cam ? icon('cam') : '') + '</span></div>' +
           '<small>' + esc(s.text || 'Détails') + '</small>' + (q ? '<div class="qa">' + q + '</div>' : '<div class="qa"><span class="qa-more">Ouvrir ›</span></div>') + '</div>';
       }).join('') + '</div>';
     });
@@ -1113,7 +1113,7 @@
     if (r.id === 'volets') return renderShuttersSheet(r);
     var s = roomStats(r), t = roomT(r), h = '';
     h += '<div class="sh-hd"><h2>' + esc(r.name) + '</h2><button class="close" data-close aria-label="Fermer">×</button></div>';
-    h += '<div class="rs-sub">' + esc([t == null ? null : fmt(t, 1) + '°', s.text].filter(Boolean).join(' · ')) + '</div>';
+    h += '<div class="rs-sub">' + esc((r.temps ? roomTs(r) : [t == null ? null : fmt(t, 1) + '°']).concat([s.text]).filter(Boolean).join(' · ')) + '</div>';
     if (roomHasCam(r)) h += camPreviewHTML(r);
     if (s.lights.length) {
       h += '<div class="ltiles">' + s.lights.map(function (it) {
@@ -1151,6 +1151,8 @@
     }).join('');
   }
 
+  // pièce avec plusieurs températures nommées (ex. piscine : Eau, Dôme)
+  function roomTs(r) { return (r.temps || []).map(function (x) { var v = num(x[0]); return v == null ? null : x[1] + ' ' + fmt(v, 1) + '°'; }).filter(Boolean); }
   function roomT(r) {
     if (r.ntTemp && NT && NT.rooms) { var nr = NT.rooms.filter(function (x) { return String(x.id) === String(r.ntTemp); })[0]; if (nr && nr.temp != null) return nr.temp; }
     return r.temp ? num(r.temp) : null;

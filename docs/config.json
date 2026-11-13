@@ -335,9 +335,17 @@
             },
             {
               "id": 3557562,
-              "name": "Eau",
+              "name": "Température de l’eau",
               "type": "sensor",
               "icon": "drop",
+              "unit": "°",
+              "decimals": 1
+            },
+            {
+              "id": 2999498,
+              "name": "Température du dôme",
+              "type": "sensor",
+              "icon": "thermo",
               "unit": "°",
               "decimals": 1
             },
@@ -365,6 +373,16 @@
               "scale": 0.001,
               "decimals": 1
             }
+          ],
+          "temps": [
+            [
+              3557562,
+              "Eau"
+            ],
+            [
+              2999498,
+              "Dôme"
+            ]
           ]
         }
       ]

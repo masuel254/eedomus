@@ -874,3 +874,7 @@ body { padding: 0 !important; }
 .alarm-onoff { margin-top: 10px !important; }
 .alarm-onoff .qseg button.yes-on { color: var(--ok); }
 .alarm-onoff .qseg button.yes-off { color: var(--amber); }
+
+/* plusieurs températures sur une tuile (piscine : eau et dôme) */
+.rc-hd span.rc-ts { display: grid; justify-items: end; gap: 2px; }
+.rc-hd span.rc-ts i { font-style: normal; white-space: nowrap; }

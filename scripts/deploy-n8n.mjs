@@ -57,6 +57,7 @@ const read = (id) => id && readable.add(String(id));
 
 for (const g of cfg.groups) for (const room of g.rooms) {
   read(room.temp);
+  (room.temps || []).forEach((x) => read(x[0]));
   for (const it of room.items) {
     switch (it.type) {
       case 'light': allow(it.id, [it.on ?? 100, it.off ?? 0]); if (it.color) allow(it.color, (cfg.lightColors || []).map((x) => x[0])); break;
