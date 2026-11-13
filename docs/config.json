@@ -134,12 +134,12 @@
               "name": "Baie aquarium",
               "type": "shutter"
             }
-          ]
+          ],
+          "ntTemp": "4008116711"
         },
         {
           "id": "entree",
           "name": "Entrée",
-          "temp": 899338,
           "items": [
             {
               "id": 1895923,
@@ -155,7 +155,8 @@
               "name": "Porte d'entrée",
               "type": "door"
             }
-          ]
+          ],
+          "ntTemp": "839048619"
         },
         {
           "id": "couloir",
@@ -173,7 +174,8 @@
               "type": "light",
               "color": 3225295
             }
-          ]
+          ],
+          "temp": 899338
         },
         {
           "id": "cellier",
@@ -248,7 +250,8 @@
               "type": "switch",
               "icon": "towel"
             }
-          ]
+          ],
+          "ntTemp": "4188413762"
         }
       ]
     },

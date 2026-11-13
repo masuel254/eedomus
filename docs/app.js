@@ -959,7 +959,7 @@
     groups.forEach(function (g, gi) {
       if (roomFilter !== 'all' && roomFilter !== 'g' + gi) return;
       h += '<div class="lbl">' + esc(g.name) + '</div><div class="rgrid2">' + g.rooms.map(function (r) {
-        var s = roomStats(r), t = r.temp ? num(r.temp) : null, cam = roomHasCam(r);
+        var s = roomStats(r), t = roomT(r), cam = roomHasCam(r);
         var q = '';
         if (s.lights.length) q += '<button class="qb' + (s.on ? ' l' : '') + '" data-lightall="' + r.id + '" aria-label="Lumières">' + icon('bulb') + '</button>';
         if (s.sh.length) q += '<button class="qb v" data-shutall="' + r.id + ':100" aria-label="Ouvrir les volets">' + icon('up') + '</button><button class="qb v" data-shutall="' + r.id + ':0" aria-label="Fermer les volets">' + icon('down') + '</button>';
@@ -1002,7 +1002,7 @@
   function renderRoomSheet() {
     var r = findRoom(roomSheet); if (!r) return;
     if (r.id === 'volets') return renderShuttersSheet(r);
-    var s = roomStats(r), t = r.temp ? num(r.temp) : null, h = '';
+    var s = roomStats(r), t = roomT(r), h = '';
     h += '<div class="sh-hd"><h2>' + esc(r.name) + '</h2><button class="close" data-close aria-label="Fermer">×</button></div>';
     h += '<div class="rs-sub">' + esc([t == null ? null : fmt(t, 1) + '°', s.text].filter(Boolean).join(' · ')) + '</div>';
     if (roomHasCam(r)) h += camPreviewHTML(r);
@@ -1030,7 +1030,7 @@
   function roomsHTML() {
     return CFG.groups.map(function (g) {
       return '<div class="sec-hd"><h2>' + esc(g.name) + '</h2></div><div class="acc">' + g.rooms.map(function (r) {
-        var o = r.id === openRoom, t = r.temp ? num(r.temp) : null;
+        var o = r.id === openRoom, t = roomT(r);
         var hasCam = roomHasCam(r);
         if (o && r.camera) loadCams(false);
         if (o && hasCam) loadImou(false);
@@ -1042,10 +1042,14 @@
     }).join('');
   }
 
+  function roomT(r) {
+    if (r.ntTemp && NT && NT.rooms) { var nr = NT.rooms.filter(function (x) { return String(x.id) === String(r.ntTemp); })[0]; if (nr && nr.temp != null) return nr.temp; }
+    return r.temp ? num(r.temp) : null;
+  }
   var TITLES = { home: 'Accueil', rooms: 'Pièces', climate: 'Climat', cams: 'Caméras', alarm: 'Alarme', more: 'Plus' };
   function render() {
     if (!CFG || !token) return;
-    var y = window.scrollY, body;
+    var y = app.scrollTop, body;
     if (TAB === 'rooms') body = roomsGridHTML();
     else if (TAB === 'climate') body = climateHTML();
     else if (TAB === 'cams') body = camsTabHTML();
@@ -1058,7 +1062,7 @@
       '<div class="hd-r"><div class="sync' + (offline ? ' off' : '') + '"><i></i>' + (offline ? 'Hors ligne' : lastOk ? ago(lastOk) : '…') + '</div>' +
       (TAB === 'home' ? '<button class="gear' + (newVersion ? ' dot' : '') + '" data-settings aria-label="Réglages">' + icon('gear') + '</button>' : '') + '</div></header>' +
       body + '<div class="foot">Maison v' + esc(LOG ? LOG.version : '…') + (lastOk ? ' · mis à jour ' + ago(lastOk) : '') + '</div>';
-    window.scrollTo(0, y);
+    app.scrollTop = y;
     tabsEl.hidden = false;
     Array.prototype.forEach.call(tabsEl.querySelectorAll('[data-tab]'), function (b) { b.classList.toggle('on', b.dataset.tab === TAB); });
     var mb = tabsEl.querySelector('[data-tab="more"]'); if (mb) mb.classList.toggle('dot', newVersion);
@@ -2012,7 +2016,7 @@
     if ((b = e.target.closest('[data-slideopen]'))) { var so = b.dataset.slideopen.split(':'); return openSlide(so[0], so[1]); }
     if ((b = e.target.closest('[data-slidekey]'))) { SLIDE.key = b.dataset.slidekey; return render(); }
     if (e.target.closest('[data-slidex]')) { SLIDE = null; return render(); }
-    if ((b = e.target.closest('[data-goto]'))) { TAB = b.dataset.goto; store.set('maison.tab', TAB); window.scrollTo(0, 0); if (TAB === 'more') { refreshIq(true); refreshTuya(true); } return render(); }
+    if ((b = e.target.closest('[data-goto]'))) { TAB = b.dataset.goto; store.set('maison.tab', TAB); app.scrollTop = 0; if (TAB === 'more') { refreshIq(true); refreshTuya(true); } return render(); }
     if ((b = e.target.closest('[data-roomf]'))) { roomFilter = b.dataset.roomf; store.set('maison.roomf', roomFilter); return render(); }
     if ((b = e.target.closest('[data-lightall]'))) {
       var lr = findRoom(b.dataset.lightall), ls = lr.items.filter(function (it) { return it.type === 'light'; }), anyOn = ls.some(isOn);
@@ -2274,9 +2278,9 @@
   tabsEl.addEventListener('click', function (e) {
     var b = e.target.closest('[data-tab]'); if (!b || !CFG) return;
     var t = b.dataset.tab;
-    if (t === TAB) { window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+    if (t === TAB) { app.scrollTo({ top: 0, behavior: 'smooth' }); return; }
     if (TAB === 'cams') liveCam = null;
-    TAB = t; store.set('maison.tab', TAB); SLIDE = null; window.scrollTo(0, 0);
+    TAB = t; store.set('maison.tab', TAB); SLIDE = null; app.scrollTop = 0;
     if (t === 'cams') { loadCams(false); loadImou(false); }
     if (t === 'more') { refreshIq(true); refreshTuya(true); loadEnergyToday(); loadHistE(3557564, 168); }
     if (t === 'climate') { var r = ntCurrentRoom(); if (r) loadRoomHist(r.id); }
@@ -2367,7 +2371,7 @@
     // toucher la notification « garage » ouvre le journal des portes
     navigator.serviceWorker.addEventListener('message', function (ev) {
       if (ev.data && /logs=doors/.test(ev.data.open || '')) openLogs('doors');
-      if (ev.data && /#water/.test(ev.data.open || '')) { TAB = 'more'; loadWater(true); window.scrollTo(0, 0); render(); }
+      if (ev.data && /#water/.test(ev.data.open || '')) { TAB = 'more'; loadWater(true); app.scrollTop = 0; render(); }
     });
   }
   if (/logs=doors/.test(location.hash)) setTimeout(function () { openLogs('doors'); }, 600);

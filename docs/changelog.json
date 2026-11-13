@@ -1,7 +1,18 @@
 {
-  "version": "2.14.3",
+  "version": "2.15.0",
   "date": "2026-11-13",
   "releases": [
+    {
+      "version": "2.15.0",
+      "date": "2026-11-13",
+      "time": "22:25",
+      "title": "Barre du bas toujours fixe, températures des pièces",
+      "changes": [
+        "La barre d’onglets du bas ne bouge plus quand on fait défiler, même pendant le chargement",
+        "Températures ajoutées : Salle à manger (Netatmo Séjour), Couloir et escalier (eedomus), Salle de bains (Netatmo), Entrée (Netatmo)",
+        "Les noms de pièces longs passent sur 2 lignes"
+      ]
+    },
     {
       "version": "2.14.3",
       "date": "2026-11-13",
@@ -745,5 +756,5 @@
     "Révoquer à la fin : mot de passe TotalEnergies",
     "Révoquer à la fin : mot de passe EDF"
   ],
-  "time": "18:33"
+  "time": "22:25"
 }

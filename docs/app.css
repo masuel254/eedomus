@@ -816,3 +816,14 @@ svg.gsvg { display: block; width: 100%; height: auto; user-select: none; -webkit
 .qseg button { font-size: 14px; font-weight: 800; padding: 9px 0; }
 .qseg button.on.ok { background: var(--ok); color: #06210F; }
 .qseg button.on.warm { background: #FF8A5B; color: #1A0B04; }
+
+/* la page défile dans #app : la barre d'onglets reste fixe même pendant les rafraîchissements */
+html, body { height: 100%; overflow: hidden; }
+body { padding: 0 !important; }
+#app { position: fixed; inset: 0; max-width: none; margin: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-y: contain; box-sizing: border-box;
+  padding: calc(var(--top) + 8px) max(env(safe-area-inset-right, 0px), calc((100% - 560px) / 2)) calc(var(--bottom) + 96px) max(env(safe-area-inset-left, 0px), calc((100% - 560px) / 2)); }
+
+/* nom de pièce long : passe sur 2 lignes, la température reste visible */
+.rc-hd { align-items: flex-start; }
+.rc-hd b { white-space: normal; flex: 1 1 0; line-height: 1.2; }
+.rc-hd span { padding-top: 2px; }
