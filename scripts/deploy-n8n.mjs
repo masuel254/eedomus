@@ -762,6 +762,48 @@ function enSeries(k) {
   return { hours, days, since: Object.keys(e.d).sort()[0] || null, index: e.last };
 }
 
+// ---------------- Coût de l'énergie (estimation) ----------------
+// Gaz : heures de marche de la chaudière par jour (Netatmo sum_boiler_on), gardées en mémoire.
+// 1re lecture : 400 jours ; ensuite seulement les 3 derniers jours (relecture complète une fois par semaine).
+async function gasDays() {
+  SD.gas = SD.gas || { d: {}, at: 0, full: 0 };
+  if (SD.gas.at > Date.now() - 20 * 60000) return SD.gas;
+  const H = await ntHomes();
+  const ths = ((H.heat && H.heat.therm) || []).filter((t) => t.bridge);
+  if (!ths.length) return SD.gas;
+  const end = Math.floor(Date.now() / 1000), full = !(SD.gas.full > Date.now() - 7 * 86400000);
+  const begin = full ? end - 400 * 86400 : end - 3 * 86400;
+  const d = {};
+  for (const th of ths) {
+    const g = await nt('GET', 'getmeasure', { device_id: th.bridge, module_id: th.id, scale: '1day', type: 'sum_boiler_on', date_begin: begin, date_end: end, optimize: 'false', real_time: 'true' });
+    const add = (ts, v) => { if (v == null) return; const k = enKey(Number(ts) * 1000).slice(0, 8); d[k] = Math.round(((d[k] || 0) + Number(v) / 3600) * 100) / 100; };
+    const bd = g.body;
+    if (Array.isArray(bd)) bd.forEach((blk) => (blk.value || []).forEach((v, i) => add(blk.beg_time + i * (blk.step_time || 86400), v[0])));
+    else if (bd && typeof bd === 'object') Object.keys(bd).forEach((ts) => add(ts, bd[ts][0]));
+  }
+  Object.assign(SD.gas.d, d);
+  const cut = enKey(Date.now() - 800 * 86400000).slice(0, 8);
+  Object.keys(SD.gas.d).forEach((k) => { if (k < cut) delete SD.gas.d[k]; });
+  SD.gas.at = Date.now(); if (full) SD.gas.full = Date.now();
+  return SD.gas;
+}
+function costCfg() {
+  SD.cost = Object.assign({ gasPrice: 0.12, kw: 10, kwSrc: 'défaut', elecPrice: 0.20, budget: 250, meters: [] }, SD.cost || {});
+  return SD.cost;
+}
+// Calibrage : 2 relevés du compteur gaz (m³) + heures de chauffe entre les deux = puissance moyenne réelle
+function costCalibrate() {
+  const C = costCfg(), m = C.meters;
+  if (m.length < 2) return null;
+  const a0 = m[0], a1 = m[m.length - 1], days = (a1.at - a0.at) / 86400000;
+  let hours = 0;
+  Object.keys(SD.gas ? SD.gas.d : {}).forEach((k) => { if (k >= a0.day && k < a1.day) hours += SD.gas.d[k]; });
+  const kwh = (a1.idx - a0.idx) * 11.2;
+  const res = { days: Math.round(days * 10) / 10, hours: Math.round(hours * 10) / 10, kwh: Math.round(kwh) };
+  if (days >= 3 && hours >= 10 && kwh > 0) { const kw = kwh / hours; if (kw >= 2 && kw <= 40) { C.kw = Math.round(kw * 10) / 10; C.kwSrc = 'compteur'; res.kw = C.kw; } }
+  return res;
+}
+
 // ---------------- iAquaLink (Zodiac / Fluidra) : électrolyseur eXO et pompe à chaleur ----------------
 // API non officielle (celle de l'appli iAquaLink, documentée par l'intégration Home Assistant iaqualink-py).
 const IQ_KEY = 'EOOEMOW4YR6QNB07', IQ_UA = 'okhttp/3.14.7';
@@ -1081,6 +1123,31 @@ try {
     return gu ? [{ json: { garageUrl: gu } }] : []; // aucune réponse HTTP à envoyer
   }
   if (body.action === 'ping') return reply(200, { ok: true });
+  // ---- Coût de l'énergie ----
+  if (body.action === 'cost' || body.action === 'cost.cfg' || body.action === 'cost.meter') {
+    const C = costCfg();
+    if (body.action === 'cost.cfg') {
+      const lim = { gasPrice: [0.03, 0.5], kw: [2, 40], elecPrice: [0.05, 0.6], budget: [10, 2000] };
+      Object.keys(lim).forEach((k) => { const v = Number(body[k]); if (body[k] != null && isFinite(v) && v >= lim[k][0] && v <= lim[k][1]) { C[k] = Math.round(v * 1000) / 1000; if (k === 'kw') C.kwSrc = 'manuel'; } });
+    }
+    if (body.action === 'cost.meter') {
+      if (body.reset) C.meters = [];
+      else {
+        const v = Number(String(body.index).replace(',', '.'));
+        if (!isFinite(v) || v <= 0 || v > 9999999) return reply(400, { ok: false, error: 'bad_index' });
+        const last = C.meters[C.meters.length - 1];
+        if (last && v < last.idx) return reply(400, { ok: false, error: 'index_lower' });
+        C.meters.push({ at: Date.now(), day: enKey(Date.now()).slice(0, 8), idx: v });
+        C.meters = C.meters.slice(-10);
+      }
+    }
+    let gasErr = null;
+    if (CFG.nt) { try { await gasDays(); } catch (e) { gasErr = String(e && e.message || e).slice(0, 80); } }
+    const calib = costCalibrate();
+    const elec = {};
+    if (CFG.tu) Object.keys(CFG.tu.devices).forEach((k) => { const s = enSeries(k); const o = {}; s.days.forEach((x) => { o[x.k] = x.kwh; }); elec[k] = { days: o, since: s.since }; });
+    return reply(200, { ok: true, cfg: { gasPrice: C.gasPrice, kw: C.kw, kwSrc: C.kwSrc, elecPrice: C.elecPrice, budget: C.budget, meters: C.meters }, calib, gas: { days: SD.gas ? SD.gas.d : {}, err: gasErr }, elec });
+  }
   // ---- Notifications ----
   if (String(body.action || '').startsWith('push.')) {
     if (!CFG.push) return reply(503, { ok: false, error: 'push_not_configured' });

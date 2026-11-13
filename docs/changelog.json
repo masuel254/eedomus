@@ -1,7 +1,18 @@
 {
-  "version": "2.6.2",
+  "version": "2.7.0",
   "date": "2026-11-13",
   "releases": [
+    {
+      "version": "2.7.0",
+      "date": "2026-11-13",
+      "time": "09:53",
+      "title": "Coût de l’énergie",
+      "changes": [
+        "Nouvel écran Plus › Énergie › Coût de l’énergie : gaz + électricité en € (Jour, Semaine, Mois, Année), jauge par rapport au budget, détail par appareil et jours les plus chers",
+        "Gaz estimé avec les heures de chauffe Netatmo (1 an d’historique) ; électricité à 0,20 €/kWh (pompe à chaleur piscine, électrolyseur + pompe, sauna)",
+        "Réglages du calcul (prix, puissance chaudière, budget) et relevés du compteur gaz pour rendre le gaz exact"
+      ]
+    },
     {
       "version": "2.6.2",
       "date": "2026-11-13",
@@ -477,7 +488,8 @@
     "iAquaLink : électrolyseur eXO (chloration, pH, Boost, filtration, programmes) et pompe à chaleur Zodiac (consigne, marche/arrêt)",
     "Alarme : activation et paramétrage complet (zones, temporisations, mode manuel/automatique)",
     "Porte de garage : état détecté par la caméra (références de jour enregistrées le 13/11)",
-    "Notifications iPhone : alerte « porte de garage ouverte » (délai réglable) avec pastille sur l’icône"
+    "Notifications iPhone : alerte « porte de garage ouverte » (délai réglable) avec pastille sur l’icône",
+    "Coût de l’énergie (Plus › Énergie) : gaz estimé à partir des heures de chauffe Netatmo + électricité des prises Smart Life, en €"
   ],
   "todo": [
     "Tester la vidéo en direct sur iPhone (Imou et Netatmo)",
@@ -493,7 +505,8 @@
     "Surveiller le forfait vidéo Imou avec « Tout en direct » activé",
     "Garage : confirmer une fois de nuit « Elle est ouverte » et « Elle est fermée » (références infrarouge)",
     "Option : capteur d'ouverture sur la porte de garage (fiable à 100 %, même si la caméra est hors ligne)",
-    "Notifications : activer « Alertes sur cet iPhone » dans Réglages (sur chaque iPhone de la famille) puis toucher « Envoyer une notification de test »"
+    "Notifications : activer « Alertes sur cet iPhone » dans Réglages (sur chaque iPhone de la famille) puis toucher « Envoyer une notification de test »",
+    "Énergie : mettre le vrai prix du gaz (facture) et noter 2 relevés du compteur gaz à 1-2 semaines d’écart pour caler la puissance de la chaudière"
   ],
-  "time": "09:15"
+  "time": "09:53"
 }

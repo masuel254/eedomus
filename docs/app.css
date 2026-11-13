@@ -681,3 +681,37 @@ svg.gsvg { display: block; width: 100%; height: auto; user-select: none; -webkit
 .status button.warn { color: var(--amber); }
 
 .gc-learn { color: var(--mu); font-size: 12px; line-height: 1.45; }
+
+/* ---------- v2.7 : coût de l'énergie ---------- */
+.en-tabs.c4 { grid-template-columns: repeat(4, 1fr); }
+.cost-hero { text-align: center; }
+.cost-hero .est { display: inline-flex; margin-top: 10px; font-size: 11px; color: var(--amber); background: rgba(255,194,75,.08); border: 1px solid rgba(255,194,75,.25); padding: 3px 9px; border-radius: 999px; }
+.cost-hero .cring { position: relative; width: 170px; height: 170px; margin: 6px auto 4px; }
+.cost-hero .crc { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; }
+.cost-hero .crc b { font-size: 30px; font-weight: 500; }
+.cost-hero .crc small { color: var(--mu); font-size: 12px; }
+.cost-k { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; text-align: left; margin-top: 8px; }
+.cost-k > div { background: var(--s2); border-radius: 14px; padding: 10px; display: grid; gap: 2px; min-width: 0; }
+.cost-k i { width: 8px; height: 8px; border-radius: 3px; display: inline-block; }
+.cost-k small { color: var(--mu); font-size: 11.5px; font-weight: 600; }
+.cost-k b { font-size: 17px; font-weight: 500; }
+.cost-k span { color: var(--mu); font-size: 11px; }
+.legend { display: flex; gap: 14px; font-size: 12px; color: var(--mu); margin-top: 6px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+.cost-list .row { grid-template-columns: auto 1fr auto; }
+.cost-list .row > span:first-child:not(.ic) { grid-column: 1 / 3; }
+.cbar { display: block; height: 5px; border-radius: 3px; background: var(--s3); overflow: hidden; margin-top: 6px; }
+.cbar i { display: block; height: 100%; border-radius: 3px; }
+.cset { display: flex; align-items: center; gap: 10px; }
+.cset b { font-size: 14px; font-weight: 500; white-space: nowrap; }
+.cost-meter p { color: var(--mu); font-size: 13px; line-height: 1.5; margin: 0 0 10px; }
+.cost-meter p.ok2 { color: var(--ok); margin: 10px 0 0; }
+.cm-in { display: flex; gap: 8px; }
+.cm-in input { flex: 1; min-width: 0; background: var(--s2); border: 1px solid var(--ln); border-radius: 12px; padding: 10px 12px; color: var(--tx); font: inherit; font-size: 16px; }
+.cost-meter ul { list-style: none; margin: 10px 0 0; padding: 0; }
+.cost-meter li { display: flex; justify-content: space-between; padding: 6px 0; border-top: 1px solid var(--ln); font-size: 13px; color: var(--mu); }
+.cost-meter li b { color: var(--tx); font-weight: 500; }
+.cm-reset { margin-top: 10px; color: var(--mu); font-size: 12.5px; text-decoration: underline; }
+.en-period button[disabled] { opacity: .3; }
+.cost-hero .cring svg { display: block; }
+.cost-hero .crc small { display: block; }

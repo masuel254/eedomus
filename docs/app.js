@@ -811,6 +811,7 @@
       spark(ph && ph.points ? ph.points.map(function (p) { return [new Date(String(p[0]).replace(' ', 'T')).getTime(), p[1]]; }) : null, { w: 320, h: 70, ref: 7.2, color: '#7CB2FF', labels: ['−7 j', '−5 j', '−3 j', '−1 j', 'auj.'] }) +
       '<div class="acc2b">' + pis.items.filter(function (it) { return it.type === 'sensor' || it.type === 'light'; }).map(rowHTML).join('') + '</div></div>';
     h += '<div class="lbl">Énergie</div><div class="card2 flat">' +
+      '<button class="row" data-cost><span class="ic" style="color:#FF8A5B">' + icon('flame') + '</span><span><b>Coût de l’énergie</b><small>Gaz et électricité · estimation en €</small></span><span class="val">›</span></button>' +
       pis.items.filter(function (it) { return it.type === 'tuya-meter'; }).map(rowHTML).join('') +
       sdb.items.filter(function (it) { return it.type === 'tuya-meter'; }).map(rowHTML).join('') + '</div>';
     if (met) h += '<div class="lbl">Météo</div><div class="card2 flat">' + met.items.map(rowHTML).join('') + '</div>';
@@ -981,6 +982,7 @@
     if (view === 'cams') { loadCams(true); loadImou(false); renderCams(); }
     else if (view === 'rec') renderRec();
     else if (view === 'energy') renderEnergy();
+    else if (view === 'cost') renderCost();
     else if (view === 'timers') renderTimers();
     else if (view === 'plans') renderPlans();
     else if (view === 'logs') renderLogs();
@@ -1329,6 +1331,147 @@
     sheet.innerHTML = '<div class="sh-in">' + h + '</div>';
     sheet.scrollTop = keep;
   }
+
+  // ---------- Coût de l'énergie (estimation : gaz via Netatmo, électricité via Smart Life) ----------
+  var COST = null; // { tab, off, data, loading, error }
+  var COST_ITEMS = [
+    { k: 'gas', name: 'Chauffage (gaz)', icon: 'flame', color: '#FF8A5B' },
+    { k: 'pac', name: 'Pompe à chaleur piscine', icon: 'thermo', color: '#FFC24B' },
+    { k: 'elec', name: 'Électrolyseur + pompe', icon: 'bolt', color: '#5BA8FF' },
+    { k: 'sauna', name: 'Sauna', icon: 'drop', color: '#B48CFF' }
+  ];
+  function costLoad(body) {
+    if (!COST) return;
+    var b = body || { action: 'cost' };
+    return api(b).then(function (j) {
+      if (!COST) return; COST.data = j; COST.loading = false; COST.error = false;
+      try { localStorage.setItem('maison-cost', JSON.stringify(j)); } catch (e) {}
+      if (sheet.dataset.view === 'cost' && !sheet.hidden) renderCost();
+      return j;
+    }).catch(function (e) { if (COST) { COST.loading = false; COST.error = true; if (sheet.dataset.view === 'cost') renderCost(); } throw e; });
+  }
+  function openCost() {
+    var cached = null; try { cached = JSON.parse(localStorage.getItem('maison-cost') || 'null'); } catch (e) {}
+    COST = { tab: 'month', off: 0, data: cached, loading: true };
+    sheet.scrollTop = 0; openSheet('cost'); costLoad().catch(function () {});
+  }
+  // Valeurs par jour (AAAAMMJJ) pour chaque poste, en kWh et en €
+  function costDay(D, k) {
+    var c = D.cfg, out = { kwh: 0, eur: 0, h: 0, any: false };
+    if (k === 'gas') { var h = D.gas.days[COST_CUR]; if (h != null) { out.h = h; out.kwh = h * c.kw; out.eur = out.kwh * c.gasPrice; out.any = true; } }
+    else { var e = D.elec[k] && D.elec[k].days[COST_CUR]; if (e != null) { out.kwh = e; out.eur = e * c.elecPrice; out.any = true; } }
+    return out;
+  }
+  var COST_CUR = '';
+  function costPeriod() {
+    // Liste des jours de la période affichée + découpage pour le graphique
+    var t = new Date(), tab = COST.tab, off = COST.off, days = [], groups = [], title = '';
+    var dk = function (d) { return ymdK(d); };
+    if (tab === 'day') {
+      var d = new Date(t.getFullYear(), t.getMonth(), t.getDate() + off); days = [dk(d)];
+      title = off === 0 ? "Aujourd'hui" : off === -1 ? 'Hier' : d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+    } else if (tab === 'week') {
+      for (var i = 6; i >= 0; i--) { var w = new Date(t.getFullYear(), t.getMonth(), t.getDate() + off * 7 - i); days.push(dk(w)); groups.push({ label: 'LMMJVSD'.charAt((w.getDay() + 6) % 7), days: [dk(w)] }); }
+      var a0 = new Date(+days[0].slice(0, 4), +days[0].slice(4, 6) - 1, +days[0].slice(6, 8));
+      title = off === 0 ? '7 derniers jours' : 'Semaine du ' + a0.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+    } else if (tab === 'month') {
+      var m = new Date(t.getFullYear(), t.getMonth() + off, 1), nd = new Date(m.getFullYear(), m.getMonth() + 1, 0).getDate();
+      for (var j = 1; j <= nd; j++) { var md = new Date(m.getFullYear(), m.getMonth(), j); if (md > t) break; days.push(dk(md)); groups.push({ label: j === 1 || j % 10 === 0 ? String(j) : '', days: [dk(md)] }); }
+      title = m.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+    } else {
+      var y = t.getFullYear() + off;
+      for (var mo = 0; mo < 12; mo++) {
+        var g = { label: 'JFMAMJJASOND'.charAt(mo), days: [] }, n2 = new Date(y, mo + 1, 0).getDate();
+        for (var dd = 1; dd <= n2; dd++) { var yd = new Date(y, mo, dd); if (yd > t) break; g.days.push(dk(yd)); days.push(dk(yd)); }
+        groups.push(g);
+      }
+      title = String(y);
+    }
+    return { days: days, groups: groups, title: title };
+  }
+  function costSum(D, list, k) {
+    var s = { kwh: 0, eur: 0, h: 0, any: false };
+    list.forEach(function (d) { COST_CUR = d; var v = costDay(D, k); if (v.any) { s.kwh += v.kwh; s.eur += v.eur; s.h += v.h; s.any = true; } });
+    return s;
+  }
+  function eur(v, dec) { return v == null ? '—' : fmt(v, dec == null ? (v < 10 ? 2 : 0) : dec) + ' €'; }
+  function renderCost() {
+    if (!COST) return;
+    var D = COST.data, h = '<div class="sh-hd"><h2>Énergie</h2><button class="close" data-close aria-label="Fermer">×</button></div>';
+    h += '<div class="en-tabs c4">' + [['day', 'Jour'], ['week', 'Semaine'], ['month', 'Mois'], ['year', 'Année']].map(function (t) {
+      return '<button class="' + (COST.tab === t[0] ? 'on' : '') + '" data-costtab="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>';
+    if (!D) { sheet.innerHTML = '<div class="sh-in">' + h + '<p class="muted">' + (COST.error ? 'La maison ne répond pas, réessaie dans un instant.' : 'Calcul en cours…') + '</p></div>'; return; }
+    var P = costPeriod(), c = D.cfg;
+    var tot = {}, total = 0, gasE = 0, elE = 0, gasK = 0, elK = 0;
+    COST_ITEMS.forEach(function (it) { var s = costSum(D, P.days, it.k); tot[it.k] = s; total += s.eur; if (it.k === 'gas') { gasE += s.eur; gasK += s.kwh; } else { elE += s.eur; elK += s.kwh; } });
+    var budget = c.budget * (COST.tab === 'day' ? 1 / 30 : COST.tab === 'week' ? 7 / 30 : COST.tab === 'month' ? 1 : 12);
+    // Jauge : gaz puis électricité, par rapport au budget
+    var R = 70, CC = 2 * Math.PI * R, fg = Math.min(1, gasE / budget), fe = Math.min(1 - fg, elE / budget);
+    var ring = '<svg viewBox="0 0 170 170" width="170" height="170"><circle cx="85" cy="85" r="' + R + '" fill="none" stroke="var(--s3)" stroke-width="14"/>' +
+      (fe > 0 ? '<circle cx="85" cy="85" r="' + R + '" fill="none" stroke="#5BA8FF" stroke-width="14" stroke-dasharray="' + (CC * (fg + fe)).toFixed(1) + ' ' + CC.toFixed(1) + '" transform="rotate(-90 85 85)" stroke-linecap="round"/>' : '') +
+      (fg > 0 ? '<circle cx="85" cy="85" r="' + R + '" fill="none" stroke="#FF8A5B" stroke-width="14" stroke-dasharray="' + (CC * fg).toFixed(1) + ' ' + CC.toFixed(1) + '" transform="rotate(-90 85 85)" stroke-linecap="round"/>' : '') + '</svg>';
+    var nDays = P.days.length || 1;
+    h += '<div class="en-card cost-hero"><div class="en-period"><button data-coststep="-1" aria-label="Période précédente">' + icon('down') + '</button><span>' + esc(P.title.charAt(0).toUpperCase() + P.title.slice(1)) + '</span>' +
+      '<button data-coststep="1" aria-label="Période suivante"' + (COST.off >= 0 ? ' disabled' : '') + '>' + icon('down') + '</button></div>' +
+      '<span class="est">≈ estimation</span>' +
+      '<div class="cring">' + ring + '<div class="crc"><b class="mono">' + eur(total, 0) + '</b><small>budget ' + eur(budget, 0) + '</small></div></div>' +
+      '<div class="cost-k"><div><i style="background:#FF8A5B"></i><small>Gaz</small><b class="mono">' + eur(gasE, 0) + '</b><span>' + fmt(gasK, 0) + ' kWh</span></div>' +
+      '<div><i style="background:#5BA8FF"></i><small>Électricité</small><b class="mono">' + eur(elE, 0) + '</b><span>' + fmt(elK, 0) + ' kWh</span></div>' +
+      '<div><i style="background:var(--mu)"></i><small>Par jour</small><b class="mono">' + eur(total / nDays, total / nDays < 10 ? 2 : 0) + '</b><span>moyenne</span></div></div></div>';
+    // Graphique empilé gaz / électricité
+    if (P.groups.length) {
+      var vals = P.groups.map(function (g) { var ga = costSum(D, g.days, 'gas').eur, el = 0; ['pac', 'elec', 'sauna'].forEach(function (k) { el += costSum(D, g.days, k).eur; }); return [ga, el]; });
+      var W = 320, H = 140, base = 116, n = vals.length, gap = n > 20 ? 2 : 5, bw = (W - gap * (n - 1)) / n, max = Math.max.apply(null, vals.map(function (v) { return v[0] + v[1]; }).concat([0.01]));
+      var s = '<svg class="bars" viewBox="0 0 ' + W + ' ' + H + '"><line x1="0" x2="' + W + '" y1="' + base + '" y2="' + base + '" class="axis"/>';
+      vals.forEach(function (v, i) {
+        var x = i * (bw + gap), hg = v[0] / max * (base - 10), he = v[1] / max * (base - 10);
+        if (hg > 0) s += '<rect x="' + x.toFixed(1) + '" y="' + (base - hg).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + hg.toFixed(1) + '" rx="2" fill="#FF8A5B"/>';
+        if (he > 0) s += '<rect x="' + x.toFixed(1) + '" y="' + (base - hg - he).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + Math.max(he, 1).toFixed(1) + '" rx="2" fill="#5BA8FF"/>';
+        if (P.groups[i].label) s += '<text x="' + (x + bw / 2).toFixed(1) + '" y="' + (H - 6) + '" text-anchor="middle" class="lbl">' + P.groups[i].label + '</text>';
+      });
+      s += '<text x="' + W + '" y="10" text-anchor="end" class="lbl">' + eur(max, max < 10 ? 2 : 0) + '</text></svg>';
+      h += '<div class="lbl">Coût ' + (COST.tab === 'year' ? 'par mois' : 'par jour') + '</div><div class="card2">' + s + '<div class="legend"><span><i style="background:#FF8A5B"></i>Gaz</span><span><i style="background:#5BA8FF"></i>Électricité</span></div></div>';
+    }
+    // Détail par appareil
+    var mx = Math.max.apply(null, COST_ITEMS.map(function (it) { return tot[it.k].eur; }).concat([0.01]));
+    h += '<div class="lbl">Détail</div><div class="card2 flat cost-list">' + COST_ITEMS.map(function (it) {
+      var s = tot[it.k], sub = it.k === 'gas' ? fmt(s.h, 0) + ' h de chauffe · ' + fmt(s.kwh, 0) + ' kWh' : (s.any ? kwh(s.kwh) + ' kWh' : 'pas encore de relevé');
+      var tag = it.k === 'gas' ? 'div' : 'button';
+      return '<' + tag + ' class="row"' + (it.k === 'gas' ? '' : ' data-energy="' + it.k + '" data-ename="' + esc(it.name) + '"') + '><span class="ic" style="color:' + it.color + '">' + icon(it.icon) + '</span>' +
+        '<span><b>' + esc(it.name) + '</b><small>' + esc(sub) + '</small><span class="cbar"><i style="width:' + (s.eur / mx * 100).toFixed(0) + '%;background:' + it.color + '"></i></span></span>' +
+        '<span class="val mono">' + eur(s.eur) + '</span></' + tag + '>';
+    }).join('') + '</div>';
+    // Jours les plus chers
+    if (COST.tab === 'month' || COST.tab === 'year') {
+      var top = P.days.map(function (d) { var e = 0, gh = 0; COST_ITEMS.forEach(function (it) { var v = costSum(D, [d], it.k); e += v.eur; if (it.k === 'gas') gh = v.h; }); return { d: d, e: e, h: gh }; })
+        .filter(function (x) { return x.e > 0; }).sort(function (a, b) { return b.e - a.e; }).slice(0, 4);
+      if (top.length) h += '<div class="lbl">Les jours qui ont coûté le plus</div><div class="card2 flat cost-list">' + top.map(function (x) {
+        var dt = new Date(+x.d.slice(0, 4), +x.d.slice(4, 6) - 1, +x.d.slice(6, 8));
+        return '<div class="row"><span><b>' + esc(dt.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short' })) + '</b><small>' + fmt(x.h, 1) + ' h de chauffe</small></span><span class="val mono">' + eur(x.e) + '</span></div>';
+      }).join('') + '</div>';
+    }
+    // Réglages du calcul
+    var st = function (f, label, sub, val, step) {
+      return '<div class="row"><span><b>' + label + '</b><small>' + sub + '</small></span><span class="cset"><b class="mono">' + val + '</b><span class="stp2"><button data-costset="' + f + ':' + (-step) + '" aria-label="Moins">−</button><button data-costset="' + f + ':' + step + '" aria-label="Plus">+</button></span></span></div>';
+    };
+    h += '<div class="lbl">Réglages du calcul</div><div class="card2 flat cost-list">' +
+      st('gasPrice', 'Prix du gaz', 'sur ta facture, en €/kWh', fmt(c.gasPrice, 3), 0.005) +
+      st('kw', 'Puissance de la chaudière', c.kwSrc === 'compteur' ? 'calculée avec ton compteur ✓' : 'moyenne quand elle chauffe', fmt(c.kw, 1) + ' kW', 0.5) +
+      st('elecPrice', 'Prix de l’électricité', 'en €/kWh', fmt(c.elecPrice, 3), 0.005) +
+      st('budget', 'Budget mensuel', 'pour la jauge', fmt(c.budget, 0) + ' €', 10) + '</div>';
+    // Relevé du compteur gaz
+    var ms = c.meters || [], cal = D.calib;
+    h += '<div class="lbl">Rendre le calcul du gaz exact</div><div class="card2 cost-meter">' +
+      '<p>Note le chiffre de ton compteur gaz (en m³) aujourd’hui, puis à nouveau dans 1 à 2 semaines. L’appli en déduit la vraie puissance de ta chaudière.</p>' +
+      '<div class="cm-in"><input id="cost-idx" inputmode="decimal" placeholder="Index du compteur (m³)" autocomplete="off"><button class="act" data-costmeter>Enregistrer</button></div>' +
+      (ms.length ? '<ul>' + ms.map(function (m) { return '<li><span>' + new Date(m.at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) + ' à ' + new Date(m.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) + '</span><b class="mono">' + fmt(m.idx, 2) + ' m³</b></li>'; }).join('') + '</ul>' : '') +
+      (cal ? '<p class="ok2">' + (cal.kw ? 'Puissance calculée : ' + fmt(cal.kw, 1) + ' kW (' + fmt(cal.kwh, 0) + ' kWh pour ' + fmt(cal.hours, 0) + ' h de chauffe sur ' + fmt(cal.days, 0) + ' jours).' : 'Encore un peu de patience : il faut au moins 3 jours et 10 h de chauffe entre le premier et le dernier relevé.') + '</p>' : ms.length === 1 ? '<p class="ok2">1er relevé noté. Refais-le dans 1 à 2 semaines.</p>' : '') +
+      (ms.length ? '<button class="cm-reset" data-costmeter-reset>Effacer les relevés</button>' : '') + '</div>';
+    var since = ['pac', 'elec', 'sauna'].map(function (k) { return D.elec[k] && D.elec[k].since; }).filter(Boolean).sort()[0];
+    h += '<p class="note-q">Estimation. Gaz = heures de chauffe de la chaudière (Netatmo) × puissance × prix ; seul le chauffage est compté (pas l’eau chaude ni la cuisson). Électricité = kWh mesurés par les prises Smart Life × prix' +
+      (since ? ', relevés depuis le ' + (+since.slice(6, 8)) + '/' + since.slice(4, 6) : '') + '.' + (D.gas && D.gas.err ? ' Netatmo n’a pas répondu, chiffres du gaz peut-être incomplets.' : '') + '</p>';
+    var keep = sheet.scrollTop; sheet.innerHTML = '<div class="sh-in">' + h + '</div>'; sheet.scrollTop = keep;
+  }
   function stepEnergy(dir) {
     if (!ENG) return;
     if (ENG.tab === 'day') { var d = new Date(+ENG.day.slice(0, 4), +ENG.day.slice(4, 6) - 1, +ENG.day.slice(6, 8) + dir); if (d > new Date()) return; ENG.day = ymdK(d); }
@@ -1469,6 +1612,7 @@
   function appClick(e) {
     var b;
     if ((b = e.target.closest('[data-settings]'))) return openSheet('settings');
+    if (e.target.closest('[data-cost]')) return openCost();
     if ((b = e.target.closest('[data-opencams]'))) { if (!sheet.hidden) closeSheet(); liveCam = b.dataset.opencams; liveHd = true; TAB = 'cams'; store.set('maison.tab', TAB); loadCams(false); loadImou(false); render();
       var cc = document.getElementById('cc-' + liveCam); if (cc) cc.scrollIntoView({ block: 'center' }); return; }
     // Accès rapide de l'accueil
@@ -1588,6 +1732,21 @@
     if (e.target.closest('[data-hd]')) { liveHd = !liveHd; return renderCams(); }
     if ((b = e.target.closest('[data-rec]'))) return openRec(b.dataset.rec);
     if ((b = e.target.closest('[data-entab]'))) { ENG.tab = b.dataset.entab; return renderEnergy(); }
+    if ((b = e.target.closest('[data-energy]')) && sheet.dataset.view === 'cost') return openEnergy(b.dataset.energy, b.dataset.ename);
+    if ((b = e.target.closest('[data-costtab]'))) { COST.tab = b.dataset.costtab; COST.off = 0; return renderCost(); }
+    if ((b = e.target.closest('[data-coststep]'))) { var nv2 = COST.off + +b.dataset.coststep; if (nv2 > 0) return; COST.off = nv2; return renderCost(); }
+    if ((b = e.target.closest('[data-costset]'))) {
+      var fs = b.dataset.costset.split(':'), cf = COST.data.cfg, nvv = Math.round((cf[fs[0]] + +fs[1]) * 1000) / 1000, q = { action: 'cost.cfg' };
+      q[fs[0]] = nvv; cf[fs[0]] = nvv; if (fs[0] === 'kw') cf.kwSrc = 'manuel'; renderCost();
+      return costLoad(q).catch(function () { toast('Réglage non enregistré, réessaie', true); costLoad().catch(function () {}); });
+    }
+    if (e.target.closest('[data-costmeter-reset]')) { if (!confirm('Effacer tous les relevés du compteur ?')) return; return costLoad({ action: 'cost.meter', reset: true }).catch(function () { toast('Impossible pour le moment', true); }); }
+    if (e.target.closest('[data-costmeter]')) {
+      var inp = document.getElementById('cost-idx'), v = inp && inp.value.trim();
+      if (!v) return toast('Tape le chiffre du compteur', true);
+      return costLoad({ action: 'cost.meter', index: v }).then(function () { toast('Relevé enregistré'); })
+        .catch(function (err) { toast(/index_lower/.test(err.message) ? 'Ce chiffre est plus petit que le relevé précédent' : 'Chiffre non valable, vérifie-le', true); });
+    }
     if ((b = e.target.closest('[data-grange]'))) { GR.range = b.dataset.grange; GR.end = null; return loadGraph(); }
     if ((b = e.target.closest('[data-groom]'))) { GR.room = b.dataset.groom; GR.end = null; return loadGraph(); }
     if ((b = e.target.closest('[data-gstep]'))) {
