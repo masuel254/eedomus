@@ -1,7 +1,16 @@
 {
-  "version": "2.17.2",
+  "version": "2.17.3",
   "date": "2026-11-13",
   "releases": [
+    {
+      "version": "2.17.3",
+      "date": "2026-11-13",
+      "time": "23:25",
+      "title": "Alarme : OUI / NON",
+      "changes": [
+        "Onglet Alarme : « Activer l’alarme » ou « Désactiver l’alarme » selon l’état, avec OUI / NON"
+      ]
+    },
     {
       "version": "2.17.2",
       "date": "2026-11-13",
@@ -825,5 +834,5 @@
     "Révoquer à la fin : mot de passe TotalEnergies",
     "Révoquer à la fin : mot de passe EDF"
   ],
-  "time": "23:23"
+  "time": "23:25"
 }

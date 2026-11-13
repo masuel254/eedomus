@@ -866,10 +866,11 @@
   function alarmHTML() {
     var A = CFG.alarm || { items: [] }, v = num(A.status), st = ALARM_STATE[v] || [(STATES[A.status] || {}).text || '—', ''], armed = v != null && v !== 0;
     var h = '<div class="acard ' + st[1] + '"><span class="aic">' + icon('shield') + '</span><span><b>Alarme ' + esc(st[0].toLowerCase()) + '</b><small>' + esc(since(A.status)) + '</small></span></div>';
-    // boutons ON / OFF (un seul appui), comme dans l'accès rapide
-    h += '<div class="card2 alarm-onoff"><span><b>' + (armed ? 'Désactiver l’alarme' : 'Activer l’alarme') + '</b><small>Un appui sur ON ou OFF</small></span>' +
-      '<span class="seg2 qseg"><button class="' + (armed ? 'on ok' : '') + '" data-qgo="alarm-on">' + (qBusy['alarm-on'] ? 'Envoi…' : 'ON') + '</button>' +
-      '<button class="' + (!armed ? 'on' : '') + '" data-qgo="alarm-off">' + (qBusy['alarm-off'] ? 'Envoi…' : 'OFF') + '</button></span></div>';
+    // « Activer l'alarme » ou « Désactiver l'alarme » selon l'état : OUI = on le fait, NON = on ne touche à rien
+    var ak = armed ? 'alarm-off' : 'alarm-on';
+    h += '<div class="card2 alarm-onoff"><span><b>' + (armed ? 'Désactiver l’alarme' : 'Activer l’alarme') + '</b><small>' + (armed ? 'L’alarme est activée' : 'L’alarme est désactivée') + '</small></span>' +
+      '<span class="seg2 qseg"><button class="' + (armed ? 'yes-off' : 'yes-on') + '" data-qgo="' + ak + '">' + (qBusy[ak] ? 'Envoi…' : 'OUI') + '</button>' +
+      '<button class="on">NON</button></span></div>';
     var grp = function (g, title) {
       var items = A.items.filter(function (it) { return it.group === g; }); if (!items.length) return '';
       // détecteurs : mouvement en cours d'abord, puis du plus récent au plus ancien
