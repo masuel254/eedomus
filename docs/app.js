@@ -484,12 +484,22 @@
     if (y1 - y0 < 0.6) { var mid = (y0 + y1) / 2; y0 = mid - 0.3; y1 = mid + 0.3; }
     var X = function (v) { return pad + (v - x0) / Math.max(1, x1 - x0) * (W - 2 * pad); }, Y = function (v) { return pad + (1 - (v - y0) / (y1 - y0)) * (H - 2 * pad - 6) + 3; };
     var d = points.map(function (p, i) { return (i ? 'L' : 'M') + X(p[0]).toFixed(1) + ' ' + Y(p[1]).toFixed(1); }).join(' ');
-    var gid = 'g' + Math.random().toString(36).slice(2, 8), hl = o.labels ? 14 : 0;
+    var gid = 'g' + Math.random().toString(36).slice(2, 8), hl = o.labels || o.hours ? 14 : 0;
     var s = '<svg class="spark" viewBox="0 0 ' + W + ' ' + (H + hl) + '" preserveAspectRatio="none"><defs><linearGradient id="' + gid + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + c + '" stop-opacity=".32"/><stop offset="1" stop-color="' + c + '" stop-opacity="0"/></linearGradient></defs>';
     if (o.ref != null) s += '<line x1="0" x2="' + W + '" y1="' + Y(o.ref).toFixed(1) + '" y2="' + Y(o.ref).toFixed(1) + '" class="sp-ref"/>';
     s += '<path d="' + d + ' L' + X(x1).toFixed(1) + ' ' + H + ' L' + X(x0).toFixed(1) + ' ' + H + ' Z" fill="url(#' + gid + ')"/>';
     s += '<path d="' + d + '" fill="none" stroke="' + c + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>';
     var last = points[points.length - 1]; s += '<circle cx="' + X(last[0]).toFixed(1) + '" cy="' + Y(last[1]).toFixed(1) + '" r="3.5" fill="' + c + '"/>';
+    // o.hours : heures pleines réelles sous l'axe (08h, 12h, 16h…), tous les o.hours heures
+    if (o.hours) {
+      var ms = x0 > 1e11 ? 1 : 1000, st = o.hours * 3600000, t = new Date(x0 * ms); t.setMinutes(0, 0, 0);
+      t.setHours(Math.ceil((t.getHours() + (x0 * ms > t.getTime() ? 1 : 0)) / o.hours) * o.hours);
+      for (var tt = t.getTime(); tt <= x1 * ms; tt += st) {
+        var xx = X(tt / ms); if (xx < 12 || xx > W - 12) continue;
+        s += '<line x1="' + xx.toFixed(1) + '" x2="' + xx.toFixed(1) + '" y1="0" y2="' + H + '" class="sp-ref" style="opacity:.35"/>';
+        s += '<text x="' + xx.toFixed(1) + '" y="' + (H + 11) + '" class="sp-l" text-anchor="middle">' + String(new Date(tt).getHours()).padStart(2, '0') + 'h</text>';
+      }
+    }
     if (o.labels) o.labels.forEach(function (t, i) { s += '<text x="' + (i / (o.labels.length - 1) * W).toFixed(1) + '" y="' + (H + 11) + '" class="sp-l" text-anchor="' + (i === 0 ? 'start' : i === o.labels.length - 1 ? 'end' : 'middle') + '">' + t + '</text>'; });
     return s + '</svg>';
   }
@@ -861,7 +871,7 @@
       var hp = HISTN[r.id], sp = ntPend && String(ntPend.room) === String(r.id) ? ntPend.temp : r.setpoint;
       h += manualHTML(r).replace('class="manual"', 'class="manual big"');
       h += '<div class="lbl">Température · ' + esc(r.name) + ' · 24 h</div><button class="card2 gtap" data-graph="' + esc(r.id) + '">' +
-        spark(hp && hp.points ? hp.points : null, { w: 320, h: 90, ref: sp, labels: ['−24 h', '−18 h', '−12 h', '−6 h', 'maint.'] }) +
+        spark(hp && hp.points ? hp.points : null, { w: 320, h: 90, ref: sp, hours: 4 }) +
         '<div class="legend"><span><i style="background:#FF8A5B"></i>Mesurée</span><span><i class="dash"></i>Consigne ' + fmt(sp, 1) + '°</span><span class="more">Détails ›</span></div></button>';
       h += '<div class="lbl">Toutes les pièces</div><div class="card2 rooms2">' + NT.rooms.map(function (x) {
         var man = x.mode === 'manual' || x.mode === 'max';
