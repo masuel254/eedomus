@@ -1,10 +1,11 @@
 // Service worker : réseau d'abord (toujours la dernière version), cache en secours hors ligne.
 // Les appels à la maison (n8n) ne passent jamais par le cache.
-var V = 'maison-2.17.6';
+var V = 'maison-2.17.7';
 var SHELL = ['./', './index.html', './app.css', './app.js', './config.json', './changelog.json', './manifest.webmanifest', './icons/icon-192-v2.png'];
 
 self.addEventListener('install', function (e) {
-  e.waitUntil(caches.open(V).then(function (c) { return c.addAll(SHELL); }));
+  // cache: 'reload' : on ignore la copie gardée par le navigateur, sinon une nouvelle version peut s'installer avec l'ancien app.js
+  e.waitUntil(caches.open(V).then(function (c) { return c.addAll(SHELL.map(function (u) { return new Request(u, { cache: 'reload' }); })); }));
   self.skipWaiting();
 });
 self.addEventListener('activate', function (e) {
@@ -16,7 +17,8 @@ self.addEventListener('activate', function (e) {
 self.addEventListener('fetch', function (e) {
   var u = new URL(e.request.url);
   if (e.request.method !== 'GET' || u.origin !== location.origin) return;
-  e.respondWith(fetch(e.request).then(function (r) {
+  // cache: 'no-cache' : le navigateur redemande toujours au serveur si le fichier a changé (réponse « inchangé » très légère sinon)
+  e.respondWith(fetch(e.request, { cache: 'no-cache' }).then(function (r) {
     var copy = r.clone();
     caches.open(V).then(function (c) { c.put(e.request, copy); });
     return r;
