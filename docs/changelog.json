@@ -1,7 +1,18 @@
 {
-  "version": "2.3.0",
+  "version": "2.4.0",
   "date": "2026-11-13",
   "releases": [
+    {
+      "version": "2.4.0",
+      "date": "2026-11-13",
+      "time": "08:18",
+      "title": "Porte de garage vue par la caméra",
+      "changes": [
+        "Détection automatique de la porte de garage par la caméra : contrôle toutes les 5 minutes et juste après chaque commande",
+        "Apprentissage : chaque confirmation « Elle est ouverte / fermée » enregistre une photo de référence (jour, puis nuit)",
+        "Pastille « Tout est fermé » : inclut la porte de garage"
+      ]
+    },
     {
       "version": "2.3.0",
       "date": "2026-11-13",
@@ -356,7 +367,8 @@
     "Enregistrements : carte SD des caméras Imou (7 jours) et clips des événements Presence",
     "Consommation électrique : électrolyseur, pompe à chaleur et sauna (jour, mois, année)",
     "iAquaLink : électrolyseur eXO (chloration, pH, Boost, filtration, programmes) et pompe à chaleur Zodiac (consigne, marche/arrêt)",
-    "Alarme : activation et paramétrage complet (zones, temporisations, mode manuel/automatique)"
+    "Alarme : activation et paramétrage complet (zones, temporisations, mode manuel/automatique)",
+    "Porte de garage : état détecté par la caméra (références de jour enregistrées le 13/11)"
   ],
   "todo": [
     "Tester la vidéo en direct sur iPhone (Imou et Netatmo)",
@@ -369,7 +381,9 @@
     "Pompe à chaleur Zodiac hors ligne depuis le 27/09 : à retester quand elle sera rallumée",
     "Tester la modification d’un planning (de préférence sur une copie d’abord)",
     "Graphiques supplémentaires : température extérieure, consommation sur la semaine",
-    "Surveiller le forfait vidéo Imou avec « Tout en direct » activé"
+    "Surveiller le forfait vidéo Imou avec « Tout en direct » activé",
+    "Garage : confirmer une fois de nuit « Elle est ouverte » et « Elle est fermée » (références infrarouge)",
+    "Option : capteur d'ouverture sur la porte de garage (fiable à 100 %, même si la caméra est hors ligne)"
   ],
-  "time": "08:10"
+  "time": "08:18"
 }

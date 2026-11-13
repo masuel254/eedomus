@@ -679,3 +679,5 @@ svg.gsvg { display: block; width: 100%; height: auto; user-select: none; -webkit
 
 .row .warn2 { color: var(--amber); font-size: 13px; font-weight: 700; }
 .status button.warn { color: var(--amber); }
+
+.gc-learn { color: var(--mu); font-size: 12px; line-height: 1.45; }

@@ -167,8 +167,32 @@ function garageState(events) {
   // commandes passées par eedomus (appli eedomus, scènes…) plus récentes que l'état mémorisé
   const cmd = (events || []).filter((e) => String(e.id) === String(CFG.logs.garage) && /ouverture|fermeture/i.test(e.text)).sort((a, b) => (a.date < b.date ? 1 : -1))[0];
   // la commande du garage est un contact bref (chaque commande fait bouger la porte, dans un sens ou dans l'autre) : état à vérifier
-  if (cmd && cmd.date > g.date) g = { state: 'unknown', date: cmd.date, src: 'commande' };
-  return Object.assign({}, g, { log: G.garageLog || [] });
+  if (cmd && cmd.date > g.date) { g = { state: 'unknown', date: cmd.date, src: 'commande' }; garageCheckSoon(); }
+  const cam = G.garageCam || {}, refs = G.garageRefs || [];
+  return Object.assign({}, g, { log: G.garageLog || [],
+    cam: { at: cam.at || null, state: cam.state || null, margin: cam.margin ?? null,
+      refs: { open: refs.filter((r) => r.state === 'open').length, closed: refs.filter((r) => r.state === 'closed').length } } });
+}
+// Demander une photo de contrôle du garage dans ~40 s puis ~100 s
+function garageCheckSoon() {
+  const G = $getWorkflowStaticData('global');
+  G.garageDues = [Date.now() + 40000, Date.now() + 100000];
+}
+// Faut-il prendre une photo maintenant ? Si oui, renvoie l'adresse d'une photo toute fraîche de la caméra du garage
+async function garageCamDue() {
+  if (!CFG.im) return null;
+  const G = $getWorkflowStaticData('global');
+  const now = Date.now(), last = (G.garageCam && G.garageCam.tryAt) || 0;
+  const dues = (G.garageDues || []).filter((t) => t <= now);
+  if (!dues.length && now - last < 5 * 60000) return null;
+  G.garageDues = (G.garageDues || []).filter((t) => t > now);
+  G.garageCam = Object.assign({}, G.garageCam || {}, { tryAt: now });
+  const d = (await imDevices()).find((x) => String(x.name).toLowerCase() === 'garage' && x.online);
+  if (!d) return null;
+  const r = await im('setDeviceSnapEnhanced', { deviceId: d.deviceId, channelId: d.channelId });
+  if (r.code !== '0' || !r.data || !r.data.url) return null;
+  await new Promise((ok) => setTimeout(ok, 2500)); // le temps que la photo soit disponible
+  return r.data.url;
 }
 
 // ---------------- Netatmo ----------------
@@ -995,7 +1019,12 @@ async function netatmo(b) {
 }
 
 try {
-  if (isCron) { await enSample(); return []; } // aucune réponse HTTP à envoyer
+  if (isCron) {
+    await enSample();
+    // Porte de garage : photo de la caméra si c'est le moment (toutes les 5 min, ou juste après une commande / une confirmation)
+    let gu = null; try { gu = await garageCamDue(); } catch (e) {}
+    return gu ? [{ json: { garageUrl: gu } }] : []; // aucune réponse HTTP à envoyer
+  }
   if (body.action === 'ping') return reply(200, { ok: true });
 
   // Historique d'un capteur eedomus (liste blanche « readable »), mis en cache 10 min
@@ -1038,7 +1067,7 @@ try {
     const r = await eedomus('set', 'action=periph.value&periph_id=' + encodeURIComponent(id) + '&value=' + encodeURIComponent(value));
     if (r.success !== 1) return reply(502, { ok: false, error: 'eedomus', detail: r.body });
     // Porte de garage : on retient l'état d'après la commande envoyée depuis l'appli
-    if (id === String(CFG.logs.garage) && (value === '1' || value === '2')) garageSet('unknown', 'commande');
+    if (id === String(CFG.logs.garage) && (value === '1' || value === '2')) { garageSet('unknown', 'commande'); garageCheckSoon(); }
     return reply(200, { ok: true, id, value });
   }
 
@@ -1072,6 +1101,9 @@ try {
   if (body.action === 'garage.mark') {
     if (body.state !== 'open' && body.state !== 'closed') return reply(403, { ok: false, error: 'not_allowed' });
     garageSet(body.state, 'manuel');
+    // la prochaine photo deviendra une référence pour cet état (apprentissage jour / nuit)
+    SD.garageCalib = { state: body.state, until: Date.now() + 5 * 60000 };
+    SD.garageDues = [Date.now() + 5000];
     if (SD.logs) delete SD.logs.doors;
     return reply(200, { ok: true, garage: garageState([]) });
   }
@@ -1100,6 +1132,64 @@ try {
   process.exit(1);
 }
 
+// Analyse de la photo du garage (nœud séparé, même mémoire que le workflow)
+const garageCode = `
+const G = $getWorkflowStaticData('global');
+function localNow() {
+  const p = {};
+  new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' })
+    .formatToParts(new Date()).forEach((x) => { p[x.type] = x.value; });
+  return p.year + '-' + p.month + '-' + p.day + ' ' + p.hour + ':' + p.minute + ':' + p.second;
+}
+let buf;
+try { buf = await this.helpers.getBinaryDataBuffer(0, 'data'); } catch (e) { G.garageCam = Object.assign({}, G.garageCam || {}, { error: 'image' }); return []; }
+// Lecture du BMP (24/32 bits ou 8 bits avec palette)
+const off = buf.readUInt32LE(10), w = buf.readInt32LE(18), hh = buf.readInt32LE(22), bpp = buf.readUInt16LE(28), h = Math.abs(hh);
+const rowSize = Math.floor((bpp * w + 31) / 32) * 4, palOff = 14 + buf.readUInt32LE(14);
+const gray = [];
+for (let y = 0; y < h; y++) {
+  const row = hh < 0 ? y : h - 1 - y;
+  for (let x = 0; x < w; x++) {
+    let r, g, b;
+    if (bpp >= 24) { const i = off + row * rowSize + x * (bpp / 8); b = buf[i]; g = buf[i + 1]; r = buf[i + 2]; }
+    else { const k = buf[off + row * rowSize + x], pi = palOff + k * 4; b = buf[pi]; g = buf[pi + 1]; r = buf[pi + 2]; }
+    gray.push(0.299 * r + 0.587 * g + 0.114 * b);
+  }
+}
+// on ignore la zone de la date incrustée (en haut à droite), qui change à chaque photo
+const keep = [];
+for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { if (!(y <= 2 && x >= Math.floor(w * 0.66))) keep.push(gray[y * w + x]); }
+const mean = keep.reduce((s, v) => s + v, 0) / keep.length;
+const sd = Math.sqrt(keep.reduce((s, v) => s + (v - mean) * (v - mean), 0) / keep.length) || 1;
+const vec = keep.map((v) => Math.round((v - mean) / sd * 1000) / 1000);
+const ncc = (a, b) => { let s = 0; for (let i = 0; i < a.length; i++) s += a[i] * b[i]; return s / a.length; };
+G.garageRefs = G.garageRefs || [];
+// Apprentissage : la photo qui suit une confirmation manuelle devient une référence (6 au maximum par état)
+if (G.garageCalib && G.garageCalib.until > Date.now()) {
+  G.garageRefs.push({ state: G.garageCalib.state, v: vec, at: Date.now(), bright: Math.round(mean) });
+  const st = G.garageCalib.state, same = G.garageRefs.filter((r) => r.state === st);
+  if (same.length > 6) G.garageRefs.splice(G.garageRefs.indexOf(same[0]), 1);
+  G.garageCalib = null;
+}
+const best = { open: null, closed: null };
+G.garageRefs.forEach((r) => { if (r.v.length !== vec.length) return; const c = ncc(vec, r.v); if (best[r.state] === null || c > best[r.state]) best[r.state] = c; });
+let state = null, margin = null;
+if (best.open !== null && best.closed !== null) {
+  margin = Math.round((best.open - best.closed) * 1000) / 1000;
+  if (margin > 0.08) state = 'open'; else if (margin < -0.08) state = 'closed';
+}
+G.garageCam = { at: Date.now(), tryAt: (G.garageCam && G.garageCam.tryAt) || Date.now(), state, margin, best, bright: Math.round(mean) };
+// État confirmé par la caméra : on met à jour l'état mémorisé s'il change (ou s'il était « à vérifier »)
+if (state && (!G.garage || G.garage.state !== state)) {
+  G.garage = { state, date: localNow(), src: 'camera' };
+  G.garageLog = [{ state, date: G.garage.date, src: 'camera' }].concat(G.garageLog || []).slice(0, 40);
+  if (G.logs) delete G.logs.doors;
+}
+return [];
+`;
+try { new Function('$getWorkflowStaticData', 'return (async function(){' + garageCode + '\n});'); }
+catch (e) { console.error('ARRÊT : le code « Analyse garage » ne compile pas ->', e.message); process.exit(1); }
+
 const NAME = 'Maison · API eedomus';
 const PATH = 'maison';
 
@@ -1122,7 +1212,7 @@ const workflow = {
     },
     {
       // Minuterie : relevés d'énergie Smart Life toutes les 5 minutes (le code décide s'il faut vraiment interroger Tuya)
-      parameters: { rule: { interval: [{ field: 'minutes', minutesInterval: 5 }] } },
+      parameters: { rule: { interval: [{ field: 'minutes', minutesInterval: 1 }] } },
       id: randomUUID(),
       name: 'Relevés énergie',
       type: 'n8n-nodes-base.scheduleTrigger',
@@ -1150,13 +1240,33 @@ const workflow = {
       name: 'Réponse',
       type: 'n8n-nodes-base.respondToWebhook',
       typeVersion: 1.1,
-      position: [520, 0],
+      position: [760, -120],
+    },
+    // --- Porte de garage vue par la caméra : photo → image réduite (32×24) → comparaison aux références ---
+    {
+      parameters: { conditions: { string: [{ value1: '={{ $json.garageUrl || "" }}', operation: 'isNotEmpty' }] } },
+      id: randomUUID(), name: 'Photo garage ?', type: 'n8n-nodes-base.if', typeVersion: 1, position: [500, 0],
+    },
+    {
+      parameters: { url: '={{ $json.garageUrl }}', options: { response: { response: { responseFormat: 'file' } } } },
+      id: randomUUID(), name: 'Photo garage', type: 'n8n-nodes-base.httpRequest', typeVersion: 4.2, position: [760, 120],
+    },
+    {
+      parameters: { operation: 'resize', width: 32, height: 24, resizeOption: 'ignoreAspectRatio', options: { format: 'bmp' } },
+      id: randomUUID(), name: 'Réduire', type: 'n8n-nodes-base.editImage', typeVersion: 1, position: [980, 120],
+    },
+    {
+      parameters: { jsCode: garageCode },
+      id: randomUUID(), name: 'Analyse garage', type: 'n8n-nodes-base.code', typeVersion: 2, position: [1200, 120],
     },
   ],
   connections: {
     Webhook: { main: [[{ node: 'eedomus', type: 'main', index: 0 }]] },
     'Relevés énergie': { main: [[{ node: 'eedomus', type: 'main', index: 0 }]] },
-    eedomus: { main: [[{ node: 'Réponse', type: 'main', index: 0 }]] },
+    eedomus: { main: [[{ node: 'Photo garage ?', type: 'main', index: 0 }]] },
+    'Photo garage ?': { main: [[{ node: 'Photo garage', type: 'main', index: 0 }], [{ node: 'Réponse', type: 'main', index: 0 }]] },
+    'Photo garage': { main: [[{ node: 'Réduire', type: 'main', index: 0 }]] },
+    'Réduire': { main: [[{ node: 'Analyse garage', type: 'main', index: 0 }]] },
   },
   settings: { executionOrder: 'v1', saveDataSuccessExecution: 'none' },
 };
