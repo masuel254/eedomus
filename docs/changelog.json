@@ -1,7 +1,17 @@
 {
-  "version": "2.12.4",
+  "version": "2.13.0",
   "date": "2026-11-13",
   "releases": [
+    {
+      "version": "2.13.0",
+      "date": "2026-11-13",
+      "time": "15:25",
+      "title": "Lampes rangées et couleurs",
+      "changes": [
+        "Nouvelle pièce « Couloir et escalier » (Hue entrée, Hue escalier), comme dans eedomus ; l’Entrée garde le portail et la porte",
+        "Couleurs des lampes Hue (salon, bar, entrée, escalier, tout l’extérieur, pergola) : 10 teintes dont blanc chaud ; toucher une couleur allume la lampe si elle est éteinte"
+      ]
+    },
     {
       "version": "2.12.4",
       "date": "2026-11-13",
@@ -675,5 +685,5 @@
     "Révoquer à la fin : mot de passe TotalEnergies",
     "Révoquer à la fin : mot de passe EDF"
   ],
-  "time": "15:19"
+  "time": "15:25"
 }

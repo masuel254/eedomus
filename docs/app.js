@@ -262,7 +262,8 @@
     if (it.type === 'light' || it.type === 'switch') {
       var on = isOn(it);
       return '<button class="row' + (on ? ' is-on' : '') + (pending[id] ? ' busy' : '') + '" data-light="' + id + '">' +
-        '<span class="ic">' + icon(it.icon || 'bulb') + '</span><span><b>' + esc(it.name) + '</b><small>' + (on ? 'Allumé' : 'Éteint') + '</small></span><span class="sw"></span></button>';
+        '<span class="ic">' + icon(it.icon || 'bulb') + '</span><span><b>' + esc(it.name) + '</b><small>' + (on ? 'Allumé' : 'Éteint') + (it.color ? ' · ' + esc(colorName(it.color)) : '') + '</small></span><span class="sw"></span></button>' +
+        (it.color ? '<div class="lcol">' + (CFG.lightColors || []).map(function (c) { var cur = String((STATES[it.color] || {}).value || '') === c[0]; return '<button class="' + (cur ? 'on' : '') + '" style="background:' + c[2] + '" data-lcolor="' + it.color + '|' + c[0] + '|' + id + '" aria-label="' + esc(c[1]) + '"></button>'; }).join('') + '</div>' : '');
     }
     if (it.type === 'shutter') {
       var p = shutterPos(id), n = num(id);
@@ -341,6 +342,7 @@
     return '<div class="hc-pres"><span><b>Sur présence</b><small>' + esc(sub) + '</small></span>' +
       '<div class="seg2"><button class="' + (P.on ? 'on' : '') + '" data-presence="1">Oui</button><button class="' + (!P.on ? 'on' : '') + '" data-presence="0">Non</button></div></div>';
   }
+  function colorName(cid) { var v = String((STATES[cid] || {}).value || ''), c = (CFG.lightColors || []).filter(function (x) { return x[0] === v; })[0]; return c ? c[1] : 'couleur'; }
   function heroHTML() {
     var h = CFG.heating;
     var row3 = '<div class="row3"><span><b>' + fmt(num(h.outside), 1) + '°</b>Dehors</span><span><b>' + fmt(num(h.humidity), 0) + ' %</b>Humidité</span>';
@@ -971,6 +973,9 @@
         var on = isOn(it);
         return '<button class="lt2' + (on ? ' on' : '') + (pending[it.id] ? ' busy' : '') + '" data-light="' + it.id + '"><span class="lt2-hd">' + icon('bulb') + '<span class="sw"></span></span><b>' + esc(it.name) + '</b><small>' + (on ? 'Allumée' : 'Éteinte') + '</small></button>';
       }).join('') + '</div>';
+      // couleurs des lampes Hue de la pièce
+      var colL = s.lights.filter(function (it) { return it.color; });
+      if (colL.length) h += '<div class="card2 flat lcols">' + colL.map(function (it) { return '<div class="lcrow"><span><b>' + esc(it.name) + '</b><small>' + esc(colorName(it.color)) + '</small></span><div class="lcol">' + (CFG.lightColors || []).map(function (c) { var cur = String((STATES[it.color] || {}).value || '') === c[0]; return '<button class="' + (cur ? 'on' : '') + '" style="background:' + c[2] + '" data-lcolor="' + it.color + '|' + c[0] + '|' + it.id + '" aria-label="' + esc(c[1]) + '"></button>'; }).join('') + '</div></div>'; }).join('') + '</div>';
     }
     if (s.sh.length) {
       var up = s.sh.filter(function (i) { return shutterPos(i.id) === 'up'; }).length, down = s.sh.filter(function (i) { return shutterPos(i.id) === 'down'; }).length;
@@ -1921,6 +1926,12 @@
       try { localStorage.setItem('maison-presence', JSON.stringify({ on: pon, at: Date.now() })); } catch (e) {}
       return api({ action: 'nt.presence', on: pon }).then(function (j) { NT = j; render(); toast(pon ? 'Chauffage sur présence : activé' : 'Chauffage sur présence : désactivé'); })
         .catch(function () { NT.presence = P0; render(); toast('Netatmo ne répond pas, réessaie', true); });
+    }
+    if ((b = e.target.closest('[data-lcolor]'))) {
+      var lc = b.dataset.lcolor.split('|'), cname = ((CFG.lightColors || []).filter(function (x) { return x[0] === lc[1]; })[0] || [])[1] || '';
+      STATES[lc[0]] = Object.assign({}, STATES[lc[0]], { value: lc[1] });
+      if (!isOn(findItem(+lc[2]) || {})) send(+lc[2], 100, { optimistic: true, quiet: true }); // allume la lampe si elle est éteinte
+      return send(+lc[0], lc[1], { optimistic: true, msg: 'Couleur : ' + cname });
     }
     if ((b = e.target.closest('[data-slideopen]'))) { var so = b.dataset.slideopen.split(':'); return openSlide(so[0], so[1]); }
     if ((b = e.target.closest('[data-slidekey]'))) { SLIDE.key = b.dataset.slidekey; return render(); }

@@ -775,3 +775,16 @@ svg.gsvg { display: block; width: 100%; height: auto; user-select: none; -webkit
 .cost-list .row.ctot { grid-template-columns: 1fr auto; background: var(--s2); }
 .cost-list .row.ctot > span:first-child { grid-column: auto; }
 .cost-list .row.ctot .val { font-size: 18px; color: var(--tx); }
+
+/* couleurs des lampes Hue */
+.lcol { display: flex; gap: 8px; padding: 0 14px 12px 64px; flex-wrap: wrap; }
+.lcol button { width: 26px; height: 26px; border-radius: 50%; border: 2px solid rgba(255,255,255,.12); }
+.lcol button.on { border-color: #fff; box-shadow: 0 0 0 2px var(--s1), 0 0 0 4px rgba(255,255,255,.6); }
+.lcols { padding: 4px 14px; margin-top: 12px; }
+.lcrow { padding: 10px 0; border-top: 1px solid var(--ln); }
+.lcrow:first-child { border-top: 0; }
+.lcrow b { font-size: 14px; } .lcrow small { color: var(--mu); font-size: 12px; margin-left: 8px; }
+.lcrow .lcol { padding: 8px 0 0; }
+.card2.lcols { margin: 12px 0 0; padding: 4px 14px; }
+.lcol button { width: 24px; height: 24px; }
+.lcol { gap: 7px; }

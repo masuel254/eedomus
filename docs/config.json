@@ -82,12 +82,14 @@
             {
               "id": 3225291,
               "name": "Hue salon",
-              "type": "light"
+              "type": "light",
+              "color": 3225292
             },
             {
               "id": 3217309,
               "name": "Hue bar",
-              "type": "light"
+              "type": "light",
+              "color": 3217310
             },
             {
               "id": 835108,
@@ -149,19 +151,27 @@
               "confirm": true
             },
             {
+              "id": 1066364,
+              "name": "Porte d'entrée",
+              "type": "door"
+            }
+          ]
+        },
+        {
+          "id": "couloir",
+          "name": "Couloir et escalier",
+          "items": [
+            {
               "id": 3226049,
               "name": "Hue entrée",
-              "type": "light"
+              "type": "light",
+              "color": 3226050
             },
             {
               "id": 3225294,
               "name": "Hue escalier",
-              "type": "light"
-            },
-            {
-              "id": 1066364,
-              "name": "Porte d'entrée",
-              "type": "door"
+              "type": "light",
+              "color": 3225295
             }
           ]
         },
@@ -254,7 +264,8 @@
             {
               "id": 3226063,
               "name": "Tout l'extérieur",
-              "type": "light"
+              "type": "light",
+              "color": 3226064
             },
             {
               "id": 2991071,
@@ -287,7 +298,8 @@
             {
               "id": 3254852,
               "name": "Hue pergola",
-              "type": "light"
+              "type": "light",
+              "color": 3254853
             }
           ]
         },
@@ -494,5 +506,57 @@
   },
   "push": {
     "key": "BA0A2d2Ni-BnKQghGkDEfk6DQYdAzlsttLofaS-zBHcwfLlCAZgecVPLZ0LBh_lQngM0hxhB4kg6nFFXNSKTJzs"
-  }
+  },
+  "lightColors": [
+    [
+      "100,87,45",
+      "Blanc chaud",
+      "#FFD9A0"
+    ],
+    [
+      "100,100,100",
+      "Blanc",
+      "#FFFFFF"
+    ],
+    [
+      "100,50,0",
+      "Orange",
+      "#FF8A1F"
+    ],
+    [
+      "100,0,0",
+      "Rouge",
+      "#FF3B3B"
+    ],
+    [
+      "100,0,100",
+      "Magenta",
+      "#E040FB"
+    ],
+    [
+      "0,0,100",
+      "Bleu",
+      "#3B6BFF"
+    ],
+    [
+      "0,25,100",
+      "Cyan",
+      "#2EC5FF"
+    ],
+    [
+      "0,100,0",
+      "Vert",
+      "#2ECC40"
+    ],
+    [
+      "0,100,28",
+      "Pomme",
+      "#7BE36B"
+    ],
+    [
+      "40,100,11",
+      "Jaune",
+      "#FFE03B"
+    ]
+  ]
 }

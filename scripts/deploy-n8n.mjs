@@ -53,7 +53,7 @@ for (const g of cfg.groups) for (const room of g.rooms) {
   read(room.temp);
   for (const it of room.items) {
     switch (it.type) {
-      case 'light': allow(it.id, [it.on ?? 100, it.off ?? 0]); break;
+      case 'light': allow(it.id, [it.on ?? 100, it.off ?? 0]); if (it.color) allow(it.color, (cfg.lightColors || []).map((x) => x[0])); break;
       case 'shutter': allow(it.id, [0, 100, 240]); break;
       case 'switch': allow(it.id, [0, 100]); break;
       case 'garage': allow(it.id, [1, 2]); break;
