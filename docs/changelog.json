@@ -1,7 +1,19 @@
 {
-  "version": "2.15.0",
+  "version": "2.16.0",
   "date": "2026-11-13",
   "releases": [
+    {
+      "version": "2.16.0",
+      "date": "2026-11-13",
+      "time": "22:35",
+      "title": "Vraie météo avec alertes",
+      "changes": [
+        "Nouvelle carte Météo dans Plus : température, ressenti, vent, rafales, pluie, humidité et 3 jours de prévisions (Météo-France)",
+        "Alertes : pluie qui arrive, gel, et rafales d’au moins 50 km/h (replier la pergola), avec notification sur l’iPhone",
+        "Touche la carte pour les 24 prochaines heures et les 5 jours",
+        "Climat : « Dehors » et « Humidité » viennent maintenant de la météo ; les anciens capteurs en panne sont retirés"
+      ]
+    },
     {
       "version": "2.15.0",
       "date": "2026-11-13",
@@ -756,5 +768,5 @@
     "Révoquer à la fin : mot de passe TotalEnergies",
     "Révoquer à la fin : mot de passe EDF"
   ],
-  "time": "22:25"
+  "time": "22:35"
 }

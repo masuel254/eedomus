@@ -827,3 +827,34 @@ body { padding: 0 !important; }
 .rc-hd { align-items: flex-start; }
 .rc-hd b { white-space: normal; flex: 1 1 0; line-height: 1.2; }
 .rc-hd span { padding-top: 2px; }
+
+/* météo */
+.wcard { cursor: pointer; }
+.wtop { display: flex; align-items: center; gap: 12px; }
+.wnow { flex: 1; min-width: 0; }
+.wnow b { display: block; font-size: 42px; font-weight: 700; line-height: 1; }
+.wnow small { color: var(--mu); font-size: 12.5px; }
+.wtags { display: grid; gap: 5px; justify-items: end; }
+.wtag { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 99px; background: var(--s2); color: var(--mu); white-space: nowrap; }
+.wstats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 12px; }
+.wstats.w3 { grid-template-columns: repeat(3, 1fr); }
+.wstats > div { background: var(--s2); border-radius: 12px; padding: 8px; min-width: 0; }
+.wstats b { display: block; font-size: 13.5px; white-space: nowrap; }
+.wstats small { color: var(--mu); font-size: 11px; }
+.walert { display: flex; gap: 10px; align-items: flex-start; border-radius: 14px; padding: 10px 12px; font-size: 13px; line-height: 1.35; margin-top: 8px; }
+.walert b { display: block; font-size: 14px; }
+.walert svg { flex: none; margin-top: 1px; }
+.walert.rain { background: #14243A; color: #BFD7FF; }
+.walert.wind { background: #2A1F10; color: #FFD9A0; }
+.walert.frost { background: #1A2230; color: #CFE0FF; }
+.wfoot { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; color: var(--mu); }
+.wfoot .more { color: var(--cool); font-weight: 700; font-size: 13px; }
+.card2.whours { padding: 2px 14px; }
+.whr, .wdy { display: grid; grid-template-columns: 38px 26px 50px 1fr 70px; align-items: center; gap: 8px; padding: 8px 0; font-size: 13.5px; }
+.wdy { grid-template-columns: 42px 26px 76px 1fr 64px; }
+.whr + .whr, .wdy + .wdy { border-top: 1px solid var(--ln); }
+.whr .rain, .wdy .rain { color: var(--cool); font-size: 12px; }
+.whr > span:last-child, .wdy > span:last-child { text-align: right; font-size: 12px; }
+.gst { color: var(--amber); font-weight: 700; }
+.mu2 { color: var(--mu); }
+#app { overflow-x: hidden; }

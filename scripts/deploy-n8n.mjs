@@ -318,7 +318,7 @@ async function ntHomes() {
   homes.forEach((h) => (h.modules || []).forEach((m) => { if (['NOC', 'NACamera', 'NDB', 'NSD'].includes(m.type)) cams.push({ home: h.id, id: m.id, name: m.name, type: m.type }); }));
   SD.ntHomes = {
     at: Date.now(),
-    heat: heat ? { id: heat.id, tz: heat.timezone || 'Europe/Paris', rooms: heat.rooms.filter((r) => (r.module_ids || []).length).map((r) => ({ id: r.id, name: r.name, type: r.type })),
+    heat: heat ? { id: heat.id, tz: heat.timezone || 'Europe/Paris', coord: Array.isArray(heat.coordinates) ? [Math.round(heat.coordinates[0] * 100) / 100, Math.round(heat.coordinates[1] * 100) / 100] : null, rooms: heat.rooms.filter((r) => (r.module_ids || []).length).map((r) => ({ id: r.id, name: r.name, type: r.type })),
       // pièces équipées du thermostat (la chaudière y chauffe directement)
       thermRooms: (heat.modules || []).filter((m) => m.type === 'NATherm1' && m.room_id).map((m) => m.room_id),
       therm: (heat.modules || []).filter((m) => m.type === 'NATherm1').map((m) => ({ id: m.id, room: m.room_id, bridge: m.bridge || null })),
@@ -428,6 +428,82 @@ async function presenceCheck(force) {
   return P;
 }
 function presenceOut() { const P = SD.presence || {}; return { on: !!P.on, setAt: P.setAt || 0, state: P.state || null, at: P.at || null, log: (P.log || []).slice(0, 10) }; }
+// ---------------- Météo (Open-Meteo, modèles Météo-France) ----------------
+// Position : celle de la maison dans Netatmo, arrondie à ~1 km. Cache 10 min ; la minuterie rafraîchit toutes les 15 min.
+function parisParts(d) {
+  const p = {};
+  new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+    .formatToParts(d || new Date()).forEach((x) => { p[x.type] = x.value; });
+  return p;
+}
+function meteoWhen(iso, today) {
+  const day = iso.slice(0, 10), h = Number(iso.slice(11, 13)) + 'h';
+  const t = new Date(today + 'T12:00:00Z'), d = new Date(day + 'T12:00:00Z'), diff = Math.round((d - t) / 86400000);
+  const jours = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+  return (diff <= 0 ? 'aujourd’hui' : diff === 1 ? 'demain' : jours[d.getUTCDay()]) + ' vers ' + h;
+}
+async function meteo(force) {
+  const M = SD.meteo = SD.meteo || {};
+  if (!force && M.data && M.at > Date.now() - 600000) return M.data;
+  let H = await ntHomes();
+  if (H.heat && H.heat.coord === undefined) { SD.ntHomes = null; H = await ntHomes(); }
+  const c = H.heat && H.heat.coord;
+  if (!c) throw fail(503, 'no_location');
+  const url = 'https://api.open-meteo.com/v1/forecast?latitude=' + c[1] + '&longitude=' + c[0] + '&timezone=Europe%2FParis&forecast_days=5' +
+    '&current=temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,pressure_msl,is_day' +
+    '&minutely_15=precipitation&forecast_minutely_15=16' +
+    '&hourly=temperature_2m,precipitation_probability,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,is_day&forecast_hours=96' +
+    '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,sunrise,sunset';
+  const j = await helpers.httpRequest({ method: 'GET', url, json: true, timeout: 15000 });
+  const P = parisParts(), nowIso = P.year + '-' + P.month + '-' + P.day + 'T' + P.hour + ':' + P.minute, today = nowIso.slice(0, 10);
+  const r1 = (v) => (v == null ? null : Math.round(v * 10) / 10), r0 = (v) => (v == null ? null : Math.round(v));
+  const cu = j.current || {}, hh = j.hourly || {}, dd = j.daily || {}, mm = j.minutely_15 || {};
+  const now = { t: r1(cu.temperature_2m), feel: r1(cu.apparent_temperature), hum: r0(cu.relative_humidity_2m), rain: r1(cu.precipitation), code: cu.weather_code, wind: r0(cu.wind_speed_10m), gust: r0(cu.wind_gusts_10m), dir: r0(cu.wind_direction_10m), press: r0(cu.pressure_msl), day: cu.is_day ? 1 : 0, time: cu.time };
+  const hours = (hh.time || []).map((t, i) => ({ t: t, temp: r1(hh.temperature_2m[i]), prob: hh.precipitation_probability ? hh.precipitation_probability[i] : null, mm: r1(hh.precipitation[i]), code: hh.weather_code[i], wind: r0(hh.wind_speed_10m[i]), gust: r0(hh.wind_gusts_10m[i]), day: hh.is_day ? hh.is_day[i] : 1 }))
+    .filter((x) => x.t.slice(0, 13) >= nowIso.slice(0, 13));
+  const days = (dd.time || []).map((t, i) => ({ d: t, code: dd.weather_code[i], min: r1(dd.temperature_2m_min[i]), max: r1(dd.temperature_2m_max[i]), mm: r1(dd.precipitation_sum[i]), prob: dd.precipitation_probability_max ? dd.precipitation_probability_max[i] : null, wind: r0(dd.wind_speed_10m_max[i]), gust: r0(dd.wind_gusts_10m_max[i]), rise: String(dd.sunrise[i] || '').slice(11, 16), set: String(dd.sunset[i] || '').slice(11, 16) }));
+  const alerts = [];
+  // pluie dans les 3 prochaines heures (pas de 15 min)
+  const slot = nowIso.slice(0, 14) + String(Math.floor(Number(P.minute) / 15) * 15).padStart(2, '0');
+  const q = (mm.time || []).map((t, i) => ({ t: t, v: mm.precipitation[i] || 0 })).filter((x) => x.t >= slot).slice(0, 12);
+  const wi = q.findIndex((x) => x.v >= 0.1);
+  if (wi >= 0) {
+    let end = wi, tot = 0; while (end < q.length && q[end].v >= 0.1) { tot += q[end].v; end++; }
+    const mins = Math.max(0, Math.round((new Date(q[wi].t + ':00Z') - new Date(nowIso + ':00Z')) / 60000));
+    const fin = end < q.length ? q[end].t.slice(11, 16).replace(':', 'h') : null;
+    alerts.push({ type: 'rain', title: mins <= 5 ? 'Il pleut' : 'Pluie dans ' + mins + ' min', text: 'Environ ' + String(Math.max(0.1, Math.round(tot * 10) / 10)).replace('.', ',') + ' mm' + (fin ? ' jusqu’à ' + fin : ' (et plus)') + ' · pense au linge et à la pergola' });
+  }
+  // rafales d'au moins 50 km/h dans les 4 jours
+  const gh = hours.filter((x) => x.gust >= 50);
+  if (gh.length) {
+    const mx = gh.reduce((m, x) => (x.gust > m.gust ? x : m), gh[0]);
+    alerts.push({ type: 'wind', title: 'Rafales à ' + mx.gust + ' km/h ' + meteoWhen(mx.t, today), text: 'Replier la pergola' + (gh[0].t !== mx.t ? ' (dès ' + meteoWhen(gh[0].t, today) + ')' : ''), key: gh[0].t.slice(0, 10), gust: mx.gust, first: gh[0].t });
+  }
+  // gel dans les 4 jours
+  const fh = hours.filter((x) => x.temp != null && x.temp <= 0);
+  if (fh.length) {
+    const mn = fh.reduce((m, x) => (x.temp < m.temp ? x : m), fh[0]);
+    alerts.push({ type: 'frost', title: 'Gel possible ' + meteoWhen(mn.t, today) + ' (' + String(mn.temp).replace('.', ',') + '°)', text: 'Vérifier la protection hors-gel de la piscine' });
+  }
+  M.data = { ok: true, at: Date.now(), now: now, hours: hours.slice(0, 24), days: days, alerts: alerts, src: 'Météo-France / Open-Meteo' };
+  M.at = Date.now();
+  return M.data;
+}
+// Minuterie : prévisions rafraîchies toutes les 15 min ; notification une fois par épisode de rafales (≥ 50 km/h)
+async function meteoWatch() {
+  const M = SD.meteo = SD.meteo || {};
+  if (M.at && M.at > Date.now() - 900000) return;
+  if (M.tryAt && M.tryAt > Date.now() - 300000) return;
+  M.tryAt = Date.now();
+  const d = await meteo(true);
+  const w = (d.alerts || []).find((x) => x.type === 'wind');
+  const soon = w && (new Date(w.first + ':00Z') - new Date(d.now.time + ':00Z')) < 36 * 3600000; // on prévient au plus 36 h avant
+  if (w && soon && M.windKey !== w.key) {
+    M.windKey = w.key;
+    const when = meteoWhen(w.first, d.hours.length ? d.hours[0].t.slice(0, 10) : w.key);
+    await pushNotify({ tag: 'meteo', title: 'Rafales à ' + w.gust + ' km/h prévues', body: when.charAt(0).toUpperCase() + when.slice(1) + ' · pense à replier la pergola' });
+  }
+}
 async function ntCameras(fresh) {
   if (!fresh && SD.ntCams && SD.ntCams.at > Date.now() - 30000) return SD.ntCams.data;
   const H = await ntHomes();
@@ -1262,6 +1338,7 @@ try {
     try { await garageAlert(); } catch (e) {}
     try { await waterWatch(false); } catch (e) {}
     try { await presenceCheck(false); } catch (e) {}
+    try { await meteoWatch(); } catch (e) {}
     let gu = null; try { gu = await garageCamDue(); } catch (e) {}
     return gu ? [{ json: { garageUrl: gu } }] : []; // aucune réponse HTTP à envoyer
   }
@@ -1439,6 +1516,7 @@ try {
     return reply(200, out);
   }
   // Correction manuelle de l'état de la porte de garage (après vérification sur la caméra)
+  if (body.action === 'meteo') return reply(200, await meteo(!!body.force));
   if (body.action === 'garage.mark') {
     if (body.state !== 'open' && body.state !== 'closed') return reply(403, { ok: false, error: 'not_allowed' });
     garageSet(body.state, 'manuel');

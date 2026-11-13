@@ -345,7 +345,9 @@
   function colorName(cid) { var v = String((STATES[cid] || {}).value || ''), c = (CFG.lightColors || []).filter(function (x) { return x[0] === v; })[0]; return c ? c[1] : 'couleur'; }
   function heroHTML() {
     var h = CFG.heating;
-    var row3 = '<div class="row3"><span><b>' + fmt(num(h.outside), 1) + '°</b>Dehors</span><span><b>' + fmt(num(h.humidity), 0) + ' %</b>Humidité</span>';
+    loadMeteo(false);
+    var mn = METEO && METEO.now;
+    var row3 = '<div class="row3"><span><b>' + fmt(mn ? mn.t : num(h.outside), 1) + '°</b>Dehors</span><span><b>' + fmt(mn ? mn.hum : num(h.humidity), 0) + ' %</b>Humidité</span>';
     var r = ntCurrentRoom();
     if (!r) {
       var t0 = num(h.roomTemp);
@@ -894,9 +896,95 @@
     return h;
   }
 
+  // ---------- Météo (Météo-France via Open-Meteo, préparée par le serveur) ----------
+  var METEO = null; try { METEO = JSON.parse(localStorage.getItem('maison-meteo') || 'null'); } catch (e) {}
+  var meteoBusy = false;
+  function loadMeteo(force) {
+    if (meteoBusy || (!force && METEO && Date.now() - METEO.at < 600000)) return;
+    meteoBusy = true;
+    api({ action: 'meteo' }).then(function (j) {
+      METEO = j; meteoBusy = false; try { localStorage.setItem('maison-meteo', JSON.stringify(j)); } catch (e) {}
+      if (!sheet.hidden && sheet.dataset.view === 'meteo') renderMeteo(); else if (!busy()) render();
+    }).catch(function () { meteoBusy = false; });
+  }
+  function wText(c, day) {
+    if (c === 0) return day === 0 ? 'Ciel clair' : 'Ensoleillé';
+    if (c === 1) return 'Peu nuageux'; if (c === 2) return 'Éclaircies'; if (c === 3) return 'Couvert';
+    if (c === 45 || c === 48) return 'Brouillard';
+    if (c >= 51 && c <= 55) return 'Bruine'; if (c === 56 || c === 57) return 'Bruine verglaçante';
+    if (c === 61) return 'Pluie faible'; if (c === 63) return 'Pluie'; if (c === 65) return 'Forte pluie'; if (c === 66 || c === 67) return 'Pluie verglaçante';
+    if (c >= 71 && c <= 77) return 'Neige'; if (c >= 80 && c <= 82) return 'Averses'; if (c === 85 || c === 86) return 'Averses de neige';
+    if (c >= 95) return 'Orage'; return '—';
+  }
+  function wIcon(c, day, sz) {
+    var s = '<svg class="wic" width="' + sz + '" height="' + sz + '" viewBox="0 0 24 24" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">';
+    var cloud = '<path d="M7 18h10a4 4 0 0 0 .5-8A5.5 5.5 0 0 0 7 11a3.5 3.5 0 0 0 0 7z" stroke="#C9D2DD" fill="#15181D"/>';
+    var rcloud = '<path d="M7 15h10a4 4 0 0 0 .5-8A5.5 5.5 0 0 0 7 8a3.5 3.5 0 0 0 0 7z" stroke="#C9D2DD" fill="#15181D"/>';
+    var sun = day === 0 ? '<path d="M15 4.5A6 6 0 1 0 19.5 12 4.7 4.7 0 0 1 15 4.5z" stroke="#B9A6FF"/>' : '<circle cx="12" cy="12" r="4.5" stroke="#F4B860"/><path d="M12 3v1.5M12 19.5V21M3 12h1.5M19.5 12H21M5.6 5.6l1 1M17.4 17.4l1 1M5.6 18.4l1-1M17.4 6.6l1-1" stroke="#F4B860"/>';
+    var small = day === 0 ? '<path d="M10 3.5A4.5 4.5 0 1 0 13.5 9 3.5 3.5 0 0 1 10 3.5z" stroke="#B9A6FF"/>' : '<circle cx="9" cy="8.5" r="3.3" stroke="#F4B860"/><path d="M9 2.5v1.3M3 8.5h1.3M4.8 4.3l.9.9M13.2 4.3l-.9.9" stroke="#F4B860"/>';
+    if (c === 0) return s + sun + '</svg>';
+    if (c === 1 || c === 2) return s + small + cloud + '</svg>';
+    if (c === 3) return s + cloud + '</svg>';
+    if (c === 45 || c === 48) return s + '<path d="M4 9h16M3 13h18M5 17h14" stroke="#C9D2DD"/></svg>';
+    if (c >= 95) return s + rcloud + '<path d="M12 15l-2 4h3l-2 3" stroke="#F4B860"/></svg>';
+    if ((c >= 71 && c <= 77) || c === 85 || c === 86) return s + rcloud + '<path d="M9 19h.01M13 20h.01M17 19h.01" stroke="#EEF0F3" stroke-width="2.6"/></svg>';
+    return s + rcloud + '<path d="M9 18l-1 2.5M13 18l-1 2.5M17 18l-1 2.5" stroke="#7CB2FF"/></svg>';
+  }
+  function wDir(d) { return d == null ? '' : ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO'][Math.round(d / 45) % 8]; }
+  function wDay(iso, i) { if (i === 0) return 'Auj.'; var d = new Date(iso + 'T12:00:00'); return ['Dim.', 'Lun.', 'Mar.', 'Mer.', 'Jeu.', 'Ven.', 'Sam.'][d.getDay()]; }
+  function deg(v) { return v == null ? '—' : fmt(v, 0) + '°'; }
+  function meteoAlertsHTML(M) {
+    return (M.alerts || []).map(function (x) {
+      var ic = x.type === 'rain' ? '<path d="M7 13h10a4 4 0 0 0 .5-8A5.5 5.5 0 0 0 7 6a3.5 3.5 0 0 0 0 7zM9 17l-1 3M13 17l-1 3M17 17l-1 3"/>' : x.type === 'wind' ? '<path d="M3 8h11a3 3 0 1 0-3-3M3 12h16a3 3 0 1 1-3 3M3 16h8"/>' : '<path d="M12 2v20M4 6l16 12M20 6L4 18"/>';
+      return '<div class="walert ' + x.type + '"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">' + ic + '</svg><span><b>' + esc(x.title) + '</b>' + esc(x.text) + '</span></div>';
+    }).join('');
+  }
+  function meteoHTML() {
+    loadMeteo(false);
+    var M = METEO;
+    if (!M || !M.now) return '<div class="card2"><p class="muted">Chargement de la météo…</p></div>';
+    var n = M.now, d0 = (M.days || [])[0] || {};
+    var tags = (M.days || []).slice(1, 4).map(function (d, i) { return '<span class="wtag mono">' + wDay(d.d, i + 1) + ' ' + deg(d.min) + '/' + deg(d.max) + '</span>'; }).join('');
+    return '<div class="card2 wcard" data-meteo role="button" tabindex="0">' +
+      '<div class="wtop">' + wIcon(n.code, n.day, 54) + '<div class="wnow"><b>' + deg(n.t) + '</b><small>Ressenti ' + deg(n.feel) + ' · ' + esc(wText(n.code, n.day)) + '</small></div><div class="wtags">' + tags + '</div></div>' +
+      '<div class="wstats">' +
+        '<div><b class="mono">' + fmt(n.wind, 0) + ' km/h</b><small>Vent ' + wDir(n.dir) + '</small></div>' +
+        '<div><b class="mono">' + fmt(n.gust, 0) + ' km/h</b><small>Rafales</small></div>' +
+        '<div><b class="mono">' + fmt(d0.mm, 1) + ' mm</b><small>Pluie' + (d0.prob != null ? ' ' + d0.prob + ' %' : '') + '</small></div>' +
+        '<div><b class="mono">' + fmt(n.hum, 0) + ' %</b><small>Humidité</small></div>' +
+      '</div>' + meteoAlertsHTML(M) +
+      '<div class="wfoot"><small>Mis à jour à ' + new Date(M.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) + ' · Météo-France</small><span class="more">Détails ›</span></div></div>';
+  }
+  function openMeteo() { sheet.scrollTop = 0; openSheet('meteo'); renderMeteo(); loadMeteo(false); }
+  function renderMeteo() {
+    var M = METEO, h = '<div class="sh-hd"><h2>Météo</h2><button class="close" data-close aria-label="Fermer">×</button></div>';
+    if (!M || !M.now) { sheet.innerHTML = '<div class="sh-in">' + h + '<p class="muted">Chargement…</p></div>'; return; }
+    var n = M.now, d0 = (M.days || [])[0] || {};
+    h += '<div class="card2"><div class="wtop">' + wIcon(n.code, n.day, 60) + '<div class="wnow"><b>' + deg(n.t) + '</b><small>Ressenti ' + deg(n.feel) + ' · ' + esc(wText(n.code, n.day)) + '</small></div></div>' +
+      '<div class="wstats w3">' +
+        '<div><b class="mono">' + fmt(n.wind, 0) + ' km/h</b><small>Vent ' + wDir(n.dir) + '</small></div>' +
+        '<div><b class="mono">' + fmt(n.gust, 0) + ' km/h</b><small>Rafales</small></div>' +
+        '<div><b class="mono">' + fmt(n.hum, 0) + ' %</b><small>Humidité</small></div>' +
+        '<div><b class="mono">' + fmt(d0.mm, 1) + ' mm</b><small>Pluie auj.</small></div>' +
+        '<div><b class="mono">' + fmt(n.press, 0) + '</b><small>Pression hPa</small></div>' +
+        '<div><b class="mono">' + esc(d0.rise || '—') + '</b><small>Soleil · ' + esc(d0.set || '—') + '</small></div>' +
+      '</div>' + meteoAlertsHTML(M) + '</div>';
+    h += '<h3>Prochaines heures</h3><div class="card2 flat whours">' + (M.hours || []).map(function (x) {
+      return '<div class="whr"><span class="mono">' + x.t.slice(11, 13) + 'h</span>' + wIcon(x.code, x.day, 24) + '<b class="mono">' + deg(x.temp) + '</b>' +
+        '<span class="rain mono">' + (x.prob != null ? x.prob + ' %' : '') + (x.mm ? ' · ' + fmt(x.mm, 1) + ' mm' : '') + '</span>' +
+        '<span class="mono' + (x.gust >= 50 ? ' gst' : ' mu2') + '">' + fmt(x.gust, 0) + ' km/h</span></div>';
+    }).join('') + '</div>';
+    h += '<h3>Prochains jours</h3><div class="card2 flat whours">' + (M.days || []).map(function (d, i) {
+      return '<div class="wdy"><b>' + wDay(d.d, i) + '</b>' + wIcon(d.code, 1, 24) + '<span class="mono">' + deg(d.min) + ' / ' + deg(d.max) + '</span>' +
+        '<span class="rain mono">' + (d.prob != null ? d.prob + ' %' : '') + (d.mm ? ' · ' + fmt(d.mm, 1) + ' mm' : '') + '</span>' +
+        '<span class="mono' + (d.gust >= 50 ? ' gst' : ' mu2') + '">' + fmt(d.gust, 0) + ' km/h</span></div>';
+    }).join('') + '</div>';
+    h += '<p class="note-q">Prévisions Météo-France (modèles AROME et ARPEGE) via Open-Meteo, pour un carré d’environ 1 km autour de la maison. Une notification te prévient quand des rafales d’au moins 50 km/h sont prévues dans les 36 h.</p>';
+    var keep = sheet.scrollTop; sheet.innerHTML = '<div class="sh-in">' + h + '</div>'; sheet.scrollTop = keep;
+  }
   // ---------- Onglet Plus (piscine, énergie, météo, réglages) ----------
   function moreHTML() {
-    var pis = findRoom('piscine'), met = findRoom('meteo'), sdb = findRoom('sdb'), h = '';
+    var pis = findRoom('piscine'), sdb = findRoom('sdb'), h = '';
     var ph = HISTE['3557564|168'];
     var wh = waterHTML(); if (wh) h += '<div class="lbl">Eau</div>' + wh;
     h += '<div class="lbl">Énergie</div><div class="card2 flat">' +
@@ -908,7 +996,7 @@
     h += '<div class="card2"><div class="row-hd"><b>pH · sonde Ondilo · 7 jours</b><span class="mono">' + fmt(num(3557564), 2) + '</span></div>' +
       spark(ph && ph.points ? ph.points.map(function (p) { return [new Date(String(p[0]).replace(' ', 'T')).getTime(), p[1]]; }) : null, { w: 320, h: 70, ref: 7.2, color: '#7CB2FF', labels: ['−7 j', '−5 j', '−3 j', '−1 j', 'auj.'] }) +
       '<div class="acc2b">' + pis.items.filter(function (it) { return it.type === 'sensor' || it.type === 'light'; }).map(rowHTML).join('') + '</div></div>';
-    if (met) h += '<div class="lbl">Météo</div><div class="card2 flat">' + met.items.map(rowHTML).join('') + '</div>';
+    h += '<div class="lbl">Météo</div>' + meteoHTML();
     h += '<div class="lbl">Application</div><div class="card2 flat">' +
       '<button class="row" data-settings><span class="ic">' + icon('gear') + '</span><span><b>Réglages et nouveautés</b><small>Version ' + esc(LOG ? LOG.version : '…') + (newVersion ? ' · nouvelle version' : '') + '</small></span><span class="val">›</span></button></div>';
     return h;
@@ -1999,6 +2087,7 @@
     }
     if (e.target.closest('[data-waterack]')) { return api({ action: 'water.ack' }).then(function (j) { WATER = j.devices; render(); toast('Alarme du compteur arrêtée'); }).catch(function () { toast('Impossible pour le moment, réessaie', true); }); }
     if (e.target.closest('[data-water]')) return openWater();
+    if (e.target.closest('[data-meteo]')) return openMeteo();
     if ((b = e.target.closest('[data-presence]'))) {
       var pon = b.dataset.presence === '1', P0 = (NT && NT.presence) || {};
       if (!!P0.on === pon) return;
@@ -2371,9 +2460,11 @@
     // toucher la notification « garage » ouvre le journal des portes
     navigator.serviceWorker.addEventListener('message', function (ev) {
       if (ev.data && /logs=doors/.test(ev.data.open || '')) openLogs('doors');
+      if (ev.data && /#meteo/.test(ev.data.open || '')) { TAB = 'more'; render(); openMeteo(); loadMeteo(true); }
       if (ev.data && /#water/.test(ev.data.open || '')) { TAB = 'more'; loadWater(true); app.scrollTop = 0; render(); }
     });
   }
   if (/logs=doors/.test(location.hash)) setTimeout(function () { openLogs('doors'); }, 600);
+  if (/#meteo/.test(location.hash)) { TAB = 'more'; setTimeout(function () { openMeteo(); loadMeteo(true); }, 600); }
   if (/#water/.test(location.hash)) { TAB = 'more'; setTimeout(function () { loadWater(true); }, 300); }
 })();

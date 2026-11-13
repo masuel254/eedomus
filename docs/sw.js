@@ -1,6 +1,6 @@
 // Service worker : réseau d'abord (toujours la dernière version), cache en secours hors ligne.
 // Les appels à la maison (n8n) ne passent jamais par le cache.
-var V = 'maison-2.15.0';
+var V = 'maison-2.16.0';
 var SHELL = ['./', './index.html', './app.css', './app.js', './config.json', './changelog.json', './manifest.webmanifest', './icons/icon-192-v2.png'];
 
 self.addEventListener('install', function (e) {
@@ -42,7 +42,7 @@ self.addEventListener('push', function (e) {
 self.addEventListener('notificationclick', function (e) {
   e.notification.close();
   var tg = e.notification.data && e.notification.data.tag;
-  var url = tg === 'garage' ? './#logs=doors' : /^water/.test(tg || '') ? './#water' : './';
+  var url = tg === 'garage' ? './#logs=doors' : /^water/.test(tg || '') ? './#water' : tg === 'meteo' ? './#meteo' : './';
   e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (cs) {
     if (cs.length) { cs[0].postMessage({ open: url }); return cs[0].focus(); }
     return self.clients.openWindow(url);

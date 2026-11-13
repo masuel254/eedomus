@@ -366,53 +366,6 @@
               "decimals": 1
             }
           ]
-        },
-        {
-          "id": "meteo",
-          "name": "Météo",
-          "temp": 3000581,
-          "items": [
-            {
-              "id": 3000573,
-              "name": "Vent",
-              "type": "sensor",
-              "icon": "wind",
-              "unit": " km/h",
-              "decimals": 0
-            },
-            {
-              "id": 3000574,
-              "name": "Rafales",
-              "type": "sensor",
-              "icon": "wind",
-              "unit": " km/h",
-              "decimals": 0
-            },
-            {
-              "id": 3000579,
-              "name": "Pluie",
-              "type": "sensor",
-              "icon": "drop",
-              "unit": " mm",
-              "decimals": 1
-            },
-            {
-              "id": 3000578,
-              "name": "Humidité",
-              "type": "sensor",
-              "icon": "drop",
-              "unit": " %",
-              "decimals": 0
-            },
-            {
-              "id": 3000577,
-              "name": "Pression",
-              "type": "sensor",
-              "icon": "thermo",
-              "unit": " hPa",
-              "decimals": 0
-            }
-          ]
         }
       ]
     }
