@@ -795,3 +795,8 @@ svg.gsvg { display: block; width: 100%; height: auto; user-select: none; -webkit
 .camwait .act { pointer-events: auto; }
 .camwait .spin { width: 26px; height: 26px; border-radius: 50%; border: 3px solid rgba(255,255,255,.25); border-top-color: #fff; animation: cwspin 0.9s linear infinite; }
 @keyframes cwspin { to { transform: rotate(360deg); } }
+
+/* garage : retour visible après confirmation, message au-dessus des pages */
+.toast { z-index: 60; }
+.gc-msg { background: rgba(46,204,64,.14); color: var(--ok); border-radius: 12px; padding: 10px 12px; font-size: 13px; line-height: 1.4; }
+.gc-msg.err { background: rgba(255,90,90,.14); color: var(--warn); }

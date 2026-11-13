@@ -1,7 +1,17 @@
 {
-  "version": "2.13.1",
+  "version": "2.13.2",
   "date": "2026-11-13",
   "releases": [
+    {
+      "version": "2.13.2",
+      "date": "2026-11-13",
+      "time": "17:34",
+      "title": "Garage : confirmation visible",
+      "changes": [
+        "Après « Elle est ouverte / fermée », un message vert confirme l’enregistrement et la photo de référence",
+        "Les messages de confirmation s’affichent maintenant aussi par-dessus les pages ouvertes"
+      ]
+    },
     {
       "version": "2.13.1",
       "date": "2026-11-13",
@@ -695,5 +705,5 @@
     "Révoquer à la fin : mot de passe TotalEnergies",
     "Révoquer à la fin : mot de passe EDF"
   ],
-  "time": "15:28"
+  "time": "17:34"
 }

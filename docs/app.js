@@ -572,6 +572,7 @@
     var open = /ouvert|ouverture/i.test(e.text), isGar = /garage/i.test(e.name);
     return { cls: open ? 'warnc' : 'mu', ic: isGar ? 'garage' : /portail/i.test(e.name) ? 'gate' : 'door', txt: isGar ? 'Garage : commande ' + e.text.toLowerCase() : e.name + ' ' + e.text.toLowerCase() };
   }
+  var garMsg = null, garMsgT = null; // retour visible après « Elle est ouverte / fermée »
   function renderLogs() {
     var kind = logsView, L = LOGS[kind], d = L && L.data;
     var title = { people: 'Présence', alarm: 'Alarme', doors: 'Portes' }[kind];
@@ -606,7 +607,7 @@
       var learn = cam && cam.refs ? 'Photos de référence : ' + cam.refs.open + ' ouverte, ' + cam.refs.closed + " fermée. Confirme aussi l'état une fois de nuit pour que la caméra le reconnaisse dans le noir." : '';
       h += '<div class="garcheck"><div class="gc-hd"><b>Vérifier la porte de garage</b><small>' + esc(camTxt || 'La caméra contrôle la porte toutes les 2 minutes et juste après chaque commande.') + '</small></div>' +
         (gc && gc.snapshot ? '<button class="gc-img" data-opencams="' + esc(gc.id) + '"><img alt="Caméra du garage" src="' + esc(gc.snapshot) + '"><span>Voir en direct ›</span></button>' : '<p class="muted">Photo de la caméra en cours de chargement…</p>') +
-        (learn ? '<small class="gc-learn">' + esc(learn) + '</small>' : '') +
+        (learn ? '<small class="gc-learn">' + esc(learn) + '</small>' : '') + (garMsg ? '<div class="gc-msg' + (garMsg.err ? ' err' : '') + '">' + esc(garMsg.t) + '</div>' : '') +
         '<div class="gc-btns"><button class="act' + (go2 ? ' on' : '') + '" data-garmark="open">Elle est ouverte</button><button class="act' + (GAR && !go2 ? ' on' : '') + '" data-garmark="closed">Elle est fermée</button></div></div>';
     }
     // Journal
@@ -1926,8 +1927,14 @@
     if ((b = e.target.closest('[data-logs]'))) return openLogs(b.dataset.logs);
     if ((b = e.target.closest('[data-garmark]'))) {
       var gs = b.dataset.garmark;
-      return api({ action: 'garage.mark', state: gs }).then(function (j) { GAR = j.garage; if (LOGS.doors) LOGS.doors.at = 0; render(); if (logsView) renderLogs(); toast('Porte de garage : ' + (gs === 'open' ? 'ouverte' : 'fermée')); })
-        .catch(function () { toast('Impossible d\'enregistrer, réessaie', true); });
+      var gsay = function (t, err, keep) { clearTimeout(garMsgT); garMsg = { t: t, err: err }; if (logsView) renderLogs(); if (!keep) garMsgT = setTimeout(function () { garMsg = null; if (logsView) renderLogs(); }, 60000); };
+      gsay('Envoi…', false, true);
+      return api({ action: 'garage.mark', state: gs }).then(function (j) {
+        GAR = j.garage; render();
+        gsay('✓ C’est noté : porte ' + (gs === 'open' ? 'ouverte' : 'fermée') + '. La caméra prend une photo de référence, le compteur ci-dessus se met à jour dans 30 secondes environ.');
+        toast('Porte de garage : ' + (gs === 'open' ? 'ouverte' : 'fermée'));
+        setTimeout(function () { if (LOGS.doors) LOGS.doors.at = 0; loadLogs('doors', true); }, 30000);
+      }).catch(function () { gsay('Impossible d’enregistrer, réessaie.', true); });
     }
     if ((b = e.target.closest('[data-yesno]'))) { var yid = +b.dataset.yesno; return send(yid, num(yid) === 1 ? 0 : 1); }
     if ((b = e.target.closest('[data-choice]'))) { var cp = b.dataset.choice.split(':'); return send(+cp[0], +cp[1]); }
