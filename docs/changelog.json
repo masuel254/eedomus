@@ -1,7 +1,16 @@
 {
-  "version": "2.4.4",
+  "version": "2.4.5",
   "date": "2026-11-13",
   "releases": [
+    {
+      "version": "2.4.5",
+      "date": "2026-11-13",
+      "time": "08:34",
+      "title": "Heures sur l’alarme",
+      "changes": [
+        "Détecteurs de mouvement : l’heure est aussi affichée pendant un mouvement (« Mouvement détecté à 09h04 · depuis 2 min ») et pour les détecteurs muets"
+      ]
+    },
     {
       "version": "2.4.4",
       "date": "2026-11-13",

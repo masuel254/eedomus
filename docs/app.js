@@ -289,7 +289,7 @@
       var old = ch && Date.now() - ch > 14 * 86400000;
       var ago2 = ch ? since(id).replace('depuis ', 'il y a ') : ''; // « à 09h04 · il y a 36 min »
       return '<div class="row motion' + (mv ? ' mv' : '') + (old ? ' old' : '') + '"><span class="ic">' + icon('walk') + '</span><span><b>' + esc(it.name) + '</b><small>' +
-        esc(mv ? 'Mouvement détecté' : old ? 'Aucune nouvelle depuis longtemps · pile à vérifier ?' : 'Dernier passage ' + ago2) + '</small></span>' +
+        esc(mv ? 'Mouvement détecté ' + since(id) : old ? 'Dernier signal ' + since(id) + ' · pile à vérifier ?' : 'Dernier passage ' + ago2) + '</small></span>' +
         '<span class="mvdot">' + (mv ? 'Mouvement' : old ? 'Inactif ?' : 'Calme') + '</span></div>';
     }
     if (it.type === 'state') {
