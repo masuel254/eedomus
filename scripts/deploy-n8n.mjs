@@ -110,6 +110,8 @@ const CODE_CFG = {
   } : null,
   deployedAt: Date.now(),
   // « nom dans eedomus = prénom affiché », gardé dans .env (pas dans les fichiers publics)
+  // position de la météo (commune), gardée dans .env : METEO_POS=lat,lon,Nom
+  meteoPos: env.METEO_POS ? (([la, lo, ...n]) => ({ lat: Number(la), lon: Number(lo), name: n.join(',').trim() || null }))(env.METEO_POS.split(',')) : null,
   names: Object.fromEntries(String(env.PEOPLE_NAMES || '').split(',').map((x) => x.split('=').map((s) => s.trim())).filter((x) => x[0] && x[1])),
   qd: env.QUANDIFY_EMAIL ? { email: env.QUANDIFY_EMAIL, password: env.QUANDIFY_PASSWORD } : null,
   push: env.VAPID_PRIVATE ? { d: env.VAPID_PRIVATE, pub: env.VAPID_PUBLIC, sub: env.APP_URL || 'https://example.invalid/' } : null,
@@ -445,9 +447,9 @@ function meteoWhen(iso, today) {
 async function meteo(force) {
   const M = SD.meteo = SD.meteo || {};
   if (!force && M.data && M.at > Date.now() - 600000) return M.data;
-  let H = await ntHomes();
+  let H = CFG.meteoPos ? {} : await ntHomes();
   if (H.heat && H.heat.coord === undefined) { SD.ntHomes = null; H = await ntHomes(); }
-  const c = H.heat && H.heat.coord;
+  const c = CFG.meteoPos ? [CFG.meteoPos.lon, CFG.meteoPos.lat] : H.heat && H.heat.coord;
   if (!c) throw fail(503, 'no_location');
   const url = 'https://api.open-meteo.com/v1/forecast?latitude=' + c[1] + '&longitude=' + c[0] + '&timezone=Europe%2FParis&forecast_days=5' +
     '&current=temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,pressure_msl,is_day' +
@@ -477,7 +479,7 @@ async function meteo(force) {
   const gh = hours.filter((x) => x.gust >= 50);
   if (gh.length) {
     const mx = gh.reduce((m, x) => (x.gust > m.gust ? x : m), gh[0]);
-    alerts.push({ type: 'wind', title: 'Rafales à ' + mx.gust + ' km/h ' + meteoWhen(mx.t, today), text: 'Replier la pergola' + (gh[0].t !== mx.t ? ' (dès ' + meteoWhen(gh[0].t, today) + ')' : ''), key: gh[0].t.slice(0, 10), gust: mx.gust, first: gh[0].t });
+    alerts.push({ type: 'wind', title: 'Rafales à ' + mx.gust + ' km/h ' + meteoWhen(mx.t, today), text: 'Replier la pergola et bien fermer le dôme de la piscine' + (gh[0].t !== mx.t ? ' (dès ' + meteoWhen(gh[0].t, today) + ')' : ''), key: gh[0].t.slice(0, 10), gust: mx.gust, first: gh[0].t });
   }
   // gel dans les 4 jours
   const fh = hours.filter((x) => x.temp != null && x.temp <= 0);
@@ -485,7 +487,7 @@ async function meteo(force) {
     const mn = fh.reduce((m, x) => (x.temp < m.temp ? x : m), fh[0]);
     alerts.push({ type: 'frost', title: 'Gel possible ' + meteoWhen(mn.t, today) + ' (' + String(mn.temp).replace('.', ',') + '°)', text: 'Vérifier la protection hors-gel de la piscine' });
   }
-  M.data = { ok: true, at: Date.now(), now: now, hours: hours.slice(0, 24), days: days, alerts: alerts, src: 'Météo-France / Open-Meteo' };
+  M.data = { ok: true, at: Date.now(), now: now, hours: hours.slice(0, 24), days: days, alerts: alerts, src: 'Météo-France / Open-Meteo', place: CFG.meteoPos ? CFG.meteoPos.name : null };
   M.at = Date.now();
   return M.data;
 }
@@ -501,7 +503,7 @@ async function meteoWatch() {
   if (w && soon && M.windKey !== w.key) {
     M.windKey = w.key;
     const when = meteoWhen(w.first, d.hours.length ? d.hours[0].t.slice(0, 10) : w.key);
-    await pushNotify({ tag: 'meteo', title: 'Rafales à ' + w.gust + ' km/h prévues', body: when.charAt(0).toUpperCase() + when.slice(1) + ' · pense à replier la pergola' });
+    await pushNotify({ tag: 'meteo', title: 'Rafales à ' + w.gust + ' km/h prévues', body: when.charAt(0).toUpperCase() + when.slice(1) + ' · replier la pergola et bien fermer le dôme de la piscine' });
   }
 }
 async function ntCameras(fresh) {

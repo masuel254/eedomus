@@ -953,11 +953,11 @@
         '<div><b class="mono">' + fmt(d0.mm, 1) + ' mm</b><small>Pluie' + (d0.prob != null ? ' ' + d0.prob + ' %' : '') + '</small></div>' +
         '<div><b class="mono">' + fmt(n.hum, 0) + ' %</b><small>Humidité</small></div>' +
       '</div>' + meteoAlertsHTML(M) +
-      '<div class="wfoot"><small>Mis à jour à ' + new Date(M.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) + ' · Météo-France</small><span class="more">Détails ›</span></div></div>';
+      '<div class="wfoot"><small>' + (M.place ? esc(M.place) + ' · ' : '') + 'mis à jour à ' + new Date(M.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) + '</small><span class="more">Détails ›</span></div></div>';
   }
   function openMeteo() { sheet.scrollTop = 0; openSheet('meteo'); renderMeteo(); loadMeteo(false); }
   function renderMeteo() {
-    var M = METEO, h = '<div class="sh-hd"><h2>Météo</h2><button class="close" data-close aria-label="Fermer">×</button></div>';
+    var M = METEO, h = '<div class="sh-hd"><h2>Météo' + (M && M.place ? ' · ' + esc(M.place) : '') + '</h2><button class="close" data-close aria-label="Fermer">×</button></div>';
     if (!M || !M.now) { sheet.innerHTML = '<div class="sh-in">' + h + '<p class="muted">Chargement…</p></div>'; return; }
     var n = M.now, d0 = (M.days || [])[0] || {};
     h += '<div class="card2"><div class="wtop">' + wIcon(n.code, n.day, 60) + '<div class="wnow"><b>' + deg(n.t) + '</b><small>Ressenti ' + deg(n.feel) + ' · ' + esc(wText(n.code, n.day)) + '</small></div></div>' +
@@ -979,7 +979,7 @@
         '<span class="rain mono">' + (d.prob != null ? d.prob + ' %' : '') + (d.mm ? ' · ' + fmt(d.mm, 1) + ' mm' : '') + '</span>' +
         '<span class="mono' + (d.gust >= 50 ? ' gst' : ' mu2') + '">' + fmt(d.gust, 0) + ' km/h</span></div>';
     }).join('') + '</div>';
-    h += '<p class="note-q">Prévisions Météo-France (modèles AROME et ARPEGE) via Open-Meteo, pour un carré d’environ 1 km autour de la maison. Une notification te prévient quand des rafales d’au moins 50 km/h sont prévues dans les 36 h.</p>';
+    h += '<p class="note-q">Prévisions Météo-France (modèles AROME et ARPEGE) via Open-Meteo, pour un carré d’environ 1 km autour de la commune. Une notification te prévient quand des rafales d’au moins 50 km/h sont prévues dans les 36 h.</p>';
     var keep = sheet.scrollTop; sheet.innerHTML = '<div class="sh-in">' + h + '</div>'; sheet.scrollTop = keep;
   }
   // ---------- Onglet Plus (piscine, énergie, météo, réglages) ----------

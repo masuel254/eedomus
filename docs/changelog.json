@@ -1,7 +1,17 @@
 {
-  "version": "2.16.0",
+  "version": "2.16.1",
   "date": "2026-11-13",
   "releases": [
+    {
+      "version": "2.16.1",
+      "date": "2026-11-13",
+      "time": "22:39",
+      "title": "Météo de la commune, alerte rafales complétée",
+      "changes": [
+        "La météo est maintenant celle de ta commune (avant : la ville voisine), son nom s’affiche sur la carte",
+        "Alerte rafales : « Replier la pergola et bien fermer le dôme de la piscine »"
+      ]
+    },
     {
       "version": "2.16.0",
       "date": "2026-11-13",
@@ -768,5 +778,5 @@
     "Révoquer à la fin : mot de passe TotalEnergies",
     "Révoquer à la fin : mot de passe EDF"
   ],
-  "time": "22:35"
+  "time": "22:39"
 }
