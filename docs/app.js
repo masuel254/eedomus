@@ -1470,7 +1470,10 @@
       }
       return D._gs[i];
     }
-    return 1;
+    // jour pas encore facturé : même correction que la même période l'an dernier, sinon la moyenne de toutes les factures
+    if (!/^L/.test(dk)) { var ly = (+dk.slice(0, 4) - 1) + dk.slice(4); for (var j = 0; j < B.length; j++) if (ly >= B[j].s && ly <= B[j].e) return gasScale(D, ly); }
+    if (D._gsAll == null) { var rk = 0, mk = 0; B.forEach(function (b, i2) { rk += b.kwh; mk += b.kwh / gasScale(D, b.s); }); D._gsAll = mk > 0 ? rk / mk : 1; }
+    return D._gsAll;
   }
   function linkyOf(D, d) { var L = D.cfg.elecDays; return L && L[d] ? L[d] : null; }
   function measDay(D, d) { var s = 0; ['pac', 'elec', 'sauna'].forEach(function (k) { if (!D.elec[k]) return; var e = D.elec[k].days[d]; if (e == null) e = costAvgOf(D, k); s += e || 0; }); return s; }

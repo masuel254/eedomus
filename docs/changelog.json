@@ -1,7 +1,16 @@
 {
-  "version": "2.12.1",
+  "version": "2.12.2",
   "date": "2026-11-13",
   "releases": [
+    {
+      "version": "2.12.2",
+      "date": "2026-11-13",
+      "time": "14:56",
+      "title": "Projection gaz affinée",
+      "changes": [
+        "Gaz : pour les jours pas encore facturés, correction de la même période l’an dernier (la chaudière consomme moins par heure en mi-saison)"
+      ]
+    },
     {
       "version": "2.12.1",
       "date": "2026-11-13",
@@ -647,5 +656,5 @@
     "Révoquer à la fin : mot de passe TotalEnergies",
     "Révoquer à la fin : mot de passe EDF"
   ],
-  "time": "14:53"
+  "time": "14:56"
 }
