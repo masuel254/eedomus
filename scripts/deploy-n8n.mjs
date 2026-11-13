@@ -103,6 +103,7 @@ const CODE_CFG = {
     seed: createHash('sha256').update(env.NETATMO_REFRESH_TOKEN.split('|')[0]).digest('hex').slice(0, 16),
   } : null,
   deployedAt: Date.now(),
+  push: env.VAPID_PRIVATE ? { d: env.VAPID_PRIVATE, pub: env.VAPID_PUBLIC, sub: env.APP_URL || 'https://example.invalid/' } : null,
   iq: env.IAQUA_EMAIL ? { email: env.IAQUA_EMAIL, password: env.IAQUA_PASSWORD, exo: env.IAQUA_EXO_SN || null, hpm: env.IAQUA_HPM_SN || null } : null,
   im: env.IMOU_APP_ID ? { id: env.IMOU_APP_ID, secret: env.IMOU_APP_SECRET } : null,
   tu: env.TUYA_CLIENT_ID ? {
@@ -112,6 +113,7 @@ const CODE_CFG = {
   } : null,
 };
 
+const PUSH_LIB = readFileSync(join(root, 'scripts', 'webpush-lib.js'), 'utf8');
 const code = `
 const CFG = ${JSON.stringify(CODE_CFG)};
 const helpers = this.helpers;
@@ -122,7 +124,7 @@ body = body || {};
 const reply = (status, data) => [{ json: { status, data } }];
 // Déclenchement par la minuterie (relevés d'énergie) : pas de requête HTTP, donc ni corps ni en-têtes.
 const isCron = req.body === undefined && req.headers === undefined;
-if (!isCron && (!body.token || !CFG.tokens.includes(body.token))) return reply(401, { ok: false, error: 'unauthorized' });
+if (!isCron && body.action !== 'push.pending' && (!body.token || !CFG.tokens.includes(body.token))) return reply(401, { ok: false, error: 'unauthorized' });
 
 const auth = 'api_user=' + encodeURIComponent(CFG.user) + '&api_secret=' + encodeURIComponent(CFG.secret);
 async function eedomus(kind, query, attempt) {
@@ -185,7 +187,7 @@ async function garageCamDue() {
   const G = $getWorkflowStaticData('global');
   const now = Date.now(), last = (G.garageCam && G.garageCam.tryAt) || 0;
   const dues = (G.garageDues || []).filter((t) => t <= now);
-  if (!dues.length && now - last < 5 * 60000) return null;
+  if (!dues.length && now - last < 2 * 60000) return null;
   G.garageDues = (G.garageDues || []).filter((t) => t > now);
   G.garageCam = Object.assign({}, G.garageCam || {}, { tryAt: now });
   const d = (await imDevices()).find((x) => String(x.name).toLowerCase() === 'garage' && x.online);
@@ -602,6 +604,50 @@ function hmac256hex(key, msg) {
   const inner = new Uint8Array(64 + mb.length); inner.set(ip); inner.set(mb, 64);
   const ih = sha256Bytes(inner), outer = new Uint8Array(96); outer.set(op); outer.set(ih, 64);
   return hex(sha256Bytes(outer));
+}
+${PUSH_LIB}
+function pushKey(endpoint) { return sha256hex(String(endpoint)).slice(0, 16); }
+// Envoie une notification à tous les iPhones abonnés (ou à un seul). Le texte attend dans une file, l'iPhone le récupère.
+async function pushNotify(item, onlyKey) {
+  if (!CFG.push) return 0;
+  SD.push = SD.push || { subs: {}, delay: 2 };
+  let sent = 0;
+  for (const k of Object.keys(SD.push.subs)) {
+    if (onlyKey && k !== onlyKey) continue;
+    const s = SD.push.subs[k];
+    s.q = (s.q || []).filter((x) => x.at > Date.now() - 3600000 && x.tag !== item.tag).concat([Object.assign({ at: Date.now() }, item)]).slice(-5);
+    try {
+      const r = await helpers.httpRequest({ method: 'POST', url: s.endpoint, body: '', json: false, returnFullResponse: true, ignoreHttpStatusErrors: true, timeout: 10000,
+        headers: { TTL: '3600', Urgency: 'high', Authorization: 'vapid t=' + vapidJwt(s.endpoint, CFG.push) + ', k=' + CFG.push.pub, 'Content-Length': '0' } });
+      const st = r.statusCode;
+      if (st === 404 || st === 410) delete SD.push.subs[k];
+      else if (st >= 200 && st < 300) { sent++; s.lastOk = Date.now(); s.lastErr = null; }
+      else s.lastErr = st + ' ' + (typeof r.body === 'string' ? r.body : JSON.stringify(r.body || '')).slice(0, 120);
+    } catch (e) { s.lastErr = String(e && e.message || e).slice(0, 120); }
+  }
+  return sent;
+}
+// Alerte « porte de garage ouverte depuis plus de N minutes » (vérifiée toutes les 30 s), rappel toutes les 30 min, puis « refermée »
+async function garageAlert() {
+  if (!CFG.push || !SD.push || !Object.keys(SD.push.subs || {}).length || !SD.garage) return;
+  const g = SD.garage, A = SD.garageAlert || {};
+  const ms = (s) => Date.parse(String(s).replace(' ', 'T') + 'Z');
+  const hm = (s) => String(s).slice(11, 16).replace(':', 'h');
+  const dur = (m) => (m < 60 ? m + ' min' : Math.floor(m / 60) + ' h ' + String(m % 60).padStart(2, '0'));
+  if (g.state === 'open') {
+    const mins = Math.floor((ms(localNow()) - ms(g.date)) / 60000), delay = SD.push.delay || 2;
+    if (mins < delay) return;
+    if (A.for !== g.date) {
+      SD.garageAlert = { for: g.date, at: Date.now() };
+      await pushNotify({ tag: 'garage', title: 'Porte de garage ouverte', body: 'Ouverte depuis ' + dur(mins) + ' (à ' + hm(g.date) + ')', badge: 1 });
+    } else if (Date.now() - A.at > 30 * 60000) {
+      A.at = Date.now(); SD.garageAlert = A;
+      await pushNotify({ tag: 'garage', title: 'Porte de garage toujours ouverte', body: 'Ouverte depuis ' + dur(mins) + ' (à ' + hm(g.date) + ')', badge: 1 });
+    }
+  } else if (g.state === 'closed' && A.for) {
+    SD.garageAlert = {};
+    await pushNotify({ tag: 'garage', title: 'Porte de garage fermée', body: 'Refermée à ' + hm(g.date), badge: 0 });
+  }
 }
 async function tuReq(method, path, token, body) {
   body = body || '';
@@ -1024,10 +1070,29 @@ try {
   if (isCron) {
     await enSample();
     // Porte de garage : photo de la caméra si c'est le moment (toutes les 5 min, ou juste après une commande / une confirmation)
+    try { await garageAlert(); } catch (e) {}
     let gu = null; try { gu = await garageCamDue(); } catch (e) {}
     return gu ? [{ json: { garageUrl: gu } }] : []; // aucune réponse HTTP à envoyer
   }
   if (body.action === 'ping') return reply(200, { ok: true });
+  // ---- Notifications ----
+  if (String(body.action || '').startsWith('push.')) {
+    if (!CFG.push) return reply(503, { ok: false, error: 'push_not_configured' });
+    SD.push = SD.push || { subs: {}, delay: 2 };
+    const ep = String(body.endpoint || ''), k = ep ? pushKey(ep) : null;
+    if (ep && !/^https:[/][/][a-z0-9.-]+[/]/i.test(ep)) return reply(400, { ok: false, error: 'bad_endpoint' });
+    if (body.action === 'push.pending') {
+      const s = k && SD.push.subs[k];
+      if (!s) return reply(404, { ok: false, error: 'unknown' });
+      const items = s.q || []; s.q = [];
+      return reply(200, { ok: true, items });
+    }
+    if (body.action === 'push.sub' && k) SD.push.subs[k] = Object.assign(SD.push.subs[k] || {}, { endpoint: ep, name: String(body.name || '').slice(0, 30), at: Date.now() });
+    if (body.action === 'push.unsub' && k) delete SD.push.subs[k];
+    if (body.action === 'push.cfg') { const d = Number(body.delay); if ([1, 2, 3, 5, 10, 15, 20, 30, 45, 60].includes(d)) SD.push.delay = d; }
+    if (body.action === 'push.test') { const n = k && SD.push.subs[k] ? await pushNotify({ tag: 'test', title: 'Maison', body: 'Les notifications fonctionnent sur cet iPhone 👍', badge: null }, k) : 0; if (!n) return reply(200, { ok: false, error: (k && SD.push.subs[k] && SD.push.subs[k].lastErr) || 'not_subscribed' }); }
+    return reply(200, { ok: true, on: !!(k && SD.push.subs[k]), delay: SD.push.delay || 2, count: Object.keys(SD.push.subs).length });
+  }
 
   // Historique d'un capteur eedomus (liste blanche « readable »), mis en cache 10 min
   if (body.action === 'hist') {
@@ -1202,7 +1267,8 @@ G.garageCam = { at: Date.now(), tryAt: (G.garageCam && G.garageCam.tryAt) || Dat
 if (!state && G.garage && G.garage.state === 'unknown' && (G.garageRetry || 0) > 0) { G.garageRetry--; G.garageDues = (G.garageDues || []).concat([Date.now() + 20000]); }
 // État confirmé par la caméra : on met à jour l'état mémorisé s'il change (ou s'il était « à vérifier »)
 if (state && (!G.garage || G.garage.state !== state)) {
-  G.garage = { state, date: localNow(), src: 'camera' };
+  const prev = G.garage, fromCmd = prev && prev.state === 'unknown' && prev.src === 'commande' && prev.date;
+  G.garage = { state, date: fromCmd || localNow(), src: 'camera' };
   G.garageLog = [{ state, date: G.garage.date, src: 'camera' }].concat(G.garageLog || []).slice(0, 40);
   if (G.logs) delete G.logs.doors;
 }

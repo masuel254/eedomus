@@ -496,7 +496,8 @@
     var c = LOGS[kind]; if (c && (c.loading || Date.now() - c.at < ttl)) return;
     LOGS[kind] = { loading: true, at: Date.now(), data: c ? c.data : null };
     api({ action: 'logs', kind: kind }).then(function (j) {
-      LOGS[kind] = { at: j.partial ? Date.now() - 105000 : Date.now(), data: j }; if (j.garage) GAR = j.garage; // incomplet : on redemande ~15 s plus tard
+      LOGS[kind] = { at: j.partial ? Date.now() - 105000 : Date.now(), data: j }; if (j.garage) GAR = j.garage;
+      if (j.garage && j.garage.state !== 'open' && navigator.clearAppBadge) { try { navigator.clearAppBadge(); } catch (e) {} } // pastille effacée dès que la porte n'est plus ouverte // incomplet : on redemande ~15 s plus tard
       if (j.partial) setTimeout(function () { loadLogs(kind, true); }, 16000);
       try { var keep = { events: j.events, kind: j.kind }; localStorage.setItem('maison-logs-' + kind, JSON.stringify(keep)); } catch (e) {}
       if (!busy()) render(); if (logsView === kind && !sheet.hidden) renderLogs();
@@ -1369,6 +1370,49 @@
     if (v) v.addEventListener('error', function () { toast('La vidéo en direct s\'ouvre dans Safari sur iPhone', true); });
     if (liveCam && sheet.dataset.jump === liveCam) { sheet.dataset.jump = ''; var cc = document.getElementById('cc-' + liveCam); if (cc) cc.scrollIntoView({ block: 'center' }); }
   }
+  // ---------- Notifications iPhone ----------
+  var PUSH = { on: false, delay: 2, loaded: false, busy: false };
+  var PUSH_DELAYS = [1, 2, 3, 5, 10, 15, 20, 30, 45, 60];
+  function pushSupported() { return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window; }
+  function pushStandalone() { return navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches); }
+  function pushSub() { return navigator.serviceWorker.ready.then(function (reg) { return reg.pushManager.getSubscription(); }); }
+  function pushLoad() {
+    if (!pushSupported() || !CFG.push) return;
+    PUSH.loaded = true;
+    pushSub().then(function (s) { return api({ action: 'push.get', endpoint: s ? s.endpoint : '' }); }).then(function (j) {
+      PUSH.on = j.on; PUSH.delay = j.delay; if (sheet.dataset.view === 'settings' && !sheet.hidden) renderSettings();
+    }).catch(function () { PUSH.loaded = false; });
+  }
+  function b64key(s) { var b = atob(s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4)), u = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; }
+  function pushToggle() {
+    if (PUSH.busy) return; PUSH.busy = true; renderSettings();
+    var end = function () { PUSH.busy = false; renderSettings(); };
+    if (PUSH.on) {
+      return pushSub().then(function (s) { return api({ action: 'push.unsub', endpoint: s ? s.endpoint : '' }).then(function () { return s && s.unsubscribe(); }); })
+        .then(function () { PUSH.on = false; toast('Alertes désactivées sur cet iPhone'); }).catch(function () { toast('Impossible pour le moment, réessaie', true); }).then(end);
+    }
+    Notification.requestPermission().then(function (perm) {
+      if (perm !== 'granted') throw new Error('refus');
+      return navigator.serviceWorker.ready.then(function (reg) { return reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64key(CFG.push.key) }); });
+    }).then(function (s) { return api({ action: 'push.sub', endpoint: s.endpoint, name: userName }); })
+      .then(function (j) { PUSH.on = j.on; PUSH.delay = j.delay; toast('Alertes activées sur cet iPhone'); })
+      .catch(function (err) { toast(err && err.message === 'refus' ? 'Notifications refusées : autorise-les dans Réglages iPhone › Notifications › Maison' : 'Activation impossible, réessaie', true); })
+      .then(end);
+  }
+  function pushHTML() {
+    if (!CFG.push) return '';
+    if (!PUSH.loaded) pushLoad();
+    var h = '<h3>Notifications</h3>';
+    if (!pushSupported() || !pushStandalone()) return h + '<p class="note-q">Pour recevoir les alertes, ouvre l’appli depuis son icône sur l’écran d’accueil (iPhone avec iOS 16.4 ou plus récent).</p>';
+    var d = PUSH.delay, i = PUSH_DELAYS.indexOf(d);
+    h += '<div class="card2 flat rs-list">' +
+      '<button class="row' + (PUSH.on ? ' is-on' : '') + (PUSH.busy ? ' busy' : '') + '" data-push-toggle><span class="ic">' + icon('bell') + '</span><span><b>Alertes sur cet iPhone</b><small>' + (PUSH.on ? 'Notification et pastille sur l’icône' : 'Désactivées') + '</small></span><span class="sw"></span></button>' +
+      '<div class="row"><span class="ic">' + icon('garage') + '</span><span><b>Porte de garage ouverte</b><small>Alerte après ' + d + ' min, rappel toutes les 30 min</small></span>' +
+      '<span class="stp2"><button data-push-delay="' + (PUSH_DELAYS[i - 1] || d) + '" aria-label="Moins">−</button><button data-push-delay="' + (PUSH_DELAYS[i + 1] || d) + '" aria-label="Plus">+</button></span></div>' +
+      (PUSH.on ? '<button class="row" data-push-test><span class="ic">' + icon('play') + '</span><span><b>Envoyer une notification de test</b><small>Pour vérifier que tout marche</small></span><span class="val">›</span></button>' : '') +
+      '</div><p class="note-q">Le délai est le même pour toute la famille. Chacun active les alertes sur son propre iPhone.</p>';
+    return h;
+  }
   function renderSettings() {
     var L = LOG || { version: '—', releases: [], works: [], todo: [] };
     var h = '<div class="sh-hd"><h2>Réglages</h2><button class="close" data-close aria-label="Fermer">×</button></div>' +
@@ -1377,6 +1421,7 @@
       '<div class="card"><div class="kv"><span>Connecté en tant que</span><b>' + esc(userName || '—') + '</b></div>' +
       '<div class="kv"><span>Box eedomus</span><b class="' + (offline ? 'bad' : 'ok') + '">' + (offline ? 'Hors ligne' : lastOk ? 'Connectée' : '…') + '</b></div>' +
       '<div class="kv"><span>Netatmo</span><b class="' + (NT ? 'ok' : ntErr ? 'bad' : '') + '">' + (NT ? 'Connecté' : ntErr ? 'Indisponible' : '…') + '</b></div></div>' +
+      pushHTML() +
       '<h3>Suivi du projet</h3>' +
       '<details class="acc2"><summary><span>Ce qui fonctionne</span><span class="cnt ok">' + L.works.length + '</span>' + icon('down') + '</summary>' +
       '<ul class="lst ok">' + L.works.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></details>' +
@@ -1645,6 +1690,18 @@
         REC.play = { url: j.url, label: label, key: r.begin }; sheet.scrollTop = 0; renderRec();
       }).catch(function () { b.classList.remove('busy'); toast('Lecture impossible pour le moment, réessaie', true); });
     }
+    if (e.target.closest('[data-push-toggle]')) return pushToggle();
+    if ((b = e.target.closest('[data-push-delay]'))) {
+      var nd = +b.dataset.pushDelay; if (nd === PUSH.delay) return;
+      var od = PUSH.delay; PUSH.delay = nd; renderSettings();
+      return api({ action: 'push.cfg', delay: nd }).then(function (j) { PUSH.delay = j.delay; renderSettings(); }).catch(function () { PUSH.delay = od; renderSettings(); toast('Réglage non enregistré, réessaie', true); });
+    }
+    if (e.target.closest('[data-push-test]')) {
+      toast('Envoi de la notification…');
+      return pushSub().then(function (s) { return fetch(CFG.api, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ token: token, action: 'push.test', endpoint: s ? s.endpoint : '' }) }); })
+        .then(function (r) { return r.json(); }).then(function (j) { toast(j.ok ? 'Notification envoyée : regarde en haut de l’écran' : 'Échec de l’envoi (' + (j.error || '?') + ')', !j.ok); })
+        .catch(function () { toast('Échec de l’envoi, réessaie', true); });
+    }
     if (e.target.closest('[data-update]')) {
       toast('Recherche de mise à jour…');
       var done = function () { location.reload(); };
@@ -1753,5 +1810,10 @@
     document.addEventListener('visibilitychange', function () { if (!document.hidden) { refresh(); refreshHeating(); refreshTuya(true); } });
   }).catch(function () { app.innerHTML = '<div class="setup"><h1>Maison</h1><p>Impossible de charger la configuration. Vérifie ta connexion.</p></div>'; });
 
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(function () {});
+    // toucher la notification « garage » ouvre le journal des portes
+    navigator.serviceWorker.addEventListener('message', function (ev) { if (ev.data && /logs=doors/.test(ev.data.open || '')) openLogs('doors'); });
+  }
+  if (/logs=doors/.test(location.hash)) setTimeout(function () { openLogs('doors'); }, 600);
 })();

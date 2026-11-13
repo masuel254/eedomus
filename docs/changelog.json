@@ -1,7 +1,18 @@
 {
-  "version": "2.5.0",
+  "version": "2.6.0",
   "date": "2026-11-13",
   "releases": [
+    {
+      "version": "2.6.0",
+      "date": "2026-11-13",
+      "time": "08:47",
+      "title": "Alertes sur l’iPhone",
+      "changes": [
+        "Notification sur l’iPhone et pastille sur l’icône quand la porte de garage reste ouverte (rappel toutes les 30 min, puis « refermée »)",
+        "Réglages › Notifications : activer les alertes sur cet iPhone, choisir le délai (1 à 60 min, 2 min par défaut), envoyer une notification de test",
+        "Porte de garage : contrôle par la caméra toutes les 2 min (au lieu de 5)"
+      ]
+    },
     {
       "version": "2.5.0",
       "date": "2026-11-13",
@@ -444,7 +455,8 @@
     "Consommation électrique : électrolyseur, pompe à chaleur et sauna (jour, mois, année)",
     "iAquaLink : électrolyseur eXO (chloration, pH, Boost, filtration, programmes) et pompe à chaleur Zodiac (consigne, marche/arrêt)",
     "Alarme : activation et paramétrage complet (zones, temporisations, mode manuel/automatique)",
-    "Porte de garage : état détecté par la caméra (références de jour enregistrées le 13/11)"
+    "Porte de garage : état détecté par la caméra (références de jour enregistrées le 13/11)",
+    "Notifications iPhone : alerte « porte de garage ouverte » (délai réglable) avec pastille sur l’icône"
   ],
   "todo": [
     "Tester la vidéo en direct sur iPhone (Imou et Netatmo)",
@@ -459,7 +471,8 @@
     "Graphiques supplémentaires : température extérieure, consommation sur la semaine",
     "Surveiller le forfait vidéo Imou avec « Tout en direct » activé",
     "Garage : confirmer une fois de nuit « Elle est ouverte » et « Elle est fermée » (références infrarouge)",
-    "Option : capteur d'ouverture sur la porte de garage (fiable à 100 %, même si la caméra est hors ligne)"
+    "Option : capteur d'ouverture sur la porte de garage (fiable à 100 %, même si la caméra est hors ligne)",
+    "Notifications : activer « Alertes sur cet iPhone » dans Réglages (sur chaque iPhone de la famille) puis toucher « Envoyer une notification de test »"
   ],
-  "time": "08:41"
+  "time": "08:47"
 }
