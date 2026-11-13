@@ -1,7 +1,16 @@
 {
-  "version": "2.9.2",
+  "version": "2.9.3",
   "date": "2026-11-13",
   "releases": [
+    {
+      "version": "2.9.3",
+      "date": "2026-11-13",
+      "time": "10:25",
+      "title": "Prénoms protégés",
+      "changes": [
+        "Plus aucun prénom dans les fichiers publics : le prénom affiché pour la présence est donné par la maison et gardé sur l’iPhone"
+      ]
+    },
     {
       "version": "2.9.2",
       "date": "2026-11-13",
@@ -516,7 +525,7 @@
       "date": "2026-11-12",
       "title": "Accès famille",
       "changes": [
-        "Un QR code d'installation par personne (Sam, Françoise, Adam, Thomas)",
+        "Un QR code d'installation par personne de la famille",
         "Accueil personnalisé avec le prénom",
         "Accès révocable personne par personne"
       ],
@@ -572,5 +581,5 @@
     "Énergie : mettre le vrai prix du gaz (facture) et noter 2 relevés du compteur gaz à 1-2 semaines d’écart pour caler la puissance de la chaudière",
     "Révoquer à la fin : mot de passe Quandify"
   ],
-  "time": "10:22"
+  "time": "10:25"
 }

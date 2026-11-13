@@ -25,7 +25,7 @@ if (!env.MAISON_TOKEN) {
   console.log('Nouveau jeton MAISON_TOKEN généré dans .env');
 }
 
-// Un jeton par personne : MAISON_TOKEN (Sam) et MAISON_TOKEN_<PRENOM>.
+// Un jeton par personne : MAISON_TOKEN (principal) et MAISON_TOKEN_<PRENOM>.
 // Ajouter : node scripts/deploy-n8n.mjs --add Prénom   ·   Révoquer : supprimer la ligne dans .env puis relancer.
 const addIdx = process.argv.indexOf('--add');
 if (addIdx > 0) {
@@ -40,7 +40,7 @@ if (addIdx > 0) {
 }
 const tokens = Object.entries(env)
   .filter(([k]) => /^MAISON_TOKEN(_[A-Z0-9]+)?$/.test(k))
-  .map(([k, v]) => ({ who: k === 'MAISON_TOKEN' ? 'SAM' : k.slice('MAISON_TOKEN_'.length), v }));
+  .map(([k, v]) => ({ who: k === 'MAISON_TOKEN' ? 'PRINCIPAL' : k.slice('MAISON_TOKEN_'.length), v }));
 
 // Liste blanche : seuls ces modules / valeurs peuvent être pilotés depuis l'appli.
 const cfg = JSON.parse(readFileSync(join(root, 'docs', 'config.json'), 'utf8'));
@@ -103,6 +103,8 @@ const CODE_CFG = {
     seed: createHash('sha256').update(env.NETATMO_REFRESH_TOKEN.split('|')[0]).digest('hex').slice(0, 16),
   } : null,
   deployedAt: Date.now(),
+  // « nom dans eedomus = prénom affiché », gardé dans .env (pas dans les fichiers publics)
+  names: Object.fromEntries(String(env.PEOPLE_NAMES || '').split(',').map((x) => x.split('=').map((s) => s.trim())).filter((x) => x[0] && x[1])),
   qd: env.QUANDIFY_EMAIL ? { email: env.QUANDIFY_EMAIL, password: env.QUANDIFY_PASSWORD } : null,
   push: env.VAPID_PRIVATE ? { d: env.VAPID_PRIVATE, pub: env.VAPID_PUBLIC, sub: env.APP_URL || 'https://example.invalid/' } : null,
   iq: env.IAQUA_EMAIL ? { email: env.IAQUA_EMAIL, password: env.IAQUA_PASSWORD, exo: env.IAQUA_EXO_SN || null, hpm: env.IAQUA_HPM_SN || null } : null,
@@ -1322,7 +1324,7 @@ try {
     }
     // mémorisé pour les journaux : ils ne relisent que les modules qui ont changé
     SD.lastChange = {}; Object.keys(states).forEach((k) => { SD.lastChange[String(k)] = states[k].changed; }); SD.lastChangeAt = Date.now();
-    return reply(200, { ok: true, states, at: new Date().toISOString() });
+    return reply(200, { ok: true, states, names: CFG.names || {}, at: new Date().toISOString() });
   }
 
   if (body.action === 'set') {

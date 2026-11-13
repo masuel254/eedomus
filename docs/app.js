@@ -69,6 +69,7 @@
   function refresh() {
     if (refreshing || !token) return; refreshing = true;
     api({ action: 'state' }).then(function (j) {
+      if (j.names && JSON.stringify(j.names) !== JSON.stringify(NAMES)) { NAMES = j.names; try { localStorage.setItem('maison-names', JSON.stringify(NAMES)); } catch (e) {} }
       STATES = j.states; lastOk = Date.now(); fails = 0; offline = false; if (!busy()) render();
     }).catch(function (e) {
       if (e.status === 401) { token = null; return setup(); }
@@ -536,7 +537,9 @@
     if (diff <= 0) return "Aujourd'hui"; if (diff === 1) return 'Hier';
     var s = dt.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }); return s.charAt(0).toUpperCase() + s.slice(1);
   }
-  function personOf(text) { return String(text || '').replace(/\s+(pr[ée]sente?|absente?)$/i, '').replace(/^France$/, 'Françoise'); }
+  // prénoms affichés : fournis par le serveur (gardés sur l'iPhone), jamais écrits dans les fichiers publics
+  var NAMES = {}; try { NAMES = JSON.parse(localStorage.getItem('maison-names') || '{}') || {}; } catch (e) {}
+  function personOf(text) { var n = String(text || '').replace(/\s+(pr[ée]sente?|absente?)$/i, ''); return NAMES[n] || n; }
   function logLine(kind, e) {
     if (kind === 'people') {
       var here = /pr[ée]sent/i.test(e.text);
