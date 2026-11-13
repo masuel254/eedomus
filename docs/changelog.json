@@ -1,7 +1,18 @@
 {
-  "version": "2.9.5",
+  "version": "2.10.0",
   "date": "2026-11-13",
   "releases": [
+    {
+      "version": "2.10.0",
+      "date": "2026-11-13",
+      "time": "10:59",
+      "title": "Gaz calé sur tes factures",
+      "changes": [
+        "Gaz : vrais chiffres de TotalEnergies (12 mois de factures) : prix 0,094 €/kWh TTC, abonnement et taxes fixes 39,40 €/mois, chaudière 12,9 kW, eau chaude ≈ 2 340 kWh/an",
+        "Les périodes déjà facturées retombent exactement sur les kWh de tes factures (les jours sont répartis selon les heures de chauffe Netatmo)",
+        "Nouvelle ligne « Abonnement gaz + taxes fixes » et carte « Factures de gaz réelles » dans Énergie / Eau"
+      ]
+    },
     {
       "version": "2.9.5",
       "date": "2026-11-13",
@@ -581,7 +592,8 @@
     "Notifications iPhone : alerte « porte de garage ouverte » (délai réglable) avec pastille sur l’icône",
     "Coût de l’énergie (Plus › Énergie) : gaz estimé à partir des heures de chauffe Netatmo + électricité des prises Smart Life, en €",
     "Eau : compteur Quandify (Water Grip) relié, litres par jour depuis l’installation, coût à 5,13 €/m³",
-    "Fuite d’eau : surveillance du compteur Quandify chaque minute, notification iPhone immédiate"
+    "Fuite d’eau : surveillance du compteur Quandify chaque minute, notification iPhone immédiate",
+    "Gaz calé sur les vraies factures TotalEnergies (12 mois, 18 223 kWh, 2 171 €) : prix, abonnement, puissance chaudière, eau chaude"
   ],
   "todo": [
     "Tester la vidéo en direct sur iPhone (Imou et Netatmo)",
@@ -598,8 +610,9 @@
     "Garage : confirmer une fois de nuit « Elle est ouverte » et « Elle est fermée » (références infrarouge)",
     "Option : capteur d'ouverture sur la porte de garage (fiable à 100 %, même si la caméra est hors ligne)",
     "Notifications : activer « Alertes sur cet iPhone » dans Réglages (sur chaque iPhone de la famille) puis toucher « Envoyer une notification de test »",
-    "Énergie : mettre le vrai prix du gaz (facture) et noter 2 relevés du compteur gaz à 1-2 semaines d’écart pour caler la puissance de la chaudière",
-    "Révoquer à la fin : mot de passe Quandify"
+    "Révoquer à la fin : mot de passe Quandify",
+    "Électricité : dire qui est le fournisseur et le prix du kWh (TotalEnergies ne fournit que le gaz)",
+    "Révoquer à la fin : mot de passe TotalEnergies"
   ],
-  "time": "10:35"
+  "time": "10:59"
 }

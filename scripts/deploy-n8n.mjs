@@ -1247,8 +1247,11 @@ try {
   if (body.action === 'cost' || body.action === 'cost.cfg' || body.action === 'cost.meter') {
     const C = costCfg();
     if (body.action === 'cost.cfg') {
-      const lim = { gasPrice: [0.03, 0.5], kw: [2, 40], elecPrice: [0.05, 0.6], waterPrice: [0.5, 20], budget: [10, 2000] };
-      Object.keys(lim).forEach((k) => { const v = Number(body[k]); if (body[k] != null && isFinite(v) && v >= lim[k][0] && v <= lim[k][1]) { C[k] = Math.round(v * 1000) / 1000; if (k === 'kw') C.kwSrc = 'manuel'; } });
+      const lim = { gasPrice: [0.03, 0.5], kw: [2, 40], elecPrice: [0.05, 0.6], waterPrice: [0.5, 20], budget: [10, 2000], gasFixed: [0, 200], ecsKwh: [0, 10000] };
+      Object.keys(lim).forEach((k) => { const v = Number(body[k]); if (body[k] != null && isFinite(v) && v >= lim[k][0] && v <= lim[k][1]) { C[k] = Math.round(v * 1000) / 1000; if (k === 'kw') C.kwSrc = body.kwSrc === 'factures' ? 'factures' : 'manuel'; } });
+      // factures de gaz réelles (relevées sur l'espace client du fournisseur) : [{ s: AAAAMMJJ, e: AAAAMMJJ, kwh, ttc }]
+      if (Array.isArray(body.gasBills)) C.billsAt = Date.now();
+      if (Array.isArray(body.gasBills)) C.gasBills = body.gasBills.filter((x) => x && /^[0-9]{8}$/.test(x.s) && /^[0-9]{8}$/.test(x.e) && isFinite(x.kwh) && isFinite(x.ttc)).slice(0, 36).map((x) => ({ s: x.s, e: x.e, kwh: Number(x.kwh), ttc: Number(x.ttc) }));
       // nombre de chaque appareil non mesuré (estimation de l'électricité)
       if (body.appl && typeof body.appl === 'object') { C.appl = C.appl || {}; Object.keys(body.appl).slice(0, 40).forEach((id) => { const q = Number(body.appl[id]); if (/^[a-z0-9]{2,12}$/.test(id) && Number.isInteger(q) && q >= 0 && q <= 60) C.appl[id] = q; }); }
     }
@@ -1270,7 +1273,7 @@ try {
     const calib = costCalibrate();
     const elec = {};
     if (CFG.tu) Object.keys(CFG.tu.devices).forEach((k) => { const s = enSeries(k); const o = {}; s.days.forEach((x) => { o[x.k] = x.kwh; }); elec[k] = { days: o, since: s.since }; });
-    return reply(200, { ok: true, cfg: { gasPrice: C.gasPrice, kw: C.kw, kwSrc: C.kwSrc, elecPrice: C.elecPrice, waterPrice: C.waterPrice, budget: C.budget, meters: C.meters, appl: C.appl || {} },
+    return reply(200, { ok: true, cfg: { gasPrice: C.gasPrice, kw: C.kw, kwSrc: C.kwSrc, elecPrice: C.elecPrice, waterPrice: C.waterPrice, budget: C.budget, meters: C.meters, appl: C.appl || {}, gasFixed: C.gasFixed || 0, ecsKwh: C.ecsKwh || null, gasBills: C.gasBills || [], billsAt: C.billsAt || null },
       water: CFG.qd ? { days: SD.water ? SD.water.d : {}, err: waterErr } : null, calib, gas: { days: SD.gas ? SD.gas.d : {}, err: gasErr }, elec });
   }
   // ---- Notifications ----
