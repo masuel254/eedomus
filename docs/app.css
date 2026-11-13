@@ -737,3 +737,12 @@ svg.gsvg { display: block; width: 100%; height: auto; user-select: none; -webkit
 .card2.water.leak .ic { color: #FF6B6B; }
 .wl-txt { font-size: 13px; line-height: 1.5; color: var(--tx); margin: 0 0 10px; }
 .card2.water .act { width: 100%; margin-bottom: 12px; }
+
+/* écran Eau */
+.card2.water[data-water] { cursor: pointer; }
+.w-sum { display: flex; align-items: baseline; justify-content: center; gap: 14px; margin: 10px 0 4px; }
+.w-sum b { font-size: 30px; font-weight: 500; }
+.w-sum span { color: #38BDF8; font-size: 18px; }
+.cost-k.w3 { margin: 12px 0; }
+.wat svg.bars .b { fill: rgba(56,189,248,.55); }
+.wat svg.bars .b-hi { fill: #38BDF8; }

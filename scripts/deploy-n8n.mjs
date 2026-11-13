@@ -1223,6 +1223,24 @@ try {
     else await waterWatch(!!body.fresh && !(SD.ww && SD.ww.at > Date.now() - 15000));
     return reply(200, { ok: true, devices: waterOut() });
   }
+  if (body.action === 'water.hours') {
+    if (!CFG.qd) return reply(503, { ok: false, error: 'water_not_configured' });
+    const day = String(body.day || '');
+    if (!/^[0-9]{8}$/.test(day)) return reply(400, { ok: false, error: 'bad_day' });
+    SD.wh = SD.wh || {};
+    const today = enKey(Date.now()).slice(0, 8), c = SD.wh[day];
+    if (c && (day < today || c.at > Date.now() - 180000)) return reply(200, { ok: true, day, hours: c.h });
+    if (!SD.water || !SD.water.dev) await waterDays();
+    const t0 = Date.UTC(Number(day.slice(0, 4)), Number(day.slice(4, 6)) - 1, Number(day.slice(6, 8))) / 1000 - 7200, h = {};
+    for (const dev of SD.water.dev) {
+      const rows = await qd('devices/' + dev.id + '/consumption', { truncate: 'hour', timezone: 'Europe/Paris', from: t0, to: Math.min(t0 + 30 * 3600, Math.floor(Date.now() / 1000)) });
+      (Array.isArray(rows) ? rows : []).forEach((r) => { const k = enKey(Number(r.ts) * 1000); if (k.slice(0, 8) === day) { const hh = Number(k.slice(8, 10)); h[hh] = Math.round(((h[hh] || 0) + Number(r.value || 0)) * 10) / 10; } });
+    }
+    SD.wh[day] = { at: Date.now(), h };
+    const cut = enKey(Date.now() - 45 * 86400000).slice(0, 8);
+    Object.keys(SD.wh).forEach((k) => { if (k < cut) delete SD.wh[k]; });
+    return reply(200, { ok: true, day, hours: h });
+  }
   // ---- Coût de l'énergie ----
   if (body.action === 'cost' || body.action === 'cost.cfg' || body.action === 'cost.meter') {
     const C = costCfg();

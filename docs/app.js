@@ -507,8 +507,8 @@
       var sub = d.leak ? kind + (d.flow ? ' · ' + fmt(d.flow, 0) + ' L/h' : '') + (d.since ? ' · ' + sinceDate(ymd(new Date(d.since)) + ' ' + new Date(d.since).toTimeString().slice(0, 8)) : '')
         : d.offline ? 'Hors ligne depuis ' + (d.seen ? new Date(d.seen).toLocaleString('fr-FR', { weekday: 'short', hour: '2-digit', minute: '2-digit' }) : '…') + ' · surveillance arrêtée'
         : 'Aucune fuite' + (d.temp != null ? ' · eau à ' + fmt(d.temp, 1) + '°' : '') + ' · surveillé chaque minute';
-      return '<div class="card2 water' + (d.leak ? ' leak' : d.offline ? ' off' : '') + '"><div class="row"><span class="ic">' + icon('drop') + '</span><span><b>Compteur d’eau</b><small>' + esc(sub) + '</small></span>' +
-        '<span class="' + (d.leak ? 'bad' : d.offline ? 'warn2' : 'ok') + '">' + (d.leak ? 'FUITE' : d.offline ? 'Hors ligne' : 'OK') + '</span></div>' +
+      return '<div class="card2 water' + (d.leak ? ' leak' : d.offline ? ' off' : '') + '" data-water><div class="row"><span class="ic">' + icon('drop') + '</span><span><b>Compteur d’eau</b><small>' + esc(sub) + '</small></span>' +
+        '<span class="' + (d.leak ? 'bad' : d.offline ? 'warn2' : 'ok') + '">' + (d.leak ? 'FUITE' : d.offline ? 'Hors ligne' : 'OK') + ' ›</span></div>' +
         (d.leak ? '<p class="wl-txt">Le Water Grip voit de l’eau couler en continu. Vérifie robinets, chasse d’eau, arrosage, piscine… et coupe l’arrivée d’eau au compteur si besoin.</p>' +
           (d.ack ? '' : '<button class="act" data-waterack>J’ai vu, arrêter l’alarme du compteur</button>') : '') + '</div>';
     }).join('');
@@ -833,15 +833,15 @@
     var pis = findRoom('piscine'), met = findRoom('meteo'), sdb = findRoom('sdb'), h = '';
     var ph = HISTE['3557564|168'];
     var wh = waterHTML(); if (wh) h += '<div class="lbl">Eau</div>' + wh;
+    h += '<div class="lbl">Énergie</div><div class="card2 flat">' +
+      '<button class="row" data-cost><span class="ic" style="color:#FF8A5B">' + icon('flame') + '</span><span><b>Coût de l’énergie</b><small>Gaz, électricité et eau · en €</small></span><span class="val">›</span></button>' +
+      pis.items.filter(function (it) { return it.type === 'tuya-meter'; }).map(rowHTML).join('') +
+      sdb.items.filter(function (it) { return it.type === 'tuya-meter'; }).map(rowHTML).join('') + '</div>';
     h += '<div class="lbl">Piscine</div>';
     h += pis.items.filter(function (it) { return /^iaqua-/.test(it.type); }).map(rowHTML).join('');
     h += '<div class="card2"><div class="row-hd"><b>pH · sonde Ondilo · 7 jours</b><span class="mono">' + fmt(num(3557564), 2) + '</span></div>' +
       spark(ph && ph.points ? ph.points.map(function (p) { return [new Date(String(p[0]).replace(' ', 'T')).getTime(), p[1]]; }) : null, { w: 320, h: 70, ref: 7.2, color: '#7CB2FF', labels: ['−7 j', '−5 j', '−3 j', '−1 j', 'auj.'] }) +
       '<div class="acc2b">' + pis.items.filter(function (it) { return it.type === 'sensor' || it.type === 'light'; }).map(rowHTML).join('') + '</div></div>';
-    h += '<div class="lbl">Énergie</div><div class="card2 flat">' +
-      '<button class="row" data-cost><span class="ic" style="color:#FF8A5B">' + icon('flame') + '</span><span><b>Coût de l’énergie</b><small>Gaz, électricité et eau · en €</small></span><span class="val">›</span></button>' +
-      pis.items.filter(function (it) { return it.type === 'tuya-meter'; }).map(rowHTML).join('') +
-      sdb.items.filter(function (it) { return it.type === 'tuya-meter'; }).map(rowHTML).join('') + '</div>';
     if (met) h += '<div class="lbl">Météo</div><div class="card2 flat">' + met.items.map(rowHTML).join('') + '</div>';
     h += '<div class="lbl">Application</div><div class="card2 flat">' +
       '<button class="row" data-settings><span class="ic">' + icon('gear') + '</span><span><b>Réglages et nouveautés</b><small>Version ' + esc(LOG ? LOG.version : '…') + (newVersion ? ' · nouvelle version' : '') + '</small></span><span class="val">›</span></button></div>';
@@ -1011,6 +1011,7 @@
     else if (view === 'rec') renderRec();
     else if (view === 'energy') renderEnergy();
     else if (view === 'cost') renderCost();
+    else if (view === 'water') renderWater();
     else if (view === 'costappl') renderCostAppl();
     else if (view === 'timers') renderTimers();
     else if (view === 'plans') renderPlans();
@@ -1434,9 +1435,9 @@
     return out;
   }
   var COST_CUR = '';
-  function costPeriod() {
+  function costPeriod(tab0, off0) {
     // Liste des jours de la période affichée + découpage pour le graphique
-    var t = new Date(), tab = COST.tab, off = COST.off, days = [], groups = [], title = '';
+    var t = new Date(), tab = tab0 || COST.tab, off = off0 != null ? off0 : COST.off, days = [], groups = [], title = '';
     var dk = function (d) { return ymdK(d); };
     if (tab === 'day') {
       var d = new Date(t.getFullYear(), t.getMonth(), t.getDate() + off); days = [dk(d)];
@@ -1565,6 +1566,60 @@
       '<div class="en-card cost-hero"><span class="est">≈ estimation</span><div class="appl-tot"><b class="mono">' + eur((totE + totG) / 12, 0) + '</b><small>par mois en moyenne · ≈ ' + eur(totE + totG, 0) + '/an (électricité ' + eur(totE, 0) + ', gaz ' + eur(totG, 0) + ')</small></div></div>' +
       '<div class="lbl">Ajuste le nombre de chaque appareil</div><div class="card2 flat cost-list appl">' + rows + '</div>' +
       '<p class="note-q">Consommations moyennes d’appareils récents pour une famille de 4. Les sèche-serviettes ne comptent que les jours où le chauffage a tourné (Netatmo) ; l’éclairage compte plus en hiver. Pas de ballon électrique : l’eau chaude vient de la chaudière gaz, que Netatmo ne compte que pour le chauffage. La piscine et le sauna sont mesurés à part.</p>';
+    var keep = sheet.scrollTop; sheet.innerHTML = '<div class="sh-in">' + h + '</div>'; sheet.scrollTop = keep;
+  }
+
+  // ---------- Écran Eau : consommation (litres, m³, €) par heure, jour, mois ----------
+  var WAT = null; // { tab, off, data (réponse « cost »), hours: { AAAAMMJJ: {h: litres} } }
+  function openWater() {
+    var cached = (COST && COST.data) || null; if (!cached) { try { cached = JSON.parse(localStorage.getItem('maison-cost') || 'null'); } catch (e) {} }
+    WAT = { tab: 'day', off: 0, data: cached, hours: {} };
+    sheet.scrollTop = 0; openSheet('water');
+    api({ action: 'cost' }).then(function (j) { if (!WAT) return; WAT.data = j; try { localStorage.setItem('maison-cost', JSON.stringify(j)); } catch (e) {} if (sheet.dataset.view === 'water') renderWater(); }).catch(function () {});
+    waterHours(ymdK(new Date()));
+  }
+  function waterHours(dk) {
+    if (!WAT || WAT.hours[dk]) return;
+    WAT.hours[dk] = { loading: true };
+    api({ action: 'water.hours', day: dk }).then(function (j) { if (!WAT) return; WAT.hours[dk] = { h: j.hours }; if (sheet.dataset.view === 'water') renderWater(); })
+      .catch(function () { if (WAT) WAT.hours[dk] = { error: true }; if (sheet.dataset.view === 'water') renderWater(); });
+  }
+  function litres(v) { return v == null ? '—' : v >= 1000 ? fmt(v / 1000, 2) + ' m³' : fmt(v, 0) + ' L'; }
+  function renderWater() {
+    if (!WAT) return;
+    var D = WAT.data, price = D && D.cfg ? D.cfg.waterPrice || 5.13 : 5.13, days = D && D.water ? D.water.days : {};
+    var h = '<div class="sh-hd"><h2>Eau</h2><button class="close" data-close aria-label="Fermer">×</button></div>';
+    h += '<div class="en-tabs c4">' + [['day', 'Jour'], ['week', 'Semaine'], ['month', 'Mois'], ['year', 'Année']].map(function (t) {
+      return '<button class="' + (WAT.tab === t[0] ? 'on' : '') + '" data-wtab="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>';
+    if (!D) { sheet.innerHTML = '<div class="sh-in">' + h + '<p class="muted">Lecture du compteur…</p></div>'; return; }
+    var P = costPeriod(WAT.tab, WAT.off), vals = [], labels = {}, total = 0, any = false, hi = -1, today = ymdK(new Date());
+    if (WAT.tab === 'day') {
+      var dk = P.days[0], H = WAT.hours[dk]; waterHours(dk);
+      for (var i = 0; i < 24; i++) { var v = H && H.h ? (H.h[i] != null ? H.h[i] : (dk === today && i > new Date().getHours() ? null : 0)) : null; vals.push(v); if (v != null) { total += v; any = true; } }
+      [0, 6, 12, 18, 23].forEach(function (i) { labels[i] = String(i).padStart(2, '0') + 'h'; });
+      if (dk === today) hi = new Date().getHours();
+      if (days[dk] != null && (!H || !H.h)) { total = days[dk]; any = true; }
+    } else {
+      P.groups.forEach(function (g, i) { var s = null; g.days.forEach(function (d) { if (days[d] != null) s = (s || 0) + days[d]; }); vals.push(s); if (s != null) { total += s; any = true; } if (g.label) labels[i] = g.label; });
+      if (WAT.off === 0) hi = vals.length - 1;
+      if (WAT.tab === 'year') hi = WAT.off === 0 ? new Date().getMonth() : -1;
+    }
+    var nd = P.days.filter(function (d) { return days[d] != null; }).length || 1, perDay = total / (WAT.tab === 'day' ? 1 : nd);
+    h += '<div class="en-card wat"><div class="en-period"><button data-wstep="-1" aria-label="Période précédente">' + icon('down') + '</button><span>' + esc(P.title.charAt(0).toUpperCase() + P.title.slice(1)) + '</span>' +
+      '<button data-wstep="1" aria-label="Période suivante"' + (WAT.off >= 0 ? ' disabled' : '') + '>' + icon('down') + '</button></div>' +
+      '<div class="w-sum"><b class="mono">' + (any ? litres(total) : '—') + '</b><span class="mono">' + (any ? eur(total / 1000 * price, total / 1000 * price < 10 ? 2 : 0) : '') + '</span></div>' +
+      bars(vals, labels, hi).replace(/ kWh<\/title>/g, ' L</title>') + '</div>';
+    h += '<div class="cost-k w3">' +
+      '<div><i style="background:#38BDF8"></i><small>Volume</small><b class="mono">' + (any ? fmt(total / 1000, total < 10000 ? 2 : 1) : '—') + '</b><span>m³</span></div>' +
+      '<div><i style="background:#38BDF8"></i><small>Coût</small><b class="mono">' + (any ? eur(total / 1000 * price, 2) : '—') + '</b><span>à ' + fmt(price, 2) + ' €/m³</span></div>' +
+      '<div><i style="background:var(--mu)"></i><small>Par personne</small><b class="mono">' + (any ? fmt(perDay / 4, 0) : '—') + '</b><span>' + (WAT.tab === 'day' ? 'litres ce jour-là' : 'litres / jour') + '</span></div></div>';
+    if (WAT.tab !== 'day' && any) {
+      var mx = -1, mk = ''; P.days.forEach(function (d) { if (days[d] != null && days[d] > mx) { mx = days[d]; mk = d; } });
+      if (mk) { var dt = new Date(+mk.slice(0, 4), +mk.slice(4, 6) - 1, +mk.slice(6, 8)); h += '<div class="card2 flat cost-list"><div class="row"><span><b>Jour le plus gourmand</b><small>' + esc(dt.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })) + '</small></span><span class="val mono">' + litres(mx) + '</span></div>' +
+        '<div class="row"><span><b>Moyenne par jour</b><small>pour toute la maison</small></span><span class="val mono">' + litres(perDay) + '</span></div></div>'; }
+    }
+    if (WAT.tab === 'day' && WAT.hours[P.days[0]] && WAT.hours[P.days[0]].loading) h += '<p class="muted">Lecture heure par heure…</p>';
+    h += '<p class="note-q">Mesuré par le compteur Quandify (Water Grip). En France, on consomme en moyenne environ 145 litres par personne et par jour. Le prix du m³ se règle dans Énergie › Réglages du calcul.</p>';
     var keep = sheet.scrollTop; sheet.innerHTML = '<div class="sh-in">' + h + '</div>'; sheet.scrollTop = keep;
   }
   function stepEnergy(dir) {
@@ -1730,6 +1785,7 @@
       if (qa === 'sauna') { if (tuOn('sauna')) { SLIDE = null; return saunaSet(false); } return openSlide('sauna-on', 'home'); }
     }
     if (e.target.closest('[data-waterack]')) { return api({ action: 'water.ack' }).then(function (j) { WATER = j.devices; render(); toast('Alarme du compteur arrêtée'); }).catch(function () { toast('Impossible pour le moment, réessaie', true); }); }
+    if (e.target.closest('[data-water]')) return openWater();
     if ((b = e.target.closest('[data-slideopen]'))) { var so = b.dataset.slideopen.split(':'); return openSlide(so[0], so[1]); }
     if ((b = e.target.closest('[data-slidekey]'))) { SLIDE.key = b.dataset.slidekey; return render(); }
     if (e.target.closest('[data-slidex]')) { SLIDE = null; return render(); }
@@ -1839,6 +1895,8 @@
       return api({ action: 'cost.cfg', appl: pa }).then(function (j) { COST.data = j; try { localStorage.setItem('maison-cost', JSON.stringify(j)); } catch (e) {} if (sheet.dataset.view === 'costappl') renderCostAppl(); })
         .catch(function () { toast('Réglage non enregistré, réessaie', true); });
     }
+    if ((b = e.target.closest('[data-wtab]'))) { WAT.tab = b.dataset.wtab; WAT.off = 0; return renderWater(); }
+    if ((b = e.target.closest('[data-wstep]'))) { var wo = WAT.off + +b.dataset.wstep; if (wo > 0) return; WAT.off = wo; return renderWater(); }
     if ((b = e.target.closest('[data-costtab]'))) { COST.tab = b.dataset.costtab; COST.off = 0; return renderCost(); }
     if ((b = e.target.closest('[data-coststep]'))) { var nv2 = COST.off + +b.dataset.coststep; if (nv2 > 0) return; COST.off = nv2; return renderCost(); }
     if ((b = e.target.closest('[data-costset]'))) {

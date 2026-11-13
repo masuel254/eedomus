@@ -1,7 +1,17 @@
 {
-  "version": "2.9.0",
+  "version": "2.9.1",
   "date": "2026-11-13",
   "releases": [
+    {
+      "version": "2.9.1",
+      "date": "2026-11-13",
+      "time": "10:18",
+      "title": "Écran Eau",
+      "changes": [
+        "Toucher la carte Eau ouvre sa consommation : Jour (heure par heure), Semaine, Mois, Année, en litres, m³ et € (5,13 €/m³), avec la moyenne par personne et le jour le plus gourmand",
+        "Onglet Plus : la carte Énergie est juste sous la carte Eau"
+      ]
+    },
     {
       "version": "2.9.0",
       "date": "2026-11-13",
@@ -552,5 +562,5 @@
     "Énergie : mettre le vrai prix du gaz (facture) et noter 2 relevés du compteur gaz à 1-2 semaines d’écart pour caler la puissance de la chaudière",
     "Révoquer à la fin : mot de passe Quandify"
   ],
-  "time": "10:12"
+  "time": "10:18"
 }
