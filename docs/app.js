@@ -1007,6 +1007,7 @@
   function moreHTML() {
     var pis = findRoom('piscine'), sdb = findRoom('sdb'), h = '';
     var ph = HISTE['3557564|168'];
+    h += '<div class="lbl">Météo</div>' + meteoHTML();
     var wh = waterHTML(); if (wh) h += '<div class="lbl">Eau</div>' + wh;
     h += '<div class="lbl">Énergie</div><div class="card2 flat">' +
       '<button class="row" data-cost><span class="ic" style="color:#FF8A5B">' + icon('flame') + '</span><span><b>Coût total</b><small>Gaz, électricité et eau · en €</small></span><span class="val">›</span></button>' +
@@ -1017,7 +1018,6 @@
     h += '<div class="card2"><div class="row-hd"><b>pH · sonde Ondilo · 7 jours</b><span class="mono">' + fmt(num(3557564), 2) + '</span></div>' +
       spark(ph && ph.points ? ph.points.map(function (p) { return [new Date(String(p[0]).replace(' ', 'T')).getTime(), p[1]]; }) : null, { w: 320, h: 70, ref: 7.2, color: '#7CB2FF', labels: ['−7 j', '−5 j', '−3 j', '−1 j', 'auj.'] }) +
       '<div class="acc2b">' + pis.items.filter(function (it) { return it.type === 'sensor' || it.type === 'light'; }).map(rowHTML).join('') + '</div></div>';
-    h += '<div class="lbl">Météo</div>' + meteoHTML();
     h += '<div class="lbl">Application</div><div class="card2 flat">' +
       '<button class="row" data-settings><span class="ic">' + icon('gear') + '</span><span><b>Réglages et nouveautés</b><small>Version ' + esc(LOG ? LOG.version : '…') + (newVersion ? ' · nouvelle version' : '') + '</small></span><span class="val">›</span></button></div>';
     return h;
