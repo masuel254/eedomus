@@ -287,7 +287,7 @@
     if (it.type === 'motion') {
       var mv = num(id) > 0, ch = STATES[id] && STATES[id].changed ? new Date(STATES[id].changed.replace(' ', 'T')).getTime() : null;
       var old = ch && Date.now() - ch > 14 * 86400000;
-      var ago2 = ch ? since(id).replace('depuis ', 'il y a ') : '';
+      var ago2 = ch ? since(id).replace('depuis ', 'il y a ') : ''; // « à 09h04 · il y a 36 min »
       return '<div class="row motion' + (mv ? ' mv' : '') + (old ? ' old' : '') + '"><span class="ic">' + icon('walk') + '</span><span><b>' + esc(it.name) + '</b><small>' +
         esc(mv ? 'Mouvement détecté' : old ? 'Aucune nouvelle depuis longtemps · pile à vérifier ?' : 'Dernier passage ' + ago2) + '</small></span>' +
         '<span class="mvdot">' + (mv ? 'Mouvement' : old ? 'Inactif ?' : 'Calme') + '</span></div>';
@@ -542,7 +542,7 @@
       var go2 = GAR && GAR.state === 'open';
       var src = GAR ? { commande: 'commande envoyée, état à confirmer', manuel: 'confirmé à la main', camera: 'vu par la caméra', 'défaut': 'état par défaut' }[GAR.src] || '' : '';
       var gu = GAR && GAR.state === 'unknown';
-      rows.push('<div class="row"><span class="ic">' + icon('garage') + '</span><span><b>Porte de garage</b><small>' + esc((GAR && GAR.date ? 'depuis ' + GAR.date.slice(11, 16) + ' · ' : '') + src) + '</small></span><span class="' + (go2 ? 'bad' : gu ? 'warn2' : 'ok') + '">' + (GAR ? (go2 ? 'Ouverte' : gu ? 'À vérifier' : 'Fermée') : '…') + '</span></div>');
+      rows.push('<div class="row"><span class="ic">' + icon('garage') + '</span><span><b>Porte de garage</b><small>' + esc((GAR && GAR.date ? sinceDate(GAR.date) + ' · ' : '') + src) + '</small></span><span class="' + (go2 ? 'bad' : gu ? 'warn2' : 'ok') + '">' + (GAR ? (go2 ? 'Ouverte' : gu ? 'À vérifier' : 'Fermée') : '…') + '</span></div>');
       h += '<div class="card2 flat rs-list">' + rows.join('') + '</div>';
       // Vérification par la caméra du garage
       var gc = IM && IM.cameras ? IM.cameras.filter(function (c) { return norm(c.name) === 'garage'; })[0] : null;
@@ -733,11 +733,20 @@
 
   // ---------- Onglet Alarme ----------
   var ALARM_STATE = { 0: ['Désactivée', ''], 12: ['Activée', 'ok'], 13: ['Intrusion détectée', 'bad'], 14: ['Sirène en cours', 'bad'], 5: ['Activation temporisée', 'warnc'] };
-  function since(id) {
-    var s = STATES[id]; if (!s || !s.changed) return '';
-    var t = new Date(s.changed.replace(' ', 'T')).getTime(), m = Math.max(0, Math.round((Date.now() - t) / 60000));
-    if (m < 60) return 'depuis ' + m + ' min'; var hh = Math.round(m / 60); if (hh < 48) return 'depuis ' + hh + ' h';
-    var dd = Math.round(hh / 24); if (dd < 60) return 'depuis ' + dd + ' jours'; return 'depuis ' + Math.round(dd / 30) + ' mois';
+  function since(id) { var s = STATES[id]; return s && s.changed ? sinceDate(s.changed) : ''; }
+  // « à 09h04 · depuis 36 min » (avec le jour si ce n'est pas aujourd'hui)
+  function sinceDate(d) {
+    var dt = new Date(String(d).replace(' ', 'T')); if (isNaN(dt)) return '';
+    var m = Math.max(0, Math.round((Date.now() - dt.getTime()) / 60000));
+    var hm = String(dt.getHours()).padStart(2, '0') + 'h' + String(dt.getMinutes()).padStart(2, '0');
+    var t0 = new Date(); t0.setHours(0, 0, 0, 0);
+    var days = Math.round((t0 - new Date(dt.getFullYear(), dt.getMonth(), dt.getDate())) / 86400000);
+    var when = days <= 0 ? 'à ' + hm : days === 1 ? 'hier à ' + hm : 'le ' + dt.getDate() + '/' + String(dt.getMonth() + 1).padStart(2, '0') + ' à ' + hm;
+    var dur;
+    if (m < 60) dur = m + ' min';
+    else if (m < 48 * 60) { var hh = Math.floor(m / 60), mm = m % 60; dur = hh + ' h' + (hh < 10 && mm ? ' ' + String(mm).padStart(2, '0') : ''); }
+    else { var dd = Math.round(m / 1440); dur = dd < 60 ? dd + ' jours' : Math.round(dd / 30) + ' mois'; }
+    return when + ' · depuis ' + dur;
   }
   function alarmHTML() {
     var A = CFG.alarm || { items: [] }, v = num(A.status), st = ALARM_STATE[v] || [(STATES[A.status] || {}).text || '—', ''], armed = v != null && v !== 0;

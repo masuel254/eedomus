@@ -1,7 +1,16 @@
 {
-  "version": "2.4.3",
+  "version": "2.4.4",
   "date": "2026-11-13",
   "releases": [
+    {
+      "version": "2.4.4",
+      "date": "2026-11-13",
+      "time": "08:34",
+      "title": "Heures dans les journaux",
+      "changes": [
+        "Partout où l’appli dit « depuis… », elle donne aussi l’heure : « à 09h04 · depuis 36 min » (avec « hier » ou la date si besoin)"
+      ]
+    },
     {
       "version": "2.4.3",
       "date": "2026-11-13",
@@ -414,5 +423,5 @@
     "Garage : confirmer une fois de nuit « Elle est ouverte » et « Elle est fermée » (références infrarouge)",
     "Option : capteur d'ouverture sur la porte de garage (fiable à 100 %, même si la caméra est hors ligne)"
   ],
-  "time": "08:29"
+  "time": "08:34"
 }
