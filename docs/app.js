@@ -489,6 +489,12 @@
     var ms = hp.points[0][0] > 1e11;
     return rows.filter(function (x) { return x[2] != null; }).map(function (x) { return [ms ? x[0] * 1000 : x[0], x[2]]; });
   }
+  function lastHours(pts, h) {
+    if (!pts || !pts.length) return pts;
+    var ms = pts[pts.length - 1][0] > 1e11, lim = (ms ? Date.now() : Date.now() / 1000) - h * (ms ? 3600000 : 3600);
+    var keep = pts.filter(function (p) { return p[0] >= lim; });
+    return keep.length >= 2 ? keep : pts.slice(-2);
+  }
   function livePts(hp, r) {
     var pts = hp && hp.points ? hp.points.slice() : null;
     if (!pts || !pts.length || !r || r.temp == null) return pts;
@@ -503,17 +509,19 @@
     var xs = points.map(function (p) { return p[0]; }), ys = points.map(function (p) { return p[1]; });
     var x0 = Math.min.apply(null, xs), x1 = Math.max.apply(null, xs);
     var spL = (o.spLine || []).filter(function (p) { return p[1] != null; });
-    var all = ys.concat(spL.length ? spL.map(function (p) { return p[1]; }) : o.ref != null ? [o.ref] : []), y0 = Math.min.apply(null, all), y1 = Math.max.apply(null, all);
+    var all = o.zoom ? ys : ys.concat(spL.length ? spL.map(function (p) { return p[1]; }) : o.ref != null ? [o.ref] : []), y0 = Math.min.apply(null, all), y1 = Math.max.apply(null, all);
     if (y1 - y0 < 0.6) { var mid = (y0 + y1) / 2; y0 = mid - 0.3; y1 = mid + 0.3; }
-    if (o.axis) { y0 = Math.floor(y0 - 0.2); y1 = Math.ceil(y1 + 0.2); if (y1 - y0 < 2) y1 = y0 + 2; }
-    var X = function (v) { return pad + (v - x0) / Math.max(1, x1 - x0) * (W - AX - 2 * pad); }, Y = function (v) { return pad + (1 - (v - y0) / (y1 - y0)) * (H - 2 * pad - 6) + 3; };
+    if (o.zoom) { y0 = Math.floor((y0 - 0.05) * 2) / 2; y1 = Math.ceil((y1 + 0.05) * 2) / 2; if (y1 - y0 < 1) y1 = y0 + 1; }
+    else if (o.axis) { y0 = Math.floor(y0 - 0.2); y1 = Math.ceil(y1 + 0.2); if (y1 - y0 < 2) y1 = y0 + 2; }
+    var X = function (v) { return pad + (v - x0) / Math.max(1, x1 - x0) * (W - AX - 2 * pad); }, Yr = function (v) { return pad + (1 - (v - y0) / (y1 - y0)) * (H - 2 * pad - 6) + 3; };
+    var Y = function (v) { var y = Yr(v); return o.zoom ? Math.max(1, Math.min(H - 1, y)) : y; };
     var d = points.map(function (p, i) { return (i ? 'L' : 'M') + X(p[0]).toFixed(1) + ' ' + Y(p[1]).toFixed(1); }).join(' ');
     var gid = 'g' + Math.random().toString(36).slice(2, 8), hl = o.labels || o.hours ? 14 : 0;
     var HT = H + hl, lab = function (x, y, t, an, cl) { TX.push('<span class="sl' + (cl ? ' ' + cl : '') + '" style="left:' + (x / W * 100).toFixed(2) + '%;top:' + (y / HT * 100).toFixed(2) + '%;--ax:' + (an === 'start' ? '0' : an === 'end' ? '-100%' : '-50%') + '">' + t + '</span>'); };
     var s = '<svg class="spark" viewBox="0 0 ' + W + ' ' + (H + hl) + '" preserveAspectRatio="none"><defs><linearGradient id="' + gid + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + c + '" stop-opacity=".32"/><stop offset="1" stop-color="' + c + '" stop-opacity="0"/></linearGradient></defs>';
     if (o.axis) {
-      var stp = y1 - y0 >= 3 ? 2 : 1, gv0 = stp === 2 ? Math.ceil(y0 / 2) * 2 : Math.ceil(y0);
-      for (var gv = gv0; gv <= y1; gv += stp) { var gy = Y(gv); s += '<line x1="' + pad + '" x2="' + (W - AX) + '" y1="' + gy.toFixed(1) + '" y2="' + gy.toFixed(1) + '" class="sp-ax"/>'; lab(W - AX + 5, gy - 6, gv + '°', 'start', 'ax'); }
+      var stp = o.zoom ? (y1 - y0 > 1.5 ? 1 : 0.5) : y1 - y0 >= 3 ? 2 : 1, gv0 = stp === 2 ? Math.ceil(y0 / 2) * 2 : stp === 1 ? Math.ceil(y0) : y0;
+      for (var gv = gv0; gv <= y1; gv += stp) { var gy = Y(gv); s += '<line x1="' + pad + '" x2="' + (W - AX) + '" y1="' + gy.toFixed(1) + '" y2="' + gy.toFixed(1) + '" class="sp-ax"/>'; lab(W - AX + 5, gy - 6, String(gv).replace('.', ',') + '°', 'start', 'ax'); }
     }
     if (spL.length) {
       // consigne heure par heure : marches d'escalier, limitées à la période de la courbe
@@ -733,7 +741,7 @@
       var sp = ntPend && String(ntPend.room) === String(r.id) ? ntPend.temp : r.setpoint, hp = HISTN[r.id];
       h += '<div class="hcard"><button class="hc-top" data-graph="' + esc(r.id) + '"><span>Chauffage · ' + esc(r.name) + '</span><span class="' + (roomHeat(r) ? 'heat' : 'mu') + '">' + icon('flame') + (roomHeat(r) ? 'Chauffe' : NT.boiler ? 'Chaudière en marche' : 'Au repos') + '</span></button>' +
         '<button class="hc-mid" data-graph="' + esc(r.id) + '"><div class="big">' + fmt(r.temp, 1) + '°<em id="ntsp">Consigne ' + fmt(sp, 1) + '°</em>' + hcOut() + '</div>' +
-        '<div class="hc-sp">' + spark(livePts(hp, r), { w: 180, h: 60, ref: sp, spLine: spHist(hp, r), hours: 6, axis: true }) + '</div></button>' + manualHTML(r) + presenceHTML() +
+        '<div class="hc-sp">' + spark(lastHours(livePts(hp, r), 6), { w: 180, h: 66, ref: sp, spLine: spHist(hp, r), hours: 2, axis: true, zoom: true }) + '</div></button>' + manualHTML(r) + presenceHTML() +
         '<div class="hc-plan"><span><b>' + esc(NT.schedule || 'Planning') + '</b> · ' + esc(schedWhen()) + '</span>' +
         '<span class="stp2"><button data-nt-step="-0.5" aria-label="Baisser">−</button><button data-nt-step="0.5" aria-label="Monter">+</button></span></div></div>';
     } else {

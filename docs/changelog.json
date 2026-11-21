@@ -1,7 +1,17 @@
 {
-  "version": "2.22.1",
+  "version": "2.23.0",
   "date": "2026-11-21",
   "releases": [
+    {
+      "version": "2.23.0",
+      "date": "2026-11-21",
+      "time": "22:51",
+      "title": "Courbe des 6 dernières heures",
+      "changes": [
+        "Sur l’accueil, la petite courbe de chauffage montre les 6 dernières heures, avec les heures de 2 en 2",
+        "L’échelle s’ajuste aux températures (repères tous les demi-degrés) : les variations se voient bien mieux"
+      ]
+    },
     {
       "version": "2.22.1",
       "date": "2026-11-21",
@@ -991,5 +1001,5 @@
     "Révoquer à la fin : mot de passe TotalEnergies",
     "Révoquer à la fin : mot de passe EDF"
   ],
-  "time": "22:47"
+  "time": "22:51"
 }
