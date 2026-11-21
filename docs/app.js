@@ -796,11 +796,25 @@
       api({ action: 'nt.roomgraph', room: id, range: '1d' }).then(function (j) { grSave(id + '|1d', j); }).catch(function () {}).then(function () { setTimeout(next, 300); });
     })();
   }
+  // Courbe du moment : on ajoute la valeur en direct (celle de l'accueil) au bout de l'historique Netatmo, qui a souvent 30 à 60 min de retard
+  function grLive(d) {
+    if (!d || !GR || GR.end || !NT || !NT.rooms) return null;
+    var rm = NT.rooms.filter(function (x) { return String(x.id) === GR.room; })[0];
+    if (!rm || rm.temp == null) return null;
+    var sp = ntPend && String(ntPend.room) === String(rm.id) ? ntPend.temp : rm.setpoint;
+    return [Math.floor(Date.now() / 1000), rm.temp, sp, rm.power != null ? rm.power : null, 1];
+  }
+  function grRows(d) {
+    var rows = d ? (d.rows || []).filter(function (r) { return r[1] != null; }) : [], lv = grLive(d);
+    if (lv && (!rows.length || lv[0] > rows[rows.length - 1][0] + 60)) rows = rows.concat([lv]);
+    return rows;
+  }
+  function grEnd(d) { var lv = grLive(d); return lv ? Math.max(d.end, lv[0]) : d.end; }
   function graphSVG(d, idx) {
     if (!d) return '<p class="muted">Chargement…</p>';
-    var rows = (d.rows || []).filter(function (r) { return r[1] != null; });
+    var rows = grRows(d);
     if (rows.length < 2) return '<div class="spark-empty">Pas de mesures sur cette période.</div>';
-    var W = 340, H = 300, L = 30, R = 8, T = 18, B = 22, x0 = d.begin, x1 = d.end;
+    var W = 340, H = 300, L = 30, R = 8, T = 18, B = 22, x0 = d.begin, x1 = grEnd(d);
     var temps = [], sps = [];
     rows.forEach(function (r) { temps.push(r[1]); if (r[2] != null) sps.push(r[2]); });
     var lo = Math.floor(Math.min.apply(null, temps.concat(sps)) - 0.5), hi = Math.ceil(Math.max.apply(null, temps.concat(sps)) + 0.5);
@@ -835,7 +849,7 @@
     var c = rows[idx == null ? rows.length - 1 : idx];
     if (c) {
       s += '<line x1="' + X(c[0]).toFixed(1) + '" x2="' + X(c[0]).toFixed(1) + '" y1="' + (T - 10) + '" y2="' + (H - B) + '" class="g-cur"/>';
-      s += '<text x="' + X(c[0]).toFixed(1) + '" y="' + (T - 10) + '" class="g-xl" text-anchor="' + (X(c[0]) > W - 40 ? 'end' : 'middle') + '">' + new Date(c[0] * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) + '</text>';
+      s += '<text x="' + X(c[0]).toFixed(1) + '" y="' + (T - 10) + '" class="g-xl" text-anchor="' + (X(c[0]) > W - 40 ? 'end' : 'middle') + '">' + (c[4] ? 'Maintenant' : new Date(c[0] * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })) + '</text>';
       if (c[2] != null) s += '<circle cx="' + X(c[0]).toFixed(1) + '" cy="' + Y(c[2]).toFixed(1) + '" r="5" class="g-dsp"/>';
       s += '<circle cx="' + X(c[0]).toFixed(1) + '" cy="' + Y(c[1]).toFixed(1) + '" r="5" class="g-dt"/>';
     }
@@ -850,7 +864,7 @@
     var fmtD = function (t) { return new Date(t * 1000).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: span > 86400 * 40 ? 'numeric' : undefined }); };
     h += '<div class="gnav"><button data-gstep="-1" aria-label="Période précédente">' + icon('down') + '</button><span>' + (span <= 86400 ? fmtD(endT) : fmtD(begT) + ' – ' + fmtD(endT)) + '</span>' +
       '<button data-gstep="1" aria-label="Période suivante"' + (GR.end ? '' : ' disabled') + '>' + icon('down') + '</button></div>';
-    var d = GR.data, rows = d ? (d.rows || []).filter(function (r) { return r[1] != null; }) : [], c = rows.length ? rows[GR.idx == null ? rows.length - 1 : GR.idx] : null;
+    var d = GR.data, rows = grRows(d), c = rows.length ? rows[GR.idx == null ? rows.length - 1 : GR.idx] : null;
     h += '<div class="glegend"><div class="gl t"><b>' + (c ? fmt(c[1], 1) + ' °C' : '—') + '</b><small>Température</small></div>' +
       '<div class="gl s"><b>' + (c && c[2] != null ? fmt(c[2], 1) + ' °C' : '—') + '</b><small>Consigne</small></div>' +
       '<div class="gl c"><b>' + (c && c[3] != null ? c[3] + ' %' : '—') + '</b><small>Chauffage</small></div></div>';
@@ -861,9 +875,9 @@
   }
   function graphPick(e) {
     var svg = e.target.closest('[data-gsvg]'); if (!svg || !GR || !GR.data) return;
-    var rows = (GR.data.rows || []).filter(function (r) { return r[1] != null; }); if (!rows.length) return;
+    var rows = grRows(GR.data); if (!rows.length) return;
     var rc = svg.getBoundingClientRect(), x = (e.clientX - rc.left) / rc.width * 340, L = 30, R = 8;
-    var t = GR.data.begin + (x - L) / (340 - L - R) * (GR.data.end - GR.data.begin), best = 0, bd = Infinity;
+    var t = GR.data.begin + (x - L) / (340 - L - R) * (grEnd(GR.data) - GR.data.begin), best = 0, bd = Infinity;
     rows.forEach(function (r, i) { var dd = Math.abs(r[0] - t); if (dd < bd) { bd = dd; best = i; } });
     if (best !== GR.idx) { GR.idx = best; renderGraph(); }
   }

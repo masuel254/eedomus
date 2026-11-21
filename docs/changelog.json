@@ -1,7 +1,17 @@
 {
-  "version": "2.18.0",
+  "version": "2.18.1",
   "date": "2026-11-21",
   "releases": [
+    {
+      "version": "2.18.1",
+      "date": "2026-11-21",
+      "time": "12:21",
+      "title": "Consigne identique partout",
+      "changes": [
+        "Le détail d’une pièce affiche maintenant la température et la consigne en direct, comme l’accueil",
+        "La courbe se termine par un point « Maintenant » : l’historique Netatmo, lui, a souvent 30 à 60 minutes de retard"
+      ]
+    },
     {
       "version": "2.18.0",
       "date": "2026-11-21",
@@ -882,5 +892,5 @@
     "Révoquer à la fin : mot de passe TotalEnergies",
     "Révoquer à la fin : mot de passe EDF"
   ],
-  "time": "12:15"
+  "time": "12:21"
 }
