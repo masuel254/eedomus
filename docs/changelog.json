@@ -1,7 +1,16 @@
 {
-  "version": "2.19.0",
+  "version": "2.19.1",
   "date": "2026-11-21",
   "releases": [
+    {
+      "version": "2.19.1",
+      "date": "2026-11-21",
+      "time": "12:30",
+      "title": "Graphique allégé",
+      "changes": [
+        "La phrase d’aide sous le graphique d’une pièce est retirée"
+      ]
+    },
     {
       "version": "2.19.0",
       "date": "2026-11-21",
@@ -913,5 +922,5 @@
     "Révoquer à la fin : mot de passe TotalEnergies",
     "Révoquer à la fin : mot de passe EDF"
   ],
-  "time": "12:28"
+  "time": "12:30"
 }

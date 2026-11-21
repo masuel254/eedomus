@@ -889,7 +889,6 @@
       h += '<div class="gheat">' + icon('flame') + '<span><b>' + durTxt(ht.sec) + '</b> de chauffe ' + per +
         '<small>' + (days >= 2 ? 'Soit ' + durTxt(ht.sec / days) + ' par jour en moyenne · ' : '') + Math.round(ht.sec / ht.span * 100) + ' % du temps, en équivalent pleine puissance</small></span></div>';
     }
-    h += '<p class="note-q">Touche ou fais glisser ton doigt sur le graphique pour lire les valeurs à un moment précis.</p>';
     if (NT && NT.rooms) h += '<div class="rchips gch">' + NT.rooms.map(function (x) { return '<button class="rchip' + (String(x.id) === GR.room ? ' on' : '') + '" data-groom="' + esc(x.id) + '">' + esc(x.name) + '</button>'; }).join('') + '</div>';
     var keep = sheet.scrollTop; sheet.innerHTML = '<div class="sh-in">' + h + '</div>'; sheet.scrollTop = keep;
   }
