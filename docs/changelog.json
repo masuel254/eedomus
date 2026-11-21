@@ -1,7 +1,17 @@
 {
-  "version": "2.18.2",
+  "version": "2.19.0",
   "date": "2026-11-21",
   "releases": [
+    {
+      "version": "2.19.0",
+      "date": "2026-11-21",
+      "time": "12:28",
+      "title": "Temps de chauffe par pièce",
+      "changes": [
+        "Sous le graphique d’une pièce : le temps de chauffe sur la période choisie (6 h, jour, semaine, mois, année)",
+        "Pour une semaine, un mois ou une année, la moyenne par jour s’affiche aussi"
+      ]
+    },
     {
       "version": "2.18.2",
       "date": "2026-11-21",
@@ -903,5 +913,5 @@
     "Révoquer à la fin : mot de passe TotalEnergies",
     "Révoquer à la fin : mot de passe EDF"
   ],
-  "time": "12:25"
+  "time": "12:28"
 }

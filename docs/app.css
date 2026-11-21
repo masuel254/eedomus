@@ -885,3 +885,8 @@ body { padding: 0 !important; }
 .lg.nf small { display: block; color: var(--mu); font-size: 13px; margin-top: 2px; }
 .lg.nf.bad span:last-child { color: inherit; }
 .lg.nf .lt, .lg.nf .li { padding-top: 2px; }
+/* Temps de chauffe sous le graphique */
+.gheat { display: flex; gap: 12px; align-items: center; margin-top: 8px; padding: 12px 14px; border-radius: 14px; background: var(--s1); border: 1px solid var(--ln); }
+.gheat svg.i { width: 22px; height: 22px; color: #FFB37A; flex: none; }
+.gheat b { font-family: var(--f-mono); font-weight: 600; font-size: 17px; }
+.gheat small { display: block; color: var(--mu); font-size: 12.5px; margin-top: 2px; }

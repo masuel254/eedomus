@@ -812,6 +812,17 @@
   function grEnd(d) { var lv = grLive(d); return lv ? Math.max(d.end, lv[0]) : d.end; }
   // Une pièce chauffe si sa vanne le demande, ou si la chaudière tourne et qu'elle est sous sa consigne (comme l'appli Netatmo)
   function roomHeat(x) { return !!x && (x.heating || (!!NT && !!NT.boiler && x.temp != null && x.setpoint != null && x.temp < x.setpoint)); }
+  // Temps de chauffe sur la période affichée : % de chauffe de chaque mesure × durée jusqu'à la mesure suivante
+  function grHeatTime(d) {
+    var rows = d ? (d.rows || []).filter(function (r) { return r[3] != null; }) : [];
+    if (rows.length < 2) return null;
+    var gaps = [], sec = 0;
+    for (var i = 1; i < rows.length; i++) gaps.push(rows[i][0] - rows[i - 1][0]);
+    var med = gaps.slice().sort(function (a, b) { return a - b; })[Math.floor(gaps.length / 2)];
+    rows.forEach(function (r, i) { var g = i < gaps.length ? Math.min(gaps[i], med * 3) : med; sec += (r[3] || 0) / 100 * g; });
+    return { sec: sec, span: rows[rows.length - 1][0] - rows[0][0] + med };
+  }
+  function durTxt(sec) { var m = Math.round(sec / 60), h = Math.floor(m / 60); return h ? h + ' h ' + String(m % 60).padStart(2, '0') : m + ' min'; }
   function graphSVG(d, idx) {
     if (!d) return '<p class="muted">Chargement…</p>';
     var rows = grRows(d);
@@ -871,6 +882,13 @@
       '<div class="gl s"><b>' + (c && c[2] != null ? fmt(c[2], 1) + ' °C' : '—') + '</b><small>Consigne</small></div>' +
       '<div class="gl c"><b>' + (c && c[4] && c[5] && !(c[3] > 0) ? 'En cours' : c && c[3] != null ? c[3] + ' %' : c && c[4] ? 'Au repos' : '—') + '</b><small>Chauffage</small></div></div>';
     h += '<div class="gwrap">' + (GR.loading && !d ? '<p class="muted">Chargement…</p>' : GR.error && !d ? '<p class="muted">Netatmo ne répond pas, réessaie.</p>' : graphSVG(d, GR.idx)) + '</div>';
+    var ht = d && grHeatTime(d), per = { '6h': 'ces 6 heures', '1d': 'ces 24 heures', '1w': 'cette semaine', '1m': 'ce mois-ci', '1y': 'cette année' }[GR.range];
+    if (GR.end) per = 'cette période';
+    if (ht) {
+      var days = ht.span / 86400;
+      h += '<div class="gheat">' + icon('flame') + '<span><b>' + durTxt(ht.sec) + '</b> de chauffe ' + per +
+        '<small>' + (days >= 2 ? 'Soit ' + durTxt(ht.sec / days) + ' par jour en moyenne · ' : '') + Math.round(ht.sec / ht.span * 100) + ' % du temps, en équivalent pleine puissance</small></span></div>';
+    }
     h += '<p class="note-q">Touche ou fais glisser ton doigt sur le graphique pour lire les valeurs à un moment précis.</p>';
     if (NT && NT.rooms) h += '<div class="rchips gch">' + NT.rooms.map(function (x) { return '<button class="rchip' + (String(x.id) === GR.room ? ' on' : '') + '" data-groom="' + esc(x.id) + '">' + esc(x.name) + '</button>'; }).join('') + '</div>';
     var keep = sheet.scrollTop; sheet.innerHTML = '<div class="sh-in">' + h + '</div>'; sheet.scrollTop = keep;
