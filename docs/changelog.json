@@ -1,7 +1,17 @@
 {
-  "version": "2.22.0",
+  "version": "2.22.1",
   "date": "2026-11-21",
   "releases": [
+    {
+      "version": "2.22.1",
+      "date": "2026-11-21",
+      "time": "22:47",
+      "title": "Repères de température",
+      "changes": [
+        "La petite courbe de chauffage affiche discrètement des repères de température à droite (par exemple 18°, 20°, 22°)",
+        "Les heures sous la courbe gardent une petite taille au lieu d’être étirées"
+      ]
+    },
     {
       "version": "2.22.0",
       "date": "2026-11-21",
@@ -981,5 +991,5 @@
     "Révoquer à la fin : mot de passe TotalEnergies",
     "Révoquer à la fin : mot de passe EDF"
   ],
-  "time": "22:43"
+  "time": "22:47"
 }
