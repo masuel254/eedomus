@@ -1,7 +1,17 @@
 {
-  "version": "2.23.0",
+  "version": "2.24.0",
   "date": "2026-11-21",
   "releases": [
+    {
+      "version": "2.24.0",
+      "date": "2026-11-21",
+      "time": "22:56",
+      "title": "Température moyenne",
+      "changes": [
+        "Sous le graphique d’une pièce : deux cartes côte à côte, le temps de chauffe et la température moyenne de la période",
+        "La carte température indique aussi la consigne moyenne, le minimum et le maximum"
+      ]
+    },
     {
       "version": "2.23.0",
       "date": "2026-11-21",
@@ -1001,5 +1011,5 @@
     "Révoquer à la fin : mot de passe TotalEnergies",
     "Révoquer à la fin : mot de passe EDF"
   ],
-  "time": "22:51"
+  "time": "22:56"
 }
