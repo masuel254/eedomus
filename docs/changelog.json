@@ -1,7 +1,17 @@
 {
-  "version": "2.20.0",
+  "version": "2.21.0",
   "date": "2026-11-21",
   "releases": [
+    {
+      "version": "2.21.0",
+      "date": "2026-11-21",
+      "time": "12:47",
+      "title": "Journal des chauffes",
+      "changes": [
+        "Dans le détail d’une pièce, touche la tuile Chauffage : la liste des allumages et arrêts des 7 derniers jours s’affiche",
+        "Pour chaque chauffe : heure d’allumage, heure d’arrêt, durée, puissance moyenne et température gagnée ; une chauffe en cours apparaît en orange"
+      ]
+    },
     {
       "version": "2.20.0",
       "date": "2026-11-21",
@@ -941,5 +951,5 @@
     "Révoquer à la fin : mot de passe TotalEnergies",
     "Révoquer à la fin : mot de passe EDF"
   ],
-  "time": "12:38"
+  "time": "12:47"
 }

@@ -823,6 +823,72 @@
     return { sec: sec, span: rows[rows.length - 1][0] - rows[0][0] + med };
   }
   function durTxt(sec) { var m = Math.round(sec / 60), h = Math.floor(m / 60); return h ? h + ' h ' + String(m % 60).padStart(2, '0') : m + ' min'; }
+  // ---------- Journal des chauffes d'une pièce (7 derniers jours, mesures Netatmo à la demi-heure) ----------
+  var HL = null;
+  function openHeatLog() {
+    if (!GR) return; HL = { room: GR.room, rows: null, loading: true }; sheet.scrollTop = 0; openSheet('heatlog');
+    var room = GR.room, now = Math.floor(Date.now() / 1000), all = {}, ck = 'maison-hl-' + room;
+    try { var sv = JSON.parse(localStorage.getItem(ck) || 'null'); if (sv && sv.rows) { HL.rows = sv.rows; renderHeatLog(); } } catch (e) {}
+    var c0 = GRC[room + '|1d']; if (c0 && c0.data && !HL.rows) { HL.rows = c0.data.rows || []; renderHeatLog(); }
+    var k = 0;
+    (function next() {
+      if (!HL || HL.room !== room) return;
+      if (k >= 7) {
+        HL.rows = Object.keys(all).map(function (t) { return all[t]; }).sort(function (a, b) { return a[0] - b[0]; }); HL.loading = false;
+        try { localStorage.setItem(ck, JSON.stringify({ at: Date.now(), rows: HL.rows })); } catch (e) {}
+        return renderHeatLog();
+      }
+      var end = now - k * 86400; k++;
+      api({ action: 'nt.roomgraph', room: room, range: '1d', end: k === 1 ? undefined : end }).then(function (j) {
+        (j.rows || []).forEach(function (r) { if (r[0] <= now) all[r[0]] = r; });
+        if (k === 1) { HL.rows = (j.rows || []).slice(); renderHeatLog(); }
+      }).catch(function () {}).then(function () { setTimeout(next, 150); });
+    })();
+  }
+  function heatSessions(rows) {
+    rows = (rows || []).filter(function (r) { return r[3] != null; });
+    var out = [], cur = null;
+    rows.forEach(function (r, i) {
+      if (r[3] > 0) {
+        if (!cur) cur = { start: r[0], sum: 0, n: 0, t0: r[1], tmax: r[1] };
+        cur.sum += r[3]; cur.n++; if (r[1] != null && (cur.tmax == null || r[1] > cur.tmax)) cur.tmax = r[1];
+        cur.last = r[0];
+      } else if (cur) { cur.end = r[0]; if (r[1] != null && r[1] > cur.tmax) cur.tmax = r[1]; out.push(cur); cur = null; }
+    });
+    if (cur) { cur.end = null; out.push(cur); }
+    return out;
+  }
+  function hlTime(t) { var d = new Date(t * 1000); return String(d.getHours()).padStart(2, '0') + 'h' + String(d.getMinutes()).padStart(2, '0'); }
+  function renderHeatLog() {
+    if (!HL) return;
+    var rm = NT && (NT.rooms || []).filter(function (x) { return String(x.id) === HL.room; })[0];
+    var h = '<div class="sh-hd"><button class="back" data-hlback>' + icon('down') + 'Graphique</button><button class="close" data-close aria-label="Fermer">×</button></div>' +
+      '<h2 class="hl-t">Chauffe · ' + esc(rm ? rm.name : 'Pièce') + '</h2><p class="muted hl-s">Allumages et arrêts des 7 derniers jours, à la demi-heure près' + (HL.loading ? ' · lecture en cours…' : '') + '</p>';
+    var ss = heatSessions(HL.rows), live = rm && roomHeat(rm), now = Date.now() / 1000;
+    if (!HL.rows) h += '<p class="muted">Lecture de l’historique Netatmo…</p>';
+    else if (!ss.length) h += '<p class="muted">Aucune chauffe enregistrée sur cette période.</p>';
+    var byDay = {}, order = [];
+    ss.slice().reverse().forEach(function (x) {
+      var d = new Date(x.start * 1000), p2 = function (v) { return (v < 10 ? '0' : '') + v; };
+      var key = d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()) + ' 12:00';
+      if (!byDay[key]) { byDay[key] = []; order.push(key); } byDay[key].push(x);
+    });
+    order.forEach(function (key) {
+      var list = byDay[key], tot = 0;
+      list.forEach(function (x) { x.dur = ((x.end || now) - x.start); tot += x.dur; });
+      h += '<div class="hl-dh"><span>' + esc(dayLabel(key)) + '</span><span>' + list.length + ' chauffe' + (list.length > 1 ? 's' : '') + ' · ' + durTxt(tot) + '</span></div><div class="hl-card">';
+      list.forEach(function (x) {
+        var on = !x.end && live, avg = Math.round(x.sum / x.n);
+        var tEnd = on && rm ? Math.max(rm.temp, x.tmax) : x.tmax, gain = x.t0 != null && tEnd != null && tEnd - x.t0 >= 0.1 ? ' · de ' + fmt(x.t0, 1) + '° à ' + fmt(tEnd, 1) + '°' : '';
+        h += '<div class="hl-row"><div class="hl-tl"><i class="on"></i><span></span><i class="' + (on ? 'live' : 'off') + '"></i></div><div class="hl-tx">' +
+          '<div><b>' + hlTime(x.start) + '</b> <em>allumage</em></div>' +
+          '<div class="hl-mid">' + icon('flame') + durTxt(x.dur) + ' · ' + avg + ' % en moyenne' + gain + '</div>' +
+          '<div>' + (on ? '<b class="lv">en cours</b>' : '<b>' + (x.end ? hlTime(x.end) : '—') + '</b> <em>arrêt</em>') + '</div></div></div>';
+      });
+      h += '</div>';
+    });
+    var keep = sheet.scrollTop; sheet.innerHTML = '<div class="sh-in">' + h + '</div>'; sheet.scrollTop = keep;
+  }
   function graphSVG(d, idx) {
     if (!d) return '<p class="muted">Chargement…</p>';
     var rows = grRows(d);
@@ -882,7 +948,7 @@
     h += '<div class="gtiles">' +
       '<div class="gtile"><svg class="gti" style="color:#5B8CFF"><use href="#thermo"/></svg><b>' + (c ? fmt(c[1], 1) + '°' : '—') + '</b><small>Pièce</small></div>' +
       '<div class="gtile"><svg class="gti" viewBox="0 0 24 24" style="color:#FF7A7A" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/></svg><b>' + (c && c[2] != null ? fmt(c[2], 1) + '°' : '—') + '</b><small>Consigne</small></div>' +
-      '<div class="gtile w' + (heatOn ? ' on' : '') + '"><svg class="gti"><use href="#flame"/></svg><b>' + (c ? (heatOn ? 'Chauffe' : 'Repos') : '—') + '</b><small>' + (c && !c[4] && c[3] > 0 ? 'Chauffage ' + c[3] + ' %' : 'Chauffage') + '</small></div>' +
+      '<button class="gtile w' + (heatOn ? ' on' : '') + '" data-heatlog><svg class="gti"><use href="#flame"/></svg><b>' + (c ? (heatOn ? 'Chauffe' : 'Repos') : '—') + '</b><small>' + (c && !c[4] && c[3] > 0 ? 'Chauffage ' + c[3] + ' %' : 'Chauffage') + ' ›</small></button>' +
       (function () { loadMeteo(false); var n = METEO && METEO.now; return '<div class="gtile"><span class="gti">' + (n && n.t != null ? wIcon(n.code, n.day, 20) : '') + '</span><b>' + (n && n.t != null ? fmt(n.t, 1) + '°' : '—') + '</b><small>Dehors</small></div>'; })() + '</div>';
     h += '<div class="gwrap">' + (GR.loading && !d ? '<p class="muted">Chargement…</p>' : GR.error && !d ? '<p class="muted">Netatmo ne répond pas, réessaie.</p>' : graphSVG(d, GR.idx)) + '</div>';
     var ht = d && grHeatTime(d), per = { '6h': 'ces 6 heures', '1d': 'ces 24 heures', '1w': 'cette semaine', '1m': 'ce mois-ci', '1y': 'cette année' }[GR.range];
@@ -1274,13 +1340,14 @@
     else if (view === 'plans') renderPlans();
     else if (view === 'logs') renderLogs();
     else if (view === 'notifs') renderNotifs();
+    else if (view === 'heatlog') renderHeatLog();
     else if (view === 'room') renderRoomSheet();
     else if (view === 'graph') renderGraph();
     else if (view === 'plan') renderPlan();
     else renderSettings();
   }
   function closeSheet() {
-    sheet.hidden = true; sheet.innerHTML = ''; liveCam = null; liveHd = true; REC = null; ENG = null; TED = null; PE = null; GR = null; roomSheet = null; logsView = null; document.body.classList.remove('noscroll');
+    sheet.hidden = true; sheet.innerHTML = ''; liveCam = null; liveHd = true; REC = null; ENG = null; TED = null; PE = null; GR = null; roomSheet = null; logsView = null; HL = null; document.body.classList.remove('noscroll');
   }
 
   // ---------- Plannings Netatmo : liste, création, modification (comme l'appli Netatmo) ----------
@@ -2326,6 +2393,8 @@
       return costLoad({ action: 'cost.meter', index: v }).then(function () { toast('Relevé enregistré'); })
         .catch(function (err) { toast(/index_lower/.test(err.message) ? 'Ce chiffre est plus petit que le relevé précédent' : 'Chiffre non valable, vérifie-le', true); });
     }
+    if (e.target.closest('[data-heatlog]')) return openHeatLog();
+    if (e.target.closest('[data-hlback]')) { HL = null; sheet.scrollTop = 0; return openSheet('graph'); }
     if ((b = e.target.closest('[data-grange]'))) { GR.range = b.dataset.grange; GR.end = null; return loadGraph(); }
     if ((b = e.target.closest('[data-groom]'))) { GR.room = b.dataset.groom; GR.end = null; return loadGraph(); }
     if ((b = e.target.closest('[data-gstep]'))) {

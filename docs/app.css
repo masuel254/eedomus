@@ -903,3 +903,22 @@ body { padding: 0 !important; }
 .gtile.w b { font-size: 17px; line-height: 25px; color: #9AA3AE; }
 .gtile.w.on { background: #2C1F16; }
 .gtile.w.on .gti, .gtile.w.on b { color: #FFB37A; }
+/* Journal des chauffes d'une pièce */
+button.gtile { border: 0; color: inherit; font: inherit; cursor: pointer; }
+.hl-t { margin: 2px 4px 2px; font-size: 24px; font-weight: 700; }
+.hl-s { margin: 0 4px 6px; font-size: 13px; }
+.hl-dh { display: flex; justify-content: space-between; font-size: 12.5px; font-weight: 800; color: var(--mu); margin: 14px 4px 6px; }
+.hl-dh span:last-child { color: #FFB37A; font-weight: 600; }
+.hl-card { background: var(--s1); border-radius: 14px; padding: 2px 12px; }
+.hl-row { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid #23272E; }
+.hl-row:last-child { border-bottom: 0; }
+.hl-tl { display: flex; flex-direction: column; align-items: center; padding: 5px 0; }
+.hl-tl i { width: 10px; height: 10px; border-radius: 50%; }
+.hl-tl span { flex: 1; width: 2px; background: #FFB37A; margin: 2px 0; min-height: 22px; }
+.hl-tl i.on { background: #FFB37A; } .hl-tl i.off { background: #6B7380; } .hl-tl i.live { background: #FFB37A; box-shadow: 0 0 0 4px rgba(255, 179, 122, .25); }
+.hl-tx { flex: 1; display: grid; gap: 5px; font-size: 14px; }
+.hl-tx b { font-family: var(--f-mono); font-weight: 600; }
+.hl-tx b.lv { color: #FFB37A; }
+.hl-tx em { font-style: normal; color: var(--mu); font-size: 13px; }
+.hl-mid { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: #C9D0D9; }
+.hl-mid svg.i { width: 15px; height: 15px; color: #FFB37A; }
