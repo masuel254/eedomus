@@ -878,10 +878,12 @@
     h += '<div class="gnav"><button data-gstep="-1" aria-label="Période précédente">' + icon('down') + '</button><span>' + (span <= 86400 ? fmtD(endT) : fmtD(begT) + ' – ' + fmtD(endT)) + '</span>' +
       '<button data-gstep="1" aria-label="Période suivante"' + (GR.end ? '' : ' disabled') + '>' + icon('down') + '</button></div>';
     var d = GR.data, rows = grRows(d), c = rows.length ? rows[GR.idx == null ? rows.length - 1 : GR.idx] : null;
-    h += '<div class="glegend"><div class="gl t"><b>' + (c ? fmt(c[1], 1) + ' °C' : '—') + '</b><small>Température</small></div>' +
-      '<div class="gl s"><b>' + (c && c[2] != null ? fmt(c[2], 1) + ' °C' : '—') + '</b><small>Consigne</small></div>' +
-      '<div class="gl c"><b>' + (c && c[4] && c[5] && !(c[3] > 0) ? 'En cours' : c && c[3] != null ? c[3] + ' %' : c && c[4] ? 'Au repos' : '—') + '</b><small>Chauffage</small></div>' +
-      (function () { loadMeteo(false); var n = METEO && METEO.now; return '<div class="gl o"><b>' + (n && n.t != null ? wIcon(n.code, n.day, 15) + fmt(n.t, 1) + ' °C' : '—') + '</b><small>Dehors, en direct</small></div>'; })() + '</div>';
+    var heatOn = c ? (c[4] ? !!c[5] || c[3] > 0 : c[3] > 0) : false;
+    h += '<div class="gtiles">' +
+      '<div class="gtile"><svg class="gti" style="color:#5B8CFF"><use href="#thermo"/></svg><b>' + (c ? fmt(c[1], 1) + '°' : '—') + '</b><small>Pièce</small></div>' +
+      '<div class="gtile"><svg class="gti" viewBox="0 0 24 24" style="color:#FF7A7A" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/></svg><b>' + (c && c[2] != null ? fmt(c[2], 1) + '°' : '—') + '</b><small>Consigne</small></div>' +
+      '<div class="gtile w' + (heatOn ? ' on' : '') + '"><svg class="gti"><use href="#flame"/></svg><b>' + (c ? (heatOn ? 'Chauffe' : 'Repos') : '—') + '</b><small>' + (c && !c[4] && c[3] > 0 ? 'Chauffage ' + c[3] + ' %' : 'Chauffage') + '</small></div>' +
+      (function () { loadMeteo(false); var n = METEO && METEO.now; return '<div class="gtile"><span class="gti">' + (n && n.t != null ? wIcon(n.code, n.day, 20) : '') + '</span><b>' + (n && n.t != null ? fmt(n.t, 1) + '°' : '—') + '</b><small>Dehors</small></div>'; })() + '</div>';
     h += '<div class="gwrap">' + (GR.loading && !d ? '<p class="muted">Chargement…</p>' : GR.error && !d ? '<p class="muted">Netatmo ne répond pas, réessaie.</p>' : graphSVG(d, GR.idx)) + '</div>';
     var ht = d && grHeatTime(d), per = { '6h': 'ces 6 heures', '1d': 'ces 24 heures', '1w': 'cette semaine', '1m': 'ce mois-ci', '1y': 'cette année' }[GR.range];
     if (GR.end) per = 'cette période';

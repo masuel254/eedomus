@@ -1,7 +1,17 @@
 {
-  "version": "2.19.2",
+  "version": "2.20.0",
   "date": "2026-11-21",
   "releases": [
+    {
+      "version": "2.20.0",
+      "date": "2026-11-21",
+      "time": "12:38",
+      "title": "Détail des pièces plus lisible",
+      "changes": [
+        "En haut du détail d’une pièce : 4 tuiles sur une ligne (pièce, consigne, chauffage, dehors), avec de gros chiffres",
+        "La tuile chauffage devient orange quand la pièce chauffe, et grise « Repos » sinon"
+      ]
+    },
     {
       "version": "2.19.2",
       "date": "2026-11-21",
@@ -931,5 +941,5 @@
     "Révoquer à la fin : mot de passe TotalEnergies",
     "Révoquer à la fin : mot de passe EDF"
   ],
-  "time": "12:32"
+  "time": "12:38"
 }

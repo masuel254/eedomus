@@ -892,3 +892,14 @@ body { padding: 0 !important; }
 .gheat small { display: block; color: var(--mu); font-size: 12.5px; margin-top: 2px; }
 .gl.o { border-color: #8FD3C8; }
 .gl b svg, .gl b img { width: 15px; height: 15px; vertical-align: -2px; margin-right: 5px; }
+/* Détail d'une pièce : 4 tuiles (maquette A) */
+.gtiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-bottom: 8px; }
+.gtile { background: var(--s1); border-radius: 14px; padding: 10px 2px 8px; text-align: center; display: grid; justify-items: center; gap: 2px; }
+.gtile .gti { width: 20px; height: 20px; display: block; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.gtile span.gti { stroke: none; }
+.gtile b { font-size: 21px; font-weight: 600; letter-spacing: -0.3px; white-space: nowrap; }
+.gtile small { font-size: 11.5px; color: var(--mu); white-space: nowrap; }
+.gtile.w .gti { color: #6B7380; }
+.gtile.w b { font-size: 17px; line-height: 25px; color: #9AA3AE; }
+.gtile.w.on { background: #2C1F16; }
+.gtile.w.on .gti, .gtile.w.on b { color: #FFB37A; }
