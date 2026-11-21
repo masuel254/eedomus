@@ -548,7 +548,7 @@ button.card2.gtap { display: block; width: calc(100% - 32px); text-align: left; 
 .gnav button:first-child svg.i { transform: rotate(90deg); }
 .gnav button:last-child svg.i { transform: rotate(-90deg); }
 .gnav button:disabled { opacity: .3; }
-.glegend { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin-bottom: 8px; }
+.glegend { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; margin-bottom: 8px; }
 .gl { border-radius: 12px; padding: 8px 10px; display: grid; gap: 2px; background: var(--s1); border-left: 4px solid; }
 .gl b { font-family: var(--f-mono); font-size: 15px; font-weight: 500; }
 .gl small { color: var(--mu); font-size: 11.5px; }
@@ -890,3 +890,5 @@ body { padding: 0 !important; }
 .gheat svg.i { width: 22px; height: 22px; color: #FFB37A; flex: none; }
 .gheat b { font-family: var(--f-mono); font-weight: 600; font-size: 17px; }
 .gheat small { display: block; color: var(--mu); font-size: 12.5px; margin-top: 2px; }
+.gl.o { border-color: #8FD3C8; }
+.gl b svg, .gl b img { width: 15px; height: 15px; vertical-align: -2px; margin-right: 5px; }

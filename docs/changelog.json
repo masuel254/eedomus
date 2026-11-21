@@ -1,7 +1,16 @@
 {
-  "version": "2.19.1",
+  "version": "2.19.2",
   "date": "2026-11-21",
   "releases": [
+    {
+      "version": "2.19.2",
+      "date": "2026-11-21",
+      "time": "12:32",
+      "title": "Température dehors dans le détail",
+      "changes": [
+        "Le détail d’une pièce affiche aussi la température dehors, en direct, à côté de la température, de la consigne et de la chauffe"
+      ]
+    },
     {
       "version": "2.19.1",
       "date": "2026-11-21",
@@ -922,5 +931,5 @@
     "Révoquer à la fin : mot de passe TotalEnergies",
     "Révoquer à la fin : mot de passe EDF"
   ],
-  "time": "12:30"
+  "time": "12:32"
 }

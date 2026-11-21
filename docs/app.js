@@ -880,7 +880,8 @@
     var d = GR.data, rows = grRows(d), c = rows.length ? rows[GR.idx == null ? rows.length - 1 : GR.idx] : null;
     h += '<div class="glegend"><div class="gl t"><b>' + (c ? fmt(c[1], 1) + ' °C' : '—') + '</b><small>Température</small></div>' +
       '<div class="gl s"><b>' + (c && c[2] != null ? fmt(c[2], 1) + ' °C' : '—') + '</b><small>Consigne</small></div>' +
-      '<div class="gl c"><b>' + (c && c[4] && c[5] && !(c[3] > 0) ? 'En cours' : c && c[3] != null ? c[3] + ' %' : c && c[4] ? 'Au repos' : '—') + '</b><small>Chauffage</small></div></div>';
+      '<div class="gl c"><b>' + (c && c[4] && c[5] && !(c[3] > 0) ? 'En cours' : c && c[3] != null ? c[3] + ' %' : c && c[4] ? 'Au repos' : '—') + '</b><small>Chauffage</small></div>' +
+      (function () { loadMeteo(false); var n = METEO && METEO.now; return '<div class="gl o"><b>' + (n && n.t != null ? wIcon(n.code, n.day, 15) + fmt(n.t, 1) + ' °C' : '—') + '</b><small>Dehors, en direct</small></div>'; })() + '</div>';
     h += '<div class="gwrap">' + (GR.loading && !d ? '<p class="muted">Chargement…</p>' : GR.error && !d ? '<p class="muted">Netatmo ne répond pas, réessaie.</p>' : graphSVG(d, GR.idx)) + '</div>';
     var ht = d && grHeatTime(d), per = { '6h': 'ces 6 heures', '1d': 'ces 24 heures', '1w': 'cette semaine', '1m': 'ce mois-ci', '1y': 'cette année' }[GR.range];
     if (GR.end) per = 'cette période';
@@ -996,7 +997,7 @@
     meteoBusy = true;
     api({ action: 'meteo' }).then(function (j) {
       METEO = j; meteoBusy = false; try { localStorage.setItem('maison-meteo', JSON.stringify(j)); } catch (e) {}
-      if (!sheet.hidden && sheet.dataset.view === 'meteo') renderMeteo(); else if (!busy()) render();
+      if (!sheet.hidden && sheet.dataset.view === 'meteo') renderMeteo(); else if (!sheet.hidden && sheet.dataset.view === 'graph') renderGraph(); else if (!busy()) render();
     }).catch(function () { meteoBusy = false; });
   }
   function wText(c, day) {
