@@ -922,3 +922,4 @@ button.gtile { border: 0; color: inherit; font: inherit; cursor: pointer; }
 .hl-tx em { font-style: normal; color: var(--mu); font-size: 13px; }
 .hl-mid { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: #C9D0D9; }
 .hl-mid svg.i { width: 15px; height: 15px; color: #FFB37A; }
+.sp-sp { stroke: #C9D0D9; stroke-width: 1.3; }

@@ -483,6 +483,12 @@
     return { hours: hours, total: Math.max(total, sumH) };
   }
   // Courbe de l'accueil et du Climat : on ajoute la température en direct au bout de l'historique (qui a 30 à 60 min de retard)
+  function spHist(hp, r) {
+    var c = r && GRC[String(r.id) + '|1d'], rows = c && c.data && c.data.rows;
+    if (!rows || !rows.length || !hp || !hp.points || !hp.points.length) return null;
+    var ms = hp.points[0][0] > 1e11;
+    return rows.filter(function (x) { return x[2] != null; }).map(function (x) { return [ms ? x[0] * 1000 : x[0], x[2]]; });
+  }
   function livePts(hp, r) {
     var pts = hp && hp.points ? hp.points.slice() : null;
     if (!pts || !pts.length || !r || r.temp == null) return pts;
@@ -496,13 +502,20 @@
     if (!points || points.length < 2) return '<div class="spark-empty">' + (points ? 'Pas encore assez de mesures' : 'Chargement de l\'historique…') + '</div>';
     var xs = points.map(function (p) { return p[0]; }), ys = points.map(function (p) { return p[1]; });
     var x0 = Math.min.apply(null, xs), x1 = Math.max.apply(null, xs);
-    var all = ys.concat(o.ref != null ? [o.ref] : []), y0 = Math.min.apply(null, all), y1 = Math.max.apply(null, all);
+    var spL = (o.spLine || []).filter(function (p) { return p[1] != null; });
+    var all = ys.concat(spL.length ? spL.map(function (p) { return p[1]; }) : o.ref != null ? [o.ref] : []), y0 = Math.min.apply(null, all), y1 = Math.max.apply(null, all);
     if (y1 - y0 < 0.6) { var mid = (y0 + y1) / 2; y0 = mid - 0.3; y1 = mid + 0.3; }
     var X = function (v) { return pad + (v - x0) / Math.max(1, x1 - x0) * (W - 2 * pad); }, Y = function (v) { return pad + (1 - (v - y0) / (y1 - y0)) * (H - 2 * pad - 6) + 3; };
     var d = points.map(function (p, i) { return (i ? 'L' : 'M') + X(p[0]).toFixed(1) + ' ' + Y(p[1]).toFixed(1); }).join(' ');
     var gid = 'g' + Math.random().toString(36).slice(2, 8), hl = o.labels || o.hours ? 14 : 0;
     var s = '<svg class="spark" viewBox="0 0 ' + W + ' ' + (H + hl) + '" preserveAspectRatio="none"><defs><linearGradient id="' + gid + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + c + '" stop-opacity=".32"/><stop offset="1" stop-color="' + c + '" stop-opacity="0"/></linearGradient></defs>';
-    if (o.ref != null) s += '<line x1="0" x2="' + W + '" y1="' + Y(o.ref).toFixed(1) + '" y2="' + Y(o.ref).toFixed(1) + '" class="sp-ref"/>';
+    if (spL.length) {
+      // consigne heure par heure : marches d'escalier, limitées à la période de la courbe
+      var sd = '', prev = null;
+      spL.forEach(function (p) { var x = Math.max(x0, Math.min(x1, p[0])); if (prev == null) sd = 'M' + X(x0).toFixed(1) + ' ' + Y(p[1]).toFixed(1); else if (p[1] !== prev) sd += ' H' + X(x).toFixed(1) + ' V' + Y(p[1]).toFixed(1); prev = p[1]; });
+      if (o.ref != null && o.ref !== prev) sd += ' H' + X(x1).toFixed(1) + ' V' + Y(o.ref).toFixed(1);
+      s += '<path d="' + sd + ' H' + X(x1).toFixed(1) + '" fill="none" class="sp-ref sp-sp"/>';
+    } else if (o.ref != null) s += '<line x1="0" x2="' + W + '" y1="' + Y(o.ref).toFixed(1) + '" y2="' + Y(o.ref).toFixed(1) + '" class="sp-ref"/>';
     s += '<path d="' + d + ' L' + X(x1).toFixed(1) + ' ' + H + ' L' + X(x0).toFixed(1) + ' ' + H + ' Z" fill="url(#' + gid + ')"/>';
     s += '<path d="' + d + '" fill="none" stroke="' + c + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>';
     var last = points[points.length - 1]; s += '<circle cx="' + X(last[0]).toFixed(1) + '" cy="' + Y(last[1]).toFixed(1) + '" r="3.5" fill="' + c + '"/>';
@@ -714,7 +727,7 @@
       var sp = ntPend && String(ntPend.room) === String(r.id) ? ntPend.temp : r.setpoint, hp = HISTN[r.id];
       h += '<div class="hcard"><button class="hc-top" data-graph="' + esc(r.id) + '"><span>Chauffage · ' + esc(r.name) + '</span><span class="' + (roomHeat(r) ? 'heat' : 'mu') + '">' + icon('flame') + (roomHeat(r) ? 'Chauffe' : NT.boiler ? 'Chaudière en marche' : 'Au repos') + '</span></button>' +
         '<button class="hc-mid" data-graph="' + esc(r.id) + '"><div class="big">' + fmt(r.temp, 1) + '°<em id="ntsp">Consigne ' + fmt(sp, 1) + '°</em>' + hcOut() + '</div>' +
-        '<div class="hc-sp">' + spark(livePts(hp, r), { w: 180, h: 60, ref: sp }) + '</div></button>' + manualHTML(r) + presenceHTML() +
+        '<div class="hc-sp">' + spark(livePts(hp, r), { w: 180, h: 60, ref: sp, spLine: spHist(hp, r), hours: 6 }) + '</div></button>' + manualHTML(r) + presenceHTML() +
         '<div class="hc-plan"><span><b>' + esc(NT.schedule || 'Planning') + '</b> · ' + esc(schedWhen()) + '</span>' +
         '<span class="stp2"><button data-nt-step="-0.5" aria-label="Baisser">−</button><button data-nt-step="0.5" aria-label="Monter">+</button></span></div></div>';
     } else {
@@ -801,7 +814,7 @@
     var ids = NT.rooms.map(function (x) { return String(x.id); }).filter(function (id) { var c = GRC[id + '|1d']; return !c || Date.now() - c.at > 600000; });
     (function next() {
       var id = ids.shift(); if (!id) { grPre = false; return hlPreload(); }
-      api({ action: 'nt.roomgraph', room: id, range: '1d' }).then(function (j) { grSave(id + '|1d', j); }).catch(function () {}).then(function () { setTimeout(next, 300); });
+      api({ action: 'nt.roomgraph', room: id, range: '1d' }).then(function (j) { grSave(id + '|1d', j); var cr = ntCurrentRoom(); if (cr && String(cr.id) === id && !busy() && sheet.hidden) render(); }).catch(function () {}).then(function () { setTimeout(next, 300); });
     })();
   }
   // Courbe du moment : on ajoute la valeur en direct (celle de l'accueil) au bout de l'historique Netatmo, qui a souvent 30 à 60 min de retard
@@ -1060,7 +1073,7 @@
       var hp = HISTN[r.id], sp = ntPend && String(ntPend.room) === String(r.id) ? ntPend.temp : r.setpoint;
       h += manualHTML(r).replace('class="manual"', 'class="manual big"');
       h += '<div class="lbl">Température · ' + esc(r.name) + ' · 24 h</div><button class="card2 gtap" data-graph="' + esc(r.id) + '">' +
-        spark(livePts(hp, r), { w: 320, h: 90, ref: sp, hours: 4 }) +
+        spark(livePts(hp, r), { w: 320, h: 90, ref: sp, spLine: spHist(hp, r), hours: 4 }) +
         '<div class="legend"><span><i style="background:#FF8A5B"></i>Mesurée</span><span><i class="dash"></i>Consigne ' + fmt(sp, 1) + '°</span><span class="more">Détails ›</span></div></button>';
       h += '<div class="lbl">Toutes les pièces</div><div class="card2 rooms2">' + NT.rooms.map(function (x) {
         var man = x.mode === 'manual' || x.mode === 'max';
