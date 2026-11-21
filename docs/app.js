@@ -361,15 +361,15 @@
         ring(t0, null, '<small>Intérieur</small>') + row3 + '<span><b>' + fmt(num(h.upstairs), 1) + '°</b>Étage</span></div></section>';
     }
     var sp = ntPend && String(ntPend.room) === String(r.id) ? ntPend.temp : r.setpoint;
-    var heatingRooms = NT.rooms.filter(function (x) { return x.heating; }).length;
+    var heatingRooms = NT.rooms.filter(function (x) { return roomHeat(x); }).length;
     var modeTxt = (MODE_LABEL[r.mode] || 'Planning') + (r.mode === 'manual' && r.end ? " jusqu'à " + hhmm(r.end) : '');
     var chips = NT.rooms.map(function (x) {
-      return '<button class="rchip' + (x.id === r.id ? ' on' : '') + (x.heating ? ' heat' : '') + '" data-ntroom="' + esc(x.id) + '">' + esc(x.name) + ' <span>' + fmt(x.temp, 1) + '°</span></button>';
+      return '<button class="rchip' + (x.id === r.id ? ' on' : '') + (roomHeat(x) ? ' heat' : '') + '" data-ntroom="' + esc(x.id) + '">' + esc(x.name) + ' <span>' + fmt(x.temp, 1) + '°</span></button>';
     }).join('');
     var homeMode = NT.mode || 'schedule';
     return '<section class="hero" aria-label="Chauffage">' +
       '<div class="hero-top"><span>Chauffage · ' + esc(r.name) + '</span>' +
-      (r.heating ? '<span class="badge heat">' + icon('flame') + 'Chauffe</span>' : '<span class="badge soon">' + icon('flame') + 'Au repos</span>') + '</div>' +
+      (roomHeat(r) ? '<span class="badge heat">' + icon('flame') + 'Chauffe</span>' : '<span class="badge soon">' + icon('flame') + 'Au repos</span>') + '</div>' +
       schedHTML() +
       '<div class="dial"><button class="step" data-nt-step="-0.5" aria-label="Baisser la consigne">−</button>' +
       ring(r.temp, sp, '<em id="ntsp">Consigne ' + fmt(sp, 1) + '°</em><small>' + esc(modeTxt) + '</small>') +
@@ -704,7 +704,7 @@
     if (r) {
       loadRoomHist(r.id);
       var sp = ntPend && String(ntPend.room) === String(r.id) ? ntPend.temp : r.setpoint, hp = HISTN[r.id];
-      h += '<div class="hcard"><button class="hc-top" data-graph="' + esc(r.id) + '"><span>Chauffage · ' + esc(r.name) + '</span><span class="' + (r.heating ? 'heat' : 'mu') + '">' + icon('flame') + (r.heating ? 'Chauffe' : NT.boiler ? 'Chaudière en marche' : 'Au repos') + '</span></button>' +
+      h += '<div class="hcard"><button class="hc-top" data-graph="' + esc(r.id) + '"><span>Chauffage · ' + esc(r.name) + '</span><span class="' + (roomHeat(r) ? 'heat' : 'mu') + '">' + icon('flame') + (roomHeat(r) ? 'Chauffe' : NT.boiler ? 'Chaudière en marche' : 'Au repos') + '</span></button>' +
         '<button class="hc-mid" data-graph="' + esc(r.id) + '"><div class="big">' + fmt(r.temp, 1) + '°<em id="ntsp">Consigne ' + fmt(sp, 1) + '°</em>' + hcOut() + '</div>' +
         '<div class="hc-sp">' + spark(hp && hp.points ? hp.points : null, { w: 180, h: 60, ref: sp }) + '</div></button>' + manualHTML(r) + presenceHTML() +
         '<div class="hc-plan"><span><b>' + esc(NT.schedule || 'Planning') + '</b> · ' + esc(schedWhen()) + '</span>' +
@@ -802,7 +802,7 @@
     var rm = NT.rooms.filter(function (x) { return String(x.id) === GR.room; })[0];
     if (!rm || rm.temp == null) return null;
     var sp = ntPend && String(ntPend.room) === String(rm.id) ? ntPend.temp : rm.setpoint;
-    return [Math.floor(Date.now() / 1000), rm.temp, sp, rm.power != null ? rm.power : null, 1];
+    return [Math.floor(Date.now() / 1000), rm.temp, sp, rm.power != null ? rm.power : null, 1, roomHeat(rm)];
   }
   function grRows(d) {
     var rows = d ? (d.rows || []).filter(function (r) { return r[1] != null; }) : [], lv = grLive(d);
@@ -810,6 +810,8 @@
     return rows;
   }
   function grEnd(d) { var lv = grLive(d); return lv ? Math.max(d.end, lv[0]) : d.end; }
+  // Une pièce chauffe si sa vanne le demande, ou si la chaudière tourne et qu'elle est sous sa consigne (comme l'appli Netatmo)
+  function roomHeat(x) { return !!x && (x.heating || (!!NT && !!NT.boiler && x.temp != null && x.setpoint != null && x.temp < x.setpoint)); }
   function graphSVG(d, idx) {
     if (!d) return '<p class="muted">Chargement…</p>';
     var rows = grRows(d);
@@ -836,12 +838,12 @@
     var dt = rows.map(function (r, i) { return (i ? 'L' : 'M') + X(r[0]).toFixed(1) + ' ' + Y(r[1]).toFixed(1); }).join(' ');
     s += '<path d="' + dt + '" class="g-t"/>';
     // axe des temps
-    var span = x1 - x0, ticks = span <= 6 * 3600 ? 6 : span <= 86400 ? 6 : span <= 8 * 86400 ? 7 : span <= 31 * 86400 ? 5 : 6;
+    var span = x1 - x0, per = d.end - x0, ticks = per <= 6 * 3600 ? 6 : per <= 86400 ? 6 : per <= 8 * 86400 ? 7 : per <= 31 * 86400 ? 5 : 6;
     for (var k = 0; k <= ticks; k++) {
       var t = x0 + span * k / ticks, dd = new Date(t * 1000), lab;
-      if (span <= 86400) lab = String(dd.getHours()).padStart(2, '0') + 'h';
-      else if (span <= 8 * 86400) lab = dd.toLocaleDateString('fr-FR', { weekday: 'short' }).replace('.', '');
-      else if (span <= 31 * 86400) lab = dd.getDate() + '/' + (dd.getMonth() + 1);
+      if (per <= 86400) lab = String(dd.getHours()).padStart(2, '0') + 'h';
+      else if (per <= 8 * 86400) lab = dd.toLocaleDateString('fr-FR', { weekday: 'short' }).replace('.', '');
+      else if (per <= 31 * 86400) lab = dd.getDate() + '/' + (dd.getMonth() + 1);
       else lab = dd.toLocaleDateString('fr-FR', { month: 'short' }).replace('.', '');
       s += '<text x="' + X(t).toFixed(1) + '" y="' + (H - 6) + '" class="g-xl" text-anchor="' + (k === 0 ? 'start' : k === ticks ? 'end' : 'middle') + '">' + lab + '</text>';
     }
@@ -867,7 +869,7 @@
     var d = GR.data, rows = grRows(d), c = rows.length ? rows[GR.idx == null ? rows.length - 1 : GR.idx] : null;
     h += '<div class="glegend"><div class="gl t"><b>' + (c ? fmt(c[1], 1) + ' °C' : '—') + '</b><small>Température</small></div>' +
       '<div class="gl s"><b>' + (c && c[2] != null ? fmt(c[2], 1) + ' °C' : '—') + '</b><small>Consigne</small></div>' +
-      '<div class="gl c"><b>' + (c && c[3] != null ? c[3] + ' %' : '—') + '</b><small>Chauffage</small></div></div>';
+      '<div class="gl c"><b>' + (c && c[4] && c[5] && !(c[3] > 0) ? 'En cours' : c && c[3] != null ? c[3] + ' %' : c && c[4] ? 'Au repos' : '—') + '</b><small>Chauffage</small></div></div>';
     h += '<div class="gwrap">' + (GR.loading && !d ? '<p class="muted">Chargement…</p>' : GR.error && !d ? '<p class="muted">Netatmo ne répond pas, réessaie.</p>' : graphSVG(d, GR.idx)) + '</div>';
     h += '<p class="note-q">Touche ou fais glisser ton doigt sur le graphique pour lire les valeurs à un moment précis.</p>';
     if (NT && NT.rooms) h += '<div class="rchips gch">' + NT.rooms.map(function (x) { return '<button class="rchip' + (String(x.id) === GR.room ? ' on' : '') + '" data-groom="' + esc(x.id) + '">' + esc(x.name) + '</button>'; }).join('') + '</div>';
@@ -950,7 +952,7 @@
         '<div class="legend"><span><i style="background:#FF8A5B"></i>Mesurée</span><span><i class="dash"></i>Consigne ' + fmt(sp, 1) + '°</span><span class="more">Détails ›</span></div></button>';
       h += '<div class="lbl">Toutes les pièces</div><div class="card2 rooms2">' + NT.rooms.map(function (x) {
         var man = x.mode === 'manual' || x.mode === 'max';
-        return '<div class="r2' + (x.id === r.id ? ' on' : '') + '"><button class="r2-b" data-ntroom="' + esc(x.id) + '"><span>' + (x.heating ? icon('flame') : '') + esc(x.name) + (man ? '<i class="mtag">manuel</i>' : '') + '</span>' +
+        return '<div class="r2' + (x.id === r.id ? ' on' : '') + '"><button class="r2-b" data-ntroom="' + esc(x.id) + '"><span>' + (roomHeat(x) ? icon('flame') : '') + esc(x.name) + (man ? '<i class="mtag">manuel</i>' : '') + '</span>' +
           '<span class="mono">' + fmt(x.temp, 1) + '° <small>→ ' + fmt(x.setpoint, 1) + '°</small></span></button>' + (man ? '<button class="r2-x" data-nt-homeroom="' + esc(x.id) + '" aria-label="Retirer la consigne manuelle">' + icon('x') + '</button>' : '') + '</div>';
       }).join('') + '</div>';
     }

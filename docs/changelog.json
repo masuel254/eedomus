@@ -1,7 +1,18 @@
 {
-  "version": "2.18.1",
+  "version": "2.18.2",
   "date": "2026-11-21",
   "releases": [
+    {
+      "version": "2.18.2",
+      "date": "2026-11-21",
+      "time": "12:25",
+      "title": "Chauffe en direct, comme Netatmo",
+      "changes": [
+        "Une pièce s’affiche « Chauffe » dès que la chaudière tourne et qu’elle est sous sa consigne, comme dans l’appli Netatmo",
+        "Dans le détail d’une pièce, la case Chauffage indique « En cours » ou « Au repos » en direct, au lieu de 0 %",
+        "Correction : les heures en bas du graphique d’une journée (10h, 14h…) étaient remplacées par des jours"
+      ]
+    },
     {
       "version": "2.18.1",
       "date": "2026-11-21",
@@ -892,5 +903,5 @@
     "Révoquer à la fin : mot de passe TotalEnergies",
     "Révoquer à la fin : mot de passe EDF"
   ],
-  "time": "12:21"
+  "time": "12:25"
 }
