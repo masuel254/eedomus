@@ -1,7 +1,18 @@
 {
-  "version": "2.21.0",
+  "version": "2.21.1",
   "date": "2026-11-21",
   "releases": [
+    {
+      "version": "2.21.1",
+      "date": "2026-11-21",
+      "time": "12:52",
+      "title": "Journal des chauffes instantané",
+      "changes": [
+        "Le journal des chauffes est gardé sur l’iPhone : il s’affiche tout de suite, et seules les dernières 24 heures sont redemandées",
+        "Les journaux de toutes les pièces se préparent en arrière-plan, comme les graphiques",
+        "Correction : une chauffe terminée pouvait s’afficher sans son heure d’arrêt"
+      ]
+    },
     {
       "version": "2.21.0",
       "date": "2026-11-21",
@@ -951,5 +962,5 @@
     "Révoquer à la fin : mot de passe TotalEnergies",
     "Révoquer à la fin : mot de passe EDF"
   ],
-  "time": "12:47"
+  "time": "12:52"
 }

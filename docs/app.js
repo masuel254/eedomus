@@ -792,7 +792,7 @@
     if (grPre || !NT || !NT.rooms || document.hidden) return; grPre = true;
     var ids = NT.rooms.map(function (x) { return String(x.id); }).filter(function (id) { var c = GRC[id + '|1d']; return !c || Date.now() - c.at > 600000; });
     (function next() {
-      var id = ids.shift(); if (!id) { grPre = false; return; }
+      var id = ids.shift(); if (!id) { grPre = false; return hlPreload(); }
       api({ action: 'nt.roomgraph', room: id, range: '1d' }).then(function (j) { grSave(id + '|1d', j); }).catch(function () {}).then(function () { setTimeout(next, 300); });
     })();
   }
@@ -825,25 +825,36 @@
   function durTxt(sec) { var m = Math.round(sec / 60), h = Math.floor(m / 60); return h ? h + ' h ' + String(m % 60).padStart(2, '0') : m + ' min'; }
   // ---------- Journal des chauffes d'une pièce (7 derniers jours, mesures Netatmo à la demi-heure) ----------
   var HL = null;
+  // Cache sur l'iPhone : les jours passés ne changent plus, on ne redemande que les dernières 24 h
+  function hlCache(room) { try { return JSON.parse(localStorage.getItem('maison-hl-' + room) || 'null'); } catch (e) { return null; } }
+  function hlMerge(room, rows) {
+    var c = hlCache(room) || { rows: [] }, all = {}, lim = Math.floor(Date.now() / 1000) - 8 * 86400;
+    c.rows.concat(rows || []).forEach(function (r) { if (r[0] >= lim) all[r[0]] = r; });
+    c = { at: Date.now(), from: c.from, rows: Object.keys(all).map(function (t) { return all[t]; }).sort(function (x, y) { return x[0] - y[0]; }) };
+    try { localStorage.setItem('maison-hl-' + room, JSON.stringify(c)); } catch (e) {}
+    return c;
+  }
+  // Met à jour le journal d'une pièce : 1 seule demande si le cache couvre déjà la semaine, sinon les jours manquants
+  function hlRefresh(room, onStep) {
+    var now = Math.floor(Date.now() / 1000), c = hlCache(room), first = c && c.rows.length ? c.rows[0][0] : now;
+    var days = Math.min(7, Math.max(1, Math.ceil((first - (now - 7 * 86400)) / 86400) + 1)), k = 0;
+    if (c && c.full && Date.now() - c.at < 20 * 3600000) days = 1;
+    return new Promise(function (done) {
+      (function next() {
+        if (k >= days) { var cc = hlCache(room); if (cc && days > 1) { cc.full = true; try { localStorage.setItem('maison-hl-' + room, JSON.stringify(cc)); } catch (e) {} } return done(); }
+        var end = k ? now - k * 86400 : undefined; k++;
+        api({ action: 'nt.roomgraph', room: room, range: '1d', end: end }).then(function (j) {
+          var cc = hlMerge(room, j.rows); if (days === 1 || k === days) { cc.full = true; try { localStorage.setItem('maison-hl-' + room, JSON.stringify(cc)); } catch (e) {} }
+          if (onStep) onStep(cc.rows);
+        }).catch(function () {}).then(function () { setTimeout(next, 150); });
+      })();
+    });
+  }
   function openHeatLog() {
-    if (!GR) return; HL = { room: GR.room, rows: null, loading: true }; sheet.scrollTop = 0; openSheet('heatlog');
-    var room = GR.room, now = Math.floor(Date.now() / 1000), all = {}, ck = 'maison-hl-' + room;
-    try { var sv = JSON.parse(localStorage.getItem(ck) || 'null'); if (sv && sv.rows) { HL.rows = sv.rows; renderHeatLog(); } } catch (e) {}
-    var c0 = GRC[room + '|1d']; if (c0 && c0.data && !HL.rows) { HL.rows = c0.data.rows || []; renderHeatLog(); }
-    var k = 0;
-    (function next() {
-      if (!HL || HL.room !== room) return;
-      if (k >= 7) {
-        HL.rows = Object.keys(all).map(function (t) { return all[t]; }).sort(function (a, b) { return a[0] - b[0]; }); HL.loading = false;
-        try { localStorage.setItem(ck, JSON.stringify({ at: Date.now(), rows: HL.rows })); } catch (e) {}
-        return renderHeatLog();
-      }
-      var end = now - k * 86400; k++;
-      api({ action: 'nt.roomgraph', room: room, range: '1d', end: k === 1 ? undefined : end }).then(function (j) {
-        (j.rows || []).forEach(function (r) { if (r[0] <= now) all[r[0]] = r; });
-        if (k === 1) { HL.rows = (j.rows || []).slice(); renderHeatLog(); }
-      }).catch(function () {}).then(function () { setTimeout(next, 150); });
-    })();
+    if (!GR) return; var room = GR.room, c = hlCache(room);
+    HL = { room: room, rows: c ? c.rows : null, loading: true }; sheet.scrollTop = 0; openSheet('heatlog');
+    if (c && Date.now() - c.at < 120000) { HL.loading = false; return renderHeatLog(); } // vu il y a moins de 2 min : rien à redemander
+    hlRefresh(room, function (rows) { if (HL && HL.room === room) { HL.rows = rows; renderHeatLog(); } }).then(function () { if (HL && HL.room === room) { HL.loading = false; renderHeatLog(); } });
   }
   function heatSessions(rows) {
     rows = (rows || []).filter(function (r) { return r[3] != null; });
@@ -855,7 +866,7 @@
         cur.last = r[0];
       } else if (cur) { cur.end = r[0]; if (r[1] != null && r[1] > cur.tmax) cur.tmax = r[1]; out.push(cur); cur = null; }
     });
-    if (cur) { cur.end = null; out.push(cur); }
+    if (cur) { cur.end = null; cur.step = rows.length > 1 ? rows[rows.length - 1][0] - rows[rows.length - 2][0] : 1800; out.push(cur); }
     return out;
   }
   function hlTime(t) { var d = new Date(t * 1000); return String(d.getHours()).padStart(2, '0') + 'h' + String(d.getMinutes()).padStart(2, '0'); }
@@ -875,7 +886,7 @@
     });
     order.forEach(function (key) {
       var list = byDay[key], tot = 0;
-      list.forEach(function (x) { x.dur = ((x.end || now) - x.start); tot += x.dur; });
+      list.forEach(function (x) { if (!x.end && !live) x.end = x.last + (x.step || 1800); x.dur = ((x.end || now) - x.start); tot += x.dur; });
       h += '<div class="hl-dh"><span>' + esc(dayLabel(key)) + '</span><span>' + list.length + ' chauffe' + (list.length > 1 ? 's' : '') + ' · ' + durTxt(tot) + '</span></div><div class="hl-card">';
       list.forEach(function (x) {
         var on = !x.end && live, avg = Math.round(x.sum / x.n);
@@ -888,6 +899,13 @@
       h += '</div>';
     });
     var keep = sheet.scrollTop; sheet.innerHTML = '<div class="sh-in">' + h + '</div>'; sheet.scrollTop = keep;
+  }
+  // Journal des chauffes préchargé en arrière-plan (une pièce à la fois, au plus toutes les 15 min)
+  var hlPre = false;
+  function hlPreload() {
+    if (hlPre || !NT || !NT.rooms || document.hidden) return; hlPre = true;
+    var ids = NT.rooms.map(function (x) { return String(x.id); }).filter(function (id) { var c = hlCache(id); return !c || Date.now() - c.at > 900000; });
+    (function next() { var id = ids.shift(); if (!id || document.hidden) { hlPre = false; return; } hlRefresh(id).then(function () { setTimeout(next, 400); }); })();
   }
   function graphSVG(d, idx) {
     if (!d) return '<p class="muted">Chargement…</p>';
