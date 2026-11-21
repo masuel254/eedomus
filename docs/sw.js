@@ -1,6 +1,8 @@
 // Service worker : réseau d'abord (toujours la dernière version), cache en secours hors ligne.
 // Les appels à la maison (n8n) ne passent jamais par le cache.
-var V = 'maison-2.17.7';
+var V = 'maison-2.18.0';
+// Les notifications reçues sont gardées à part (30 dernières) : une mise à jour de l'appli ne les efface pas
+var NOTIFS = 'maison-notifs';
 var SHELL = ['./', './index.html', './app.css', './app.js', './config.json', './changelog.json', './manifest.webmanifest', './icons/icon-192-v2.png'];
 
 self.addEventListener('install', function (e) {
@@ -10,7 +12,7 @@ self.addEventListener('install', function (e) {
 });
 self.addEventListener('activate', function (e) {
   e.waitUntil(caches.keys().then(function (ks) {
-    return Promise.all(ks.filter(function (k) { return k !== V; }).map(function (k) { return caches.delete(k); }));
+    return Promise.all(ks.filter(function (k) { return k !== V && k !== NOTIFS; }).map(function (k) { return caches.delete(k); }));
   }));
   self.clients.claim();
 });
@@ -31,20 +33,38 @@ function setBadge(n) {
   try { if (n === 0 && self.navigator.clearAppBadge) return self.navigator.clearAppBadge(); if (n > 0 && self.navigator.setAppBadge) return self.navigator.setAppBadge(n); } catch (e) {}
   return Promise.resolve();
 }
+// Titre clair dès l'écran verrouillé : un symbole selon le type d'alerte
+function clearTitle(it) {
+  var t = String(it.title || 'Maison'), ic = { garage: '🚗', water: '💧', wateroff: '💧', meteo: '🌬️', test: '🔔' }[it.tag];
+  if (/^Maison$/.test(t) && it.tag !== 'test') t = 'Alerte de la maison';
+  return ic && t.indexOf(ic) !== 0 ? ic + ' ' + t : t;
+}
+// Historique : les 30 dernières notifications, gardées sur l'iPhone
+function saveNotifs(items) {
+  return caches.open(NOTIFS).then(function (c) {
+    return c.match('./__notifs').then(function (r) { return r ? r.json() : []; }).catch(function () { return []; }).then(function (list) {
+      list = (list || []).concat(items.map(function (it) { return { at: it.at, title: it.title, body: it.body || '', tag: it.tag || 'maison', lost: !!it.lost }; })).slice(-30);
+      return c.put('./__notifs', new Response(JSON.stringify(list), { headers: { 'Content-Type': 'application/json' } }));
+    });
+  }).then(function () {
+    return self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (cs) { cs.forEach(function (cl) { cl.postMessage({ notifs: true }); }); });
+  }).catch(function () {});
+}
 self.addEventListener('push', function (e) {
   e.waitUntil(Promise.all([fetch('./config.json').then(function (r) { return r.json(); }), self.registration.pushManager.getSubscription()]).then(function (x) {
     return fetch(x[0].api, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'push.pending', endpoint: x[1] && x[1].endpoint }) }).then(function (r) { return r.json(); });
   }).catch(function () { return null; }).then(function (j) {
-    var items = j && j.items && j.items.length ? j.items : [{ title: 'Maison', body: 'Nouvelle alerte : ouvre l’appli', tag: 'maison' }];
+    var items = j && j.items && j.items.length ? j.items : [{ title: 'Alerte de la maison', body: 'Le détail n’a pas pu être lu. Touche pour voir l’état de la maison.', tag: 'notifs', lost: true }];
+    items = items.map(function (it) { return Object.assign({}, it, { title: clearTitle(it), at: it.at || Date.now() }); });
     return Promise.all(items.map(function (it) {
       return self.registration.showNotification(it.title, { body: it.body, tag: it.tag || 'maison', icon: './icons/icon-192-v2.png', data: { tag: it.tag } });
-    }).concat(items.filter(function (it) { return it.badge != null; }).slice(-1).map(function (it) { return setBadge(it.badge); })));
+    }).concat([saveNotifs(items)]).concat(items.filter(function (it) { return it.badge != null; }).slice(-1).map(function (it) { return setBadge(it.badge); })));
   }));
 });
 self.addEventListener('notificationclick', function (e) {
   e.notification.close();
   var tg = e.notification.data && e.notification.data.tag;
-  var url = tg === 'garage' ? './#logs=doors' : /^water/.test(tg || '') ? './#water' : tg === 'meteo' ? './#meteo' : tg === 'smoke' ? './#smoke' : './';
+  var url = tg === 'garage' ? './#logs=doors' : /^water/.test(tg || '') ? './#water' : tg === 'meteo' ? './#meteo' : tg === 'smoke' ? './#smoke' : tg === 'notifs' ? './#notifs' : './';
   e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (cs) {
     if (cs.length) { cs[0].postMessage({ open: url }); return cs[0].focus(); }
     return self.clients.openWindow(url);

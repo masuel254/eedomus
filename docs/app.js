@@ -646,6 +646,44 @@
     var keep = sheet.scrollTop; sheet.innerHTML = '<div class="sh-in">' + h + '</div>'; sheet.scrollTop = keep;
   }
 
+  // ---------- Notifications reçues (30 dernières, gardées sur l'iPhone par le service worker) ----------
+  var NOTIFS = [];
+  function notifSeen() { return +(store.get('maison.notifs.seen') || 0); }
+  function notifUnread() { var s = notifSeen(); return NOTIFS.filter(function (n) { return n.at > s; }).length; }
+  function loadNotifs() {
+    if (!window.caches) return;
+    caches.open('maison-notifs').then(function (c) { return c.match('./__notifs'); }).then(function (r) { return r ? r.json() : []; }).then(function (l) {
+      NOTIFS = l || [];
+      if (!sheet.hidden && sheet.dataset.view === 'notifs') { store.set('maison.notifs.seen', Date.now()); renderNotifs(); }
+      else if (CFG && lastOk && !busy()) render();
+    }).catch(function () {});
+  }
+  function openNotifs() { sheet.scrollTop = 0; store.set('maison.notifs.seen', Date.now()); openSheet('notifs'); loadNotifs(); if (CFG) render(); }
+  function goNotif(tag) {
+    closeSheet();
+    if (tag === 'garage') return openLogs('doors');
+    if (tag === 'smoke') { TAB = 'alarm'; app.scrollTop = 0; return render(); }
+    if (tag === 'meteo') { TAB = 'more'; render(); openMeteo(); return loadMeteo(true); }
+    if (/^water/.test(tag)) { TAB = 'more'; loadWater(true); app.scrollTop = 0; return render(); }
+    TAB = 'home'; render();
+  }
+  function renderNotifs() {
+    var h = '<div class="sh-hd"><h2>Notifications</h2><button class="close" data-close aria-label="Fermer">×</button></div>' +
+      '<p class="muted" style="margin:0 4px 6px">Les 30 dernières reçues sur cet iPhone. Touche une alerte pour voir le détail.</p>';
+    if (!NOTIFS.length) h += '<p class="muted" style="margin:14px 4px">Aucune notification enregistrée pour l’instant. Les prochaines s’afficheront ici.</p>';
+    var ICN = { garage: 'garage', water: 'drop', wateroff: 'drop', meteo: 'wind', smoke: 'flame' }, cur = '';
+    NOTIFS.slice().reverse().forEach(function (n) {
+      var dt = new Date(n.at), p2 = function (x) { return (x < 10 ? '0' : '') + x; };
+      var ds = dt.getFullYear() + '-' + p2(dt.getMonth() + 1) + '-' + p2(dt.getDate()) + ' ' + p2(dt.getHours()) + ':' + p2(dt.getMinutes());
+      var dl = dayLabel(ds); if (dl !== cur) { if (cur) h += '</div>'; h += '<div class="lday">' + esc(dl) + '</div><div class="card2 flat logs">'; cur = dl; }
+      var bad = /ouverte|fuite|fumée|hors ligne|rafales|gel|pluie|pleut/i.test(n.title) && !/fermée|terminée|fin d/i.test(n.title);
+      h += '<button class="lg nf' + (bad ? ' bad' : ' ok') + '" data-notif="' + esc(n.tag || '') + '"><span class="lt">' + esc(ds.slice(11)) + '</span><span class="li">' + icon(ICN[n.tag] || 'bell') + '</span>' +
+        '<span><b>' + esc(n.title) + '</b><small>' + esc(n.body || '') + '</small></span></button>';
+    });
+    if (cur) h += '</div>';
+    var keep = sheet.scrollTop; sheet.innerHTML = '<div class="sh-in">' + h + '</div>'; sheet.scrollTop = keep;
+  }
+
   // ---------- Onglet Accueil ----------
   function homeHTML() {
     var s = CFG.status, armed = alarmArmed();
@@ -1169,6 +1207,7 @@
     app.innerHTML =
       '<header class="hd2"><div><small>' + (TAB === 'home' ? esc(d.charAt(0).toUpperCase() + d.slice(1)) + (userName ? ' · ' + esc(userName) : '') : '&nbsp;') + '</small><h1>' + TITLES[TAB] + '</h1></div>' +
       '<div class="hd-r"><div class="sync' + (offline ? ' off' : '') + '"><i></i>' + (offline ? 'Hors ligne' : lastOk ? ago(lastOk) : '…') + '</div>' +
+      (TAB === 'home' ? '<button class="gear" data-notifs aria-label="Notifications">' + icon('bell') + (notifUnread() ? '<span class="cnt">' + notifUnread() + '</span>' : '') + '</button>' : '') +
       (TAB === 'home' ? '<button class="gear' + (newVersion ? ' dot' : '') + '" data-settings aria-label="Réglages">' + icon('gear') + '</button>' : '') + '</div></header>' +
       body + '<div class="foot">Maison v' + esc(LOG ? LOG.version : '…') + (lastOk ? ' · mis à jour ' + ago(lastOk) : '') + '</div>';
     app.scrollTop = y;
@@ -1198,6 +1237,7 @@
     else if (view === 'timers') renderTimers();
     else if (view === 'plans') renderPlans();
     else if (view === 'logs') renderLogs();
+    else if (view === 'notifs') renderNotifs();
     else if (view === 'room') renderRoomSheet();
     else if (view === 'graph') renderGraph();
     else if (view === 'plan') renderPlan();
@@ -2070,6 +2110,8 @@
   function appClick(e) {
     var b;
     if ((b = e.target.closest('[data-settings]'))) return openSheet('settings');
+    if (e.target.closest('[data-notifs]')) return openNotifs();
+    if ((b = e.target.closest('[data-notif]'))) return goNotif(b.dataset.notif);
     if (e.target.closest('[data-cost]')) return openCost();
     if ((b = e.target.closest('[data-opencams]'))) { if (!sheet.hidden) closeSheet(); liveCam = b.dataset.opencams; liveHd = true; TAB = 'cams'; store.set('maison.tab', TAB); loadCams(false); loadImou(false); render();
       var cc = document.getElementById('cc-' + liveCam); if (cc) cc.scrollIntoView({ block: 'center' }); return; }
@@ -2217,7 +2259,7 @@
   sheet.addEventListener('click', function (e) {
     var b;
     if (e.target.closest('[data-close]')) return closeSheet();
-    if (sheet.dataset.view === 'room' || sheet.dataset.view === 'logs') return appClick(e); // panneaux : mêmes commandes que l'appli
+    if (sheet.dataset.view === 'room' || sheet.dataset.view === 'logs' || sheet.dataset.view === 'notifs') return appClick(e); // panneaux : mêmes commandes que l'appli
     if ((b = e.target.closest('[data-live]'))) { liveCam = b.dataset.live; liveHd = true; return renderCams(); }
     if (e.target.closest('[data-hd]')) { liveHd = !liveHd; return renderCams(); }
     if ((b = e.target.closest('[data-rec]'))) return openRec(b.dataset.rec);
@@ -2444,7 +2486,8 @@
     }).catch(function () {});
   }
   setInterval(function () { if (!document.hidden) checkUpdate(); }, 180000);
-  document.addEventListener('visibilitychange', function () { if (!document.hidden) { checkUpdate(); clearBadge(); } });
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) { checkUpdate(); clearBadge(); loadNotifs(); } });
+  loadNotifs();
   // Pastille rouge sur l'icône : effacée à chaque ouverture de l'appli (l'alerte a été vue)
   function clearBadge() { try { if (navigator.clearAppBadge) navigator.clearAppBadge(); } catch (e) {} }
   clearBadge();
@@ -2480,6 +2523,8 @@
     navigator.serviceWorker.register('sw.js').catch(function () {});
     // toucher la notification « garage » ouvre le journal des portes
     navigator.serviceWorker.addEventListener('message', function (ev) {
+      if (ev.data && ev.data.notifs) loadNotifs();
+      if (ev.data && /#notifs/.test(ev.data.open || '')) openNotifs();
       if (ev.data && /logs=doors/.test(ev.data.open || '')) openLogs('doors');
       if (ev.data && /#smoke/.test(ev.data.open || '')) { TAB = 'alarm'; app.scrollTop = 0; render(); }
       if (ev.data && /#meteo/.test(ev.data.open || '')) { TAB = 'more'; render(); openMeteo(); loadMeteo(true); }
@@ -2487,6 +2532,7 @@
     });
   }
   if (/logs=doors/.test(location.hash)) setTimeout(function () { openLogs('doors'); }, 600);
+  if (/#notifs/.test(location.hash)) setTimeout(function () { openNotifs(); }, 600);
   if (/#smoke/.test(location.hash)) TAB = 'alarm';
   if (/#meteo/.test(location.hash)) { TAB = 'more'; setTimeout(function () { openMeteo(); loadMeteo(true); }, 600); }
   if (/#water/.test(location.hash)) { TAB = 'more'; setTimeout(function () { loadWater(true); }, 300); }

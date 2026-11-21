@@ -878,3 +878,10 @@ body { padding: 0 !important; }
 /* plusieurs températures sur une tuile (piscine : eau et dôme) */
 .rc-hd span.rc-ts { display: grid; justify-items: end; gap: 2px; }
 .rc-hd span.rc-ts i { font-style: normal; white-space: nowrap; }
+/* Notifications reçues */
+.gear .cnt { position: absolute; top: -3px; right: -3px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--warn); color: #fff; font-size: 11px; font-weight: 800; line-height: 18px; text-align: center; box-shadow: 0 0 0 2px var(--bg); }
+.lg.nf { width: 100%; text-align: left; background: none; border-left: 0; border-right: 0; border-top: 0; color: inherit; font: inherit; align-items: start; }
+.lg.nf b { display: block; font-size: 14px; }
+.lg.nf small { display: block; color: var(--mu); font-size: 13px; margin-top: 2px; }
+.lg.nf.bad span:last-child { color: inherit; }
+.lg.nf .lt, .lg.nf .li { padding-top: 2px; }

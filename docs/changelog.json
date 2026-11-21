@@ -1,7 +1,18 @@
 {
-  "version": "2.17.7",
-  "date": "2026-11-13",
+  "version": "2.18.0",
+  "date": "2026-11-21",
   "releases": [
+    {
+      "version": "2.18.0",
+      "date": "2026-11-21",
+      "time": "12:15",
+      "title": "Historique des notifications",
+      "changes": [
+        "Nouvelle cloche en haut de l’accueil : elle affiche les 30 dernières notifications reçues, avec l’heure et le détail",
+        "Le nombre d’alertes non lues s’affiche sur la cloche ; touche une alerte pour ouvrir le bon écran (garage, eau, météo…)",
+        "Titres plus clairs sur l’écran verrouillé, avec un symbole selon le type d’alerte"
+      ]
+    },
     {
       "version": "2.17.7",
       "date": "2026-11-13",
@@ -871,5 +882,5 @@
     "Révoquer à la fin : mot de passe TotalEnergies",
     "Révoquer à la fin : mot de passe EDF"
   ],
-  "time": "23:46"
+  "time": "12:15"
 }
