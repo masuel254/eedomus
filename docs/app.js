@@ -482,6 +482,14 @@
     var sumH = hours.reduce(function (s, v) { return s + (v || 0); }, 0);
     return { hours: hours, total: Math.max(total, sumH) };
   }
+  // Courbe de l'accueil et du Climat : on ajoute la température en direct au bout de l'historique (qui a 30 à 60 min de retard)
+  function livePts(hp, r) {
+    var pts = hp && hp.points ? hp.points.slice() : null;
+    if (!pts || !pts.length || !r || r.temp == null) return pts;
+    var last = pts[pts.length - 1], ms = last[0] > 1e11, now = ms ? Date.now() : Date.now() / 1000;
+    if (now - last[0] > (ms ? 60000 : 60)) pts.push([now, r.temp]); else pts[pts.length - 1] = [last[0], r.temp];
+    return pts;
+  }
   function spark(points, o) {
     // points : [[x, y], ...] (x croissant). o : { w, h, ref, color, labels, area }
     o = o || {}; var W = o.w || 300, H = o.h || 70, pad = 4, c = o.color || '#FF8A5B';
@@ -706,7 +714,7 @@
       var sp = ntPend && String(ntPend.room) === String(r.id) ? ntPend.temp : r.setpoint, hp = HISTN[r.id];
       h += '<div class="hcard"><button class="hc-top" data-graph="' + esc(r.id) + '"><span>Chauffage · ' + esc(r.name) + '</span><span class="' + (roomHeat(r) ? 'heat' : 'mu') + '">' + icon('flame') + (roomHeat(r) ? 'Chauffe' : NT.boiler ? 'Chaudière en marche' : 'Au repos') + '</span></button>' +
         '<button class="hc-mid" data-graph="' + esc(r.id) + '"><div class="big">' + fmt(r.temp, 1) + '°<em id="ntsp">Consigne ' + fmt(sp, 1) + '°</em>' + hcOut() + '</div>' +
-        '<div class="hc-sp">' + spark(hp && hp.points ? hp.points : null, { w: 180, h: 60, ref: sp }) + '</div></button>' + manualHTML(r) + presenceHTML() +
+        '<div class="hc-sp">' + spark(livePts(hp, r), { w: 180, h: 60, ref: sp }) + '</div></button>' + manualHTML(r) + presenceHTML() +
         '<div class="hc-plan"><span><b>' + esc(NT.schedule || 'Planning') + '</b> · ' + esc(schedWhen()) + '</span>' +
         '<span class="stp2"><button data-nt-step="-0.5" aria-label="Baisser">−</button><button data-nt-step="0.5" aria-label="Monter">+</button></span></div></div>';
     } else {
@@ -1052,7 +1060,7 @@
       var hp = HISTN[r.id], sp = ntPend && String(ntPend.room) === String(r.id) ? ntPend.temp : r.setpoint;
       h += manualHTML(r).replace('class="manual"', 'class="manual big"');
       h += '<div class="lbl">Température · ' + esc(r.name) + ' · 24 h</div><button class="card2 gtap" data-graph="' + esc(r.id) + '">' +
-        spark(hp && hp.points ? hp.points : null, { w: 320, h: 90, ref: sp, hours: 4 }) +
+        spark(livePts(hp, r), { w: 320, h: 90, ref: sp, hours: 4 }) +
         '<div class="legend"><span><i style="background:#FF8A5B"></i>Mesurée</span><span><i class="dash"></i>Consigne ' + fmt(sp, 1) + '°</span><span class="more">Détails ›</span></div></button>';
       h += '<div class="lbl">Toutes les pièces</div><div class="card2 rooms2">' + NT.rooms.map(function (x) {
         var man = x.mode === 'manual' || x.mode === 'max';

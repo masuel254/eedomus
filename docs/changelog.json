@@ -1,7 +1,16 @@
 {
-  "version": "2.21.1",
+  "version": "2.21.2",
   "date": "2026-11-21",
   "releases": [
+    {
+      "version": "2.21.2",
+      "date": "2026-11-21",
+      "time": "22:31",
+      "title": "Petite courbe à jour",
+      "changes": [
+        "La petite courbe de l’accueil et de l’onglet Climat se termine maintenant sur la température en direct, celle du gros chiffre"
+      ]
+    },
     {
       "version": "2.21.1",
       "date": "2026-11-21",
@@ -962,5 +971,5 @@
     "Révoquer à la fin : mot de passe TotalEnergies",
     "Révoquer à la fin : mot de passe EDF"
   ],
-  "time": "12:52"
+  "time": "22:31"
 }
