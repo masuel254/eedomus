@@ -858,14 +858,31 @@
   function loadGraph() {
     if (!GR) return; var g = GR, want = g.room + '|' + g.range + '|' + g.end, ck = g.end ? null : g.room + '|' + g.range;
     var c = ck && GRC[ck];
+    // 6 h jamais vues : on les tire tout de suite de la courbe 24 h gardée (même précision, une mesure par demi-heure)
+    if (!c && ck && g.range === '6h' && GRC[g.room + '|1d']) {
+      var dd = GRC[g.room + '|1d'].data, b6 = dd.end - 6 * 3600;
+      c = { at: 0, data: Object.assign({}, dd, { begin: b6, rows: (dd.rows || []).filter(function (r) { return r[0] >= b6 - 1800; }) }) };
+    }
     g.data = c ? c.data : null; g.idx = null; g.error = false;
     g.loading = !(c && Date.now() - c.at < 120000); renderGraph();
-    if (!g.loading) return; // vue il y a moins de 2 min : rien à redemander
+    if (!g.loading) return grPrefetch(g.room); // vue il y a moins de 2 min : rien à redemander
     api({ action: 'nt.roomgraph', room: g.room, range: g.range, end: g.end || undefined }).then(function (j) {
       if (ck) grSave(ck, j);
+      grPrefetch(g.room);
       if (!GR || GR.room + '|' + GR.range + '|' + GR.end !== want) return;
       GR.data = j; GR.idx = null; GR.loading = false; renderGraph();
     }).catch(function () { if (GR) { GR.loading = false; GR.error = true; renderGraph(); } });
+  }
+  // Les autres périodes de la pièce ouverte (6H, 1J, 1S, 1M) se préchargent en arrière-plan, une à la fois
+  var grPf = false;
+  function grPrefetch(room) {
+    if (grPf) return; grPf = true;
+    var todo = ['6h', '1d', '1w', '1m'].filter(function (r) { var c = GRC[room + '|' + r]; return !c || Date.now() - c.at > 600000; });
+    (function next() {
+      var r = todo.shift(); if (!r || !GR || GR.room !== room) { grPf = false; return; }
+      if (GR.range === r) return next();
+      api({ action: 'nt.roomgraph', room: room, range: r }).then(function (j) { grSave(room + '|' + r, j); }).catch(function () {}).then(function () { setTimeout(next, 300); });
+    })();
   }
   // Préchargement discret des courbes du jour de toutes les pièces (une à la fois)
   var grPre = false;
@@ -1363,6 +1380,33 @@
   var OUTH = {}; try { OUTH = JSON.parse(localStorage.getItem('maison-outh') || '{}') || {}; } catch (e) {}
   function ltStr(ms) { var d = new Date(ms), p = function (v) { return (v < 10 ? '0' : '') + v; }; return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()); }
   function outRange(begSec, endSec) { var st = 600000; return { from: ltStr(Math.floor(begSec * 1000 / st) * st), to: ltStr(Math.floor(endSec * 1000 / st) * st) }; }
+  // Série « Dehors » unique gardée sur l'iPhone (une valeur par mesure, jusqu'à 40 jours) : l'affichage est immédiat,
+  // et l'on ne redemande que ce qui manque (le début de la période s'il n'est pas couvert, et les dernières heures).
+  var OUTS = null; try { OUTS = JSON.parse(localStorage.getItem('maison-outs') || 'null'); } catch (e) {}
+  OUTS = OUTS && OUTS.pts ? OUTS : { pts: [], from: null, at: 0 };
+  function outsMerge(pts) {
+    var m = {}; OUTS.pts.concat(pts).forEach(function (p) { m[p[0]] = p[1]; });
+    var lim = Date.now() / 1000 - 41 * 86400;
+    OUTS.pts = Object.keys(m).map(Number).filter(function (t) { return t >= lim; }).sort(function (a, b) { return a - b; }).map(function (t) { return [t, m[t]]; });
+    try { localStorage.setItem('maison-outs', JSON.stringify(OUTS)); } catch (e) {}
+  }
+  var outsBusy = false;
+  function outsGet(begSec, endSec, onNew) {
+    var have = OUTS.from != null && OUTS.from <= begSec + 1800;
+    var stale = !OUTS.at || Date.now() - OUTS.at > 600000;
+    if (!outsBusy && (!have || stale)) {
+      outsBusy = true;
+      var last = OUTS.pts.length ? OUTS.pts[OUTS.pts.length - 1][0] : null;
+      var from = have && last ? Math.max(begSec, last - 3 * 3600) : begSec, rg = outRange(from, Date.now() / 1000);
+      api({ action: 'out.hist', from: rg.from, to: rg.to }).then(function (j) {
+        outsMerge((j.points || []).map(function (p) { return [new Date(p[0].replace(' ', 'T') + ':00').getTime() / 1000, p[1]]; }));
+        if (!j.partial) { if (!have) OUTS.from = OUTS.from == null ? from : Math.min(OUTS.from, from); OUTS.at = Date.now(); }
+        try { localStorage.setItem('maison-outs', JSON.stringify(OUTS)); } catch (e) {}
+        outsBusy = false; if (onNew) onNew();
+      }).catch(function () { outsBusy = false; });
+    }
+    return OUTS.pts.filter(function (p) { return p[0] >= begSec - 3600 && p[0] <= endSec + 60; });
+  }
   function outGet(rg, onNew) {
     var k = rg.from + '|' + rg.to, c = OUTH[k];
     if (!c || (!c.busy && Date.now() - c.at > (c.past ? 864e5 : 600000))) {
@@ -1377,7 +1421,7 @@
     return OUTH[k].pts;
   }
   function outTempHTML() {
-    var now = Date.now() / 1000, pts = outGet(outRange(now - 7 * 86400, now), function () { if (!busy() && TAB === 'more') render(); });
+    var now = Date.now() / 1000, pts = outsGet(now - 7 * 86400, now, function () { if (!busy() && TAB === 'more') render(); });
     var n = METEO && METEO.now, cur = n && n.t != null ? n.t : (pts && pts.length ? pts[pts.length - 1][1] : null), mn = null, mx = null;
     (pts || []).forEach(function (p) { if (mn == null || p[1] < mn) mn = p[1]; if (mx == null || p[1] > mx) mx = p[1]; });
     return '<div class="card2"><div class="row-hd"><b>Température extérieure · 7 jours</b><span class="mono">' + (cur != null ? fmt(cur, 1) + '°' : '—') + '</span></div>' +
@@ -1388,11 +1432,12 @@
   function outAt(pts, t) { var b = null, bd = Infinity; (pts || []).forEach(function (p) { var d = Math.abs(p[0] - t); if (d < bd) { bd = d; b = p; } }); return b; }
   function outBandSVG(d, idx) {
     if (!d) return '';
-    var x0 = d.begin, x1 = grEnd(d), pts = outGet(outRange(x0, x1), function () { if (GR && sheet.dataset.view === 'graph' && !sheet.hidden) renderGraph(); });
+    var x0 = d.begin, x1 = grEnd(d), reGr = function () { if (GR && sheet.dataset.view === 'graph' && !sheet.hidden) renderGraph(); };
+    var pts = x1 - x0 > 40 * 86400 ? outGet(outRange(x0, x1), reGr) : outsGet(x0, x1, reGr);
     var W = 340, H = 64, L = 30, R = 8, T = 19, B = 5;
     var s = '<svg class="gsvg" viewBox="0 0 ' + W + ' ' + H + '" data-gsvg><line x1="' + L + '" x2="' + (W - R) + '" y1="1" y2="1" class="g-sep"/><text x="' + L + '" y="13" class="g-ot">Dehors</text>';
     pts = (pts || []).filter(function (p) { return p[0] >= x0 - 3600 && p[0] <= x1 + 60; });
-    if (pts.length < 2) return s + '<text x="' + ((L + W - R) / 2) + '" y="42" class="g-om" text-anchor="middle">' + (OUTH[outRange(x0, x1).from + '|' + outRange(x0, x1).to] && !OUTH[outRange(x0, x1).from + '|' + outRange(x0, x1).to].busy ? 'Pas de mesure extérieure sur cette période' : 'Chargement…') + '</text></svg>';
+    if (pts.length < 2) return s + '<text x="' + ((L + W - R) / 2) + '" y="42" class="g-om" text-anchor="middle">' + ((x1 - x0 > 40 * 86400 ? (OUTH[outRange(x0, x1).from + '|' + outRange(x0, x1).to] && !OUTH[outRange(x0, x1).from + '|' + outRange(x0, x1).to].busy) : !outsBusy) ? 'Pas de mesure extérieure sur cette période' : 'Chargement…') + '</text></svg>';
     var mn = Infinity, mx = -Infinity; pts.forEach(function (p) { if (p[1] < mn) mn = p[1]; if (p[1] > mx) mx = p[1]; });
     var lo = Math.floor(mn), hi = Math.ceil(mx); if (hi - lo < 2) { lo = Math.floor((mn + mx) / 2) - 1; hi = lo + 2; }
     var X = function (t) { return L + (Math.max(x0, Math.min(x1, t)) - x0) / (x1 - x0) * (W - L - R); }, Y = function (v) { return T + (1 - (v - lo) / (hi - lo)) * (H - T - B); };
@@ -3055,6 +3100,8 @@
     render(); refresh(); refreshHeating(); refreshTuya(true); refreshIq(false);
     // alertes déjà activées sur cet iPhone : on vérifie l'inscription (et on envoie la clé si elle manque), sans attendre les Réglages
     setTimeout(function () { try { if (window.Notification && Notification.permission === 'granted' && !PUSH.loaded) pushLoad(); } catch (e) {} }, 4000);
+    // série « Dehors » (7 jours) préparée en arrière-plan, pour que les graphiques l'affichent tout de suite
+    setTimeout(function () { var n = Date.now() / 1000; outsGet(n - 7 * 86400, n); }, 7000);
     if (TAB === 'cams') { loadCams(false); loadImou(false); }
     if (TAB === 'more') { loadEnergyToday(); loadHistE(3557564, 168); }
     setInterval(function () { if (!document.hidden) refreshIq(false); }, 60000);

@@ -1,7 +1,17 @@
 {
-  "version": "2.31.0",
+  "version": "2.31.1",
   "date": "2026-11-22",
   "releases": [
+    {
+      "version": "2.31.1",
+      "date": "2026-11-22",
+      "time": "18:53",
+      "title": "Graphiques instantanés",
+      "changes": [
+        "Graphique d’une pièce : 6H s’affiche tout de suite à partir de la courbe 24 h ; 1S et 1M se préchargent en arrière-plan dès l’ouverture",
+        "Bandeau Dehors : la température extérieure est gardée sur l’iPhone et préparée au démarrage ; seules les dernières heures sont redemandées"
+      ]
+    },
     {
       "version": "2.31.0",
       "date": "2026-11-22",
@@ -1271,5 +1281,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "16:57"
+  "time": "18:53"
 }
