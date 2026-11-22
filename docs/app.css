@@ -1053,3 +1053,5 @@ svg.hl-svg { touch-action: none; }
 .g-heatlive { fill: #FFB37A; opacity: .38; }
 .hl-row.hl-live { cursor: default; }
 .hl-row.hl-live .hl-mid { color: var(--mu); line-height: 1.35; }
+/* Barre d'onglets : plus près du bas de l'écran (au-dessus de la barre d'accueil de l'iPhone, sans grand vide dessous) */
+.tabs { padding-bottom: max(6px, calc(var(--bottom) - 16px)); padding-top: 8px; }

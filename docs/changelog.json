@@ -1,7 +1,16 @@
 {
-  "version": "2.30.0",
+  "version": "2.30.1",
   "date": "2026-11-22",
   "releases": [
+    {
+      "version": "2.30.1",
+      "date": "2026-11-22",
+      "time": "16:53",
+      "title": "Barre du bas plus basse",
+      "changes": [
+        "Les icônes du bas (Accueil, Pièces, Climat…) sont descendues pour profiter de la place libre en bas de l’écran"
+      ]
+    },
     {
       "version": "2.30.0",
       "date": "2026-11-22",
@@ -1252,5 +1261,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "15:32"
+  "time": "16:53"
 }
