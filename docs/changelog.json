@@ -1,7 +1,16 @@
 {
-  "version": "2.29.1",
+  "version": "2.29.2",
   "date": "2026-11-22",
   "releases": [
+    {
+      "version": "2.29.2",
+      "date": "2026-11-22",
+      "time": "15:08",
+      "title": "Suivi des notifications reçues",
+      "changes": [
+        "À chaque notification reçue, l’appli prévient le serveur (version, texte lu, affichage réussi ou erreur) pour comprendre pourquoi rien ne s’affiche"
+      ]
+    },
     {
       "version": "2.29.1",
       "date": "2026-11-22",
@@ -1193,5 +1202,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "15:06"
+  "time": "15:08"
 }

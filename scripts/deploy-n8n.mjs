@@ -1543,11 +1543,14 @@ try {
     // Diagnostic (avec jeton) : état de chaque inscription, sans adresse ni clé
     if (body.action === 'push.diag') {
       if (!body.token || !CFG.tokens.includes(body.token)) return reply(401, { ok: false, error: 'unauthorized' });
-      return reply(200, { ok: true, subs: Object.keys(SD.push.subs).map((x) => { const v = SD.push.subs[x]; return { host: String(v.endpoint || '').split('/')[2], name: v.name, at: v.at, keys: !!v.keys, app: !!v.app, lastOk: v.lastOk || null, lastErr: v.lastErr || null, q: (v.q || []).length }; }) });
+      return reply(200, { ok: true, subs: Object.keys(SD.push.subs).map((x) => { const v = SD.push.subs[x]; return { host: String(v.endpoint || '').split('/')[2], name: v.name, at: v.at, keys: !!v.keys, app: !!v.app, lastOk: v.lastOk || null, lastErr: v.lastErr || null, q: (v.q || []).length, seen: v.seen || null }; }) });
     }
     if (body.action === 'push.pending') {
       const s = k && SD.push.subs[k];
       if (!s) return reply(404, { ok: false, error: 'unknown' });
+      const sn = body.seen || {};
+      s.seen = { at: Date.now(), v: String(sn.v || '').slice(0, 20), data: !!sn.data, parsed: !!sn.parsed, shown: !!sn.shown, err: String(sn.err || '').slice(0, 100) };
+      if (body.peek) return reply(200, { ok: true });
       const items = s.q || []; s.q = [];
       return reply(200, { ok: true, items });
     }
