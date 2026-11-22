@@ -1600,6 +1600,7 @@
   function openPlan(id) {
     var s = PLANS.schedules.filter(function (x) { return String(x.id) === String(id); })[0]; if (!s) return;
     PE = { src: s.id, data: clonePlan(s), tab: 'week', day: (new Date().getDay() + 6) % 7, dirty: false, copy: null, zopen: null };
+    ptBuild();
     sheet.scrollTop = 0; openSheet('plan');
   }
   function peTT() { return PE.data.timetable; }
@@ -1610,6 +1611,107 @@
   }
   function zoneById(id) { return PE.data.zones.filter(function (z) { return z.id === id; })[0]; }
   function zoneAt(o) { var cur = peTT()[peTT().length - 1]; peTT().forEach(function (t) { if (t.o <= o) cur = t; }); return cur ? cur.z : null; }
+  // ---------- Journées types (Netatmo garde une seule liste de plages pour la semaine) ----------
+  // À l'ouverture, les jours identiques sont regroupés en « journées types » ; à chaque changement, la semaine est recalculée.
+  var PT_COL = ['#5BA8FF', '#FF8A5B', '#4CD38A', '#C08BFF', '#F4B860', '#38BDF8', '#F87171'];
+  function ptNames() { try { return JSON.parse(localStorage.getItem('maison-ptn-' + PE.src) || '{}') || {}; } catch (e) { return {}; } }
+  function ptKey(t) { return PE.T.days.map(function (x, d) { return x === t.id ? d : null; }).filter(function (d) { return d != null; }).join(','); }
+  function ptAuto(days) {
+    var k = days.join(',');
+    if (k === '0,1,2,3,4') return 'Semaine'; if (k === '5,6') return 'Week-end'; if (k === '0,1,2,3,4,5,6') return 'Tous les jours';
+    if (days.length === 1) return DAYS[days[0]];
+    return null; // nommée ensuite « Type A », « Type B »…
+  }
+  function ptSaveNames() {
+    var n = ptNames(); PE.T.types.forEach(function (t) { var k = ptKey(t); if (k) n[k] = t.name; });
+    try { localStorage.setItem('maison-ptn-' + PE.src, JSON.stringify(n)); } catch (e) {}
+  }
+  function ptBuild() {
+    var sig = {}, types = [], days = [], names = ptNames();
+    for (var d = 0; d < 7; d++) {
+      var st = d * 1440, sl = [[0, zoneAt(st)]];
+      peTT().forEach(function (t) { if (t.o > st && t.o < st + 1440) sl.push([t.o - st, t.z]); });
+      var k = JSON.stringify(sl);
+      if (!sig[k]) { sig[k] = { id: types.length + 1, sl: sl, d: [] }; types.push(sig[k]); }
+      sig[k].d.push(d); days.push(sig[k].id);
+    }
+    var letter = 0;
+    types.forEach(function (t, i) { t.name = names[t.d.join(',')] || ptAuto(t.d) || 'Type ' + 'ABCDEFG'.charAt(letter++); t.col = PT_COL[i % PT_COL.length]; delete t.d; });
+    PE.T = { types: types, days: days, open: null, blk: null, nid: types.length + 1 };
+  }
+  function ptType(id) { return PE.T.types.filter(function (t) { return t.id === id; })[0]; }
+  // Recalcule la semaine Netatmo à partir des journées types (en retirant les plages qui ne changent rien)
+  function ptCompile() {
+    var tt = [];
+    PE.T.days.forEach(function (id, d) { ptType(id).sl.forEach(function (x) { tt.push({ o: d * 1440 + x[0], z: x[1] }); }); });
+    PE.data.timetable = tt.filter(function (t, i) { return i === 0 || t.z !== tt[i - 1].z; });
+    ptSaveNames(); peChanged();
+  }
+  function zTemp(z) {
+    var ts = (z && z.rooms || []).map(function (r) { return r.t; }); if (!ts.length) return '—';
+    var mn = Math.min.apply(null, ts), mx = Math.max.apply(null, ts);
+    return mn === mx ? fmt(mn, 1) + '°' : fmt(mn, 1) + '–' + fmt(mx, 1) + '°';
+  }
+  function ptBar(sl) {
+    return '<div class="dbar">' + sl.map(function (x, i) { var to = i + 1 < sl.length ? sl[i + 1][0] : 1440, z = zoneById(x[1]) || {}; return '<span style="flex:' + (to - x[0]) + ';background:' + zColor(z) + '"></span>'; }).join('') +
+      '</div><div class="dbar-l"><span>00h</span><span>06h</span><span>12h</span><span>18h</span><span>24h</span></div>';
+  }
+  function ptDaysTxt(t) {
+    var ds = PE.T.days.map(function (x, d) { return x === t.id ? d : null; }).filter(function (d) { return d != null; });
+    if (!ds.length) return 'aucun jour';
+    if (ds.length > 2 && ds[ds.length - 1] - ds[0] === ds.length - 1) return DAYS[ds[0]].slice(0, 3).toLowerCase() + ' → ' + DAYS[ds[ds.length - 1]].slice(0, 3).toLowerCase();
+    return ds.map(function (d) { return DAYS[d].slice(0, 3).toLowerCase(); }).join(', ');
+  }
+  var PT_PX = 0.6; // hauteur de la frise : 0,6 px par minute
+  function ptHomeHTML() {
+    var T = PE.T, h = '';
+    h += '<div class="en-card pt-week"><div class="pt-h"><b>Ma semaine</b><small>Touche un jour pour changer sa journée type</small></div><div class="pt-days">' + T.days.map(function (id, d) {
+      var t = ptType(id); return '<button class="pt-d" style="background:' + t.col + '" data-pt-cycle="' + d + '" aria-label="' + DAYS[d] + ' : ' + esc(t.name) + '"><b>' + DAYS[d].slice(0, 1) + '</b><small>' + esc(t.name.slice(0, 6)) + '</small></button>';
+    }).join('') + '</div></div>';
+    h += '<div class="lbl">Journées types</div>';
+    h += T.types.map(function (t) {
+      return '<button class="pt-type" data-pt-open="' + t.id + '"><div class="pt-th"><b><i style="background:' + t.col + '"></i>' + esc(t.name) + '</b><small>' + ptDaysTxt(t) + ' ›</small></div>' + ptBar(t.sl) + '</button>';
+    }).join('');
+    h += '<button class="act wide" data-pt-new>+ Nouvelle journée type</button>';
+    var used = {}; T.types.forEach(function (t) { t.sl.forEach(function (x) { used[x[1]] = 1; }); });
+    h += '<div class="lbl">Ambiances utilisées</div><div class="pt-leg">' + PE.data.zones.filter(function (z) { return used[z.id]; }).map(function (z) {
+      return '<button class="pt-chip" data-pt-zone="' + z.id + '"><i style="background:' + zColor(z) + '"></i>' + esc(zName(z)) + ' <span>' + zTemp(z) + '</span></button>';
+    }).join('') + '</div><p class="note-q">Touche une ambiance pour régler la température de chaque pièce.</p>';
+    return h;
+  }
+  function ptEditHTML() {
+    var T = PE.T, t = ptType(T.open), h = '';
+    if (!t) { T.open = null; return ptHomeHTML(); }
+    var ndays = T.days.filter(function (x) { return x === t.id; }).length;
+    h += '<button class="back2 pt-back" data-pt-home>' + icon('down') + '<span>Ma semaine</span></button>';
+    h += '<div class="pt-title"><i style="background:' + t.col + '"></i><input id="pt-name" maxlength="24" value="' + esc(t.name) + '" aria-label="Nom de la journée type"></div>';
+    h += '<p class="muted pt-sub">' + (ndays ? 'Utilisée le ' + ptDaysTxt(t) + '. Un changement ici s’applique à ' + (ndays > 1 ? 'ces ' + ndays + ' jours' : 'ce jour') + '.' : 'Attribuée à aucun jour : touche un jour dans « Ma semaine » pour l’utiliser.') + '</p>';
+    // frise verticale
+    var hours = '', blocks = '';
+    for (var hr = 0; hr <= 24; hr += 2) hours += '<span class="pt-hr" style="top:' + (hr * 60 * PT_PX) + 'px">' + String(hr).padStart(2, '0') + 'h</span>';
+    t.sl.forEach(function (x, i) {
+      var to = i + 1 < t.sl.length ? t.sl[i + 1][0] : 1440, z = zoneById(x[1]) || {}, ht = (to - x[0]) * PT_PX, sel = T.blk === i;
+      blocks += '<div class="pt-blk' + (sel ? ' sel' : '') + (ht < 34 ? ' tiny' : '') + '" style="top:' + (x[0] * PT_PX) + 'px;height:' + Math.max(4, ht - 2) + 'px;background:' + zColor(z) + '" data-pt-blk="' + i + '" role="button" tabindex="0">' +
+        (i ? '<span class="pt-hd" data-pt-drag="' + i + '" aria-label="Glisser pour changer l’heure"></span>' : '') +
+        '<span class="pt-bl"><b>' + esc(zName(z)) + '</b><small>' + hmOf(x[0]) + ' → ' + (to === 1440 ? '24:00' : hmOf(to)) + '</small></span><span class="pt-bt">' + zTemp(z) + '</span></div>';
+    });
+    h += '<div class="en-card pt-tl"><div class="pt-col" style="height:' + (1440 * PT_PX) + 'px">' + hours + blocks + '</div></div>';
+    h += '<div class="pc-btns"><button class="act" data-pt-add>+ Ajouter un bloc</button>' + (!ndays && T.types.length > 1 ? '<button class="act danger" data-pt-del data-confirm><span>Supprimer cette journée</span></button>' : '') + '</div>';
+    h += '<p class="note-q">Fais glisser la poignée blanche d’un bloc pour changer son heure de début (par quart d’heure). Touche un bloc pour changer son ambiance et ses températures.</p>';
+    // panneau du bloc choisi
+    if (T.blk != null && t.sl[T.blk]) {
+      var x0 = t.sl[T.blk], zb = zoneById(x0[1]) || {}, to0 = T.blk + 1 < t.sl.length ? t.sl[T.blk + 1][0] : 1440;
+      h += '<div class="pt-panel"><div class="pt-ph"><b>' + (T.blk ? '<input type="time" step="900" class="slot-time" data-pt-time="' + T.blk + '" value="' + hmOf(x0[0]) + '" aria-label="Heure de début">' : '<span class="mono">00:00</span>') +
+        ' <span class="muted">→ ' + (to0 === 1440 ? '24:00' : hmOf(to0)) + '</span></b><span class="pt-pa">' + (T.blk ? '<button class="pt-del" data-pt-blkdel aria-label="Supprimer ce bloc">Supprimer</button>' : '') + '<button class="close" data-pt-blkclose aria-label="Fermer">×</button></span></div>';
+      h += '<div class="pt-zs pt-zrow">' + PE.data.zones.slice().sort(function (a, b) { return (b.id === x0[1]) - (a.id === x0[1]); }).map(function (z) { return '<button class="pt-chip' + (z.id === x0[1] ? ' on' : '') + '" data-pt-setz="' + z.id + '"><i style="background:' + zColor(z) + '"></i>' + esc(zName(z)) + '</button>'; }).join('') + '</div>';
+      h += '<button class="act wide pt-tbtn" data-pt-temps>' + (PE.T.temps ? 'Masquer les températures' : 'Températures « ' + esc(zName(zb)) + ' » · ' + zTemp(zb)) + '</button>';
+      if (PE.T.temps) h += '<div class="zrooms">' + (zb.rooms || []).map(function (r, ri) {
+        return '<div class="zr"><span>' + esc(roomName(r.id)) + '</span><div class="stp"><button data-pe-t="' + zb.id + ':' + ri + ':-0.5" aria-label="Moins">−</button><b>' + fmt(r.t, 1) + '°</b><button data-pe-t="' + zb.id + ':' + ri + ':0.5" aria-label="Plus">+</button></div></div>';
+      }).join('') + '</div><p class="pt-warn">Ces températures valent pour tous les blocs « ' + esc(zName(zb)) + ' » de la semaine.</p>';
+      h += '</div>';
+    }
+    return h;
+  }
   function dayBar(d) {
     var start = d * 1440, end = start + 1440, pts = [{ o: start, z: zoneAt(start) }];
     peTT().forEach(function (t) { if (t.o > start && t.o < end) pts.push(t); });
@@ -1631,30 +1733,7 @@
     h += '<input class="pname" id="pe-name" maxlength="30" value="' + esc(D.name) + '" aria-label="Nom du planning">';
     h += '<div class="en-tabs"><button class="' + (PE.tab === 'week' ? 'on' : '') + '" data-ptab="week">Semaine</button><button class="' + (PE.tab === 'zones' ? 'on' : '') + '" data-ptab="zones">Ambiances</button></div>';
     if (PE.tab === 'week') {
-      h += '<div class="days">' + DAYS.map(function (n, i) { return '<button class="' + (i === PE.day ? 'on' : '') + '" data-pday="' + i + '">' + n.slice(0, 3) + '</button>'; }).join('') + '</div>';
-      h += '<div class="en-card">' + dayBar(PE.day);
-      var start = PE.day * 1440, end = start + 1440, rows = '';
-      var first = peTT().filter(function (t) { return t.o === start; })[0];
-      if (!first) {
-        var zc = zoneById(zoneAt(start)) || {};
-        rows += '<div class="slot inh"><span class="sw-c" style="background:' + zColor(zc) + '"></span><span class="slot-t">00:00</span><span class="slot-z">' + esc(zName(zc)) + ' <small>(suite de la veille)</small></span><span></span></div>';
-      }
-      peTT().forEach(function (t, i) {
-        if (t.o < start || t.o >= end) return;
-        var z = zoneById(t.z) || {}, locked = t.o === 0;
-        rows += '<div class="slot"><span class="sw-c" style="background:' + zColor(z) + '"></span>' +
-          (locked ? '<span class="slot-t">00:00</span>' : '<input type="time" step="900" class="slot-time" data-pe-time="' + i + '" value="' + hmOf(t.o) + '" aria-label="Heure">') +
-          '<select class="slot-sel" data-pe-zone="' + i + '" aria-label="Ambiance">' + zoneOptions(t.z) + '</select>' +
-          (locked ? '<span></span>' : '<button class="slot-del" data-pe-del="' + i + '" aria-label="Supprimer la plage">×</button>') + '</div>';
-      });
-      h += '<div class="slots">' + rows + '</div>';
-      h += '<div class="pc-btns"><button class="act" data-pe-add>+ Ajouter une plage</button><button class="act" data-pe-copy>Copier ce jour…</button></div>';
-      if (PE.copy) {
-        h += '<div class="copybox"><small>Copier le ' + DAYS[PE.day].toLowerCase() + ' vers :</small><div class="days">' + DAYS.map(function (n, i) {
-          return i === PE.day ? '' : '<button class="' + (PE.copy.indexOf(i) >= 0 ? 'on' : '') + '" data-pe-cpday="' + i + '">' + n.slice(0, 3) + '</button>';
-        }).join('') + '</div><div class="pc-btns"><button class="act" data-pe-cpall>Tous les jours</button><button class="act primary" data-pe-cpgo>Copier</button></div></div>';
-      }
-      h += '</div><p class="note-q">Chaque plage démarre à l\'heure indiquée et dure jusqu\'à la suivante. Le lundi commence toujours à 00:00.</p>';
+      h += PE.T.open ? ptEditHTML() : ptHomeHTML();
     } else {
       h += D.zones.map(function (z) {
         var open = PE.zopen === z.id, used = peTT().some(function (t) { return t.z === z.id; });
@@ -2631,6 +2710,37 @@
     }
     if (e.target.closest('[data-psave]')) { if (PE && PE.dirty) savePlan(); return; }
     if ((b = e.target.closest('[data-ptab]'))) { PE.tab = b.dataset.ptab; PE.copy = null; return renderPlan(); }
+    // ---- Journées types ----
+    if ((b = e.target.closest('[data-pt-cycle]'))) { var cy = +b.dataset.ptCycle, ids = PE.T.types.map(function (t) { return t.id; }); PE.T.days[cy] = ids[(ids.indexOf(PE.T.days[cy]) + 1) % ids.length]; return ptCompile(); }
+    if ((b = e.target.closest('[data-pt-open]'))) { PE.T.open = +b.dataset.ptOpen; PE.T.blk = null; sheet.scrollTop = 0; return renderPlan(); }
+    if (e.target.closest('[data-pt-home]')) { PE.T.open = null; PE.T.blk = null; sheet.scrollTop = 0; return renderPlan(); }
+    if (e.target.closest('[data-pt-new]')) {
+      if (PE.T.types.length >= 7) return toast('7 journées types au maximum', true);
+      var src0 = ptType(PE.T.days[0]), nt0 = { id: PE.T.nid++, name: 'Nouvelle journée', col: PT_COL[PE.T.types.length % PT_COL.length], sl: JSON.parse(JSON.stringify(src0.sl)) };
+      PE.T.types.push(nt0); PE.T.open = nt0.id; PE.T.blk = null; sheet.scrollTop = 0; return renderPlan();
+    }
+    if ((b = e.target.closest('[data-pt-del]'))) {
+      if (!confirmed(b)) return;
+      PE.T.types = PE.T.types.filter(function (t) { return t.id !== PE.T.open; }); PE.T.open = null; return renderPlan();
+    }
+    if ((b = e.target.closest('[data-pt-zone]'))) { PE.tab = 'zones'; PE.zopen = +b.dataset.ptZone; return renderPlan(); }
+    if (e.target.closest('[data-pt-blkclose]')) { PE.T.blk = null; PE.T.temps = false; return renderPlan(); }
+    if (e.target.closest('[data-pt-temps]')) { PE.T.temps = !PE.T.temps; return renderPlan(); }
+    if (e.target.closest('[data-pt-blkdel]')) { var tb = ptType(PE.T.open); if (tb && PE.T.blk) { tb.sl.splice(PE.T.blk, 1); PE.T.blk = null; return ptCompile(); } return; }
+    if ((b = e.target.closest('[data-pt-setz]'))) { var tz = ptType(PE.T.open); if (tz && tz.sl[PE.T.blk]) { tz.sl[PE.T.blk][1] = +b.dataset.ptSetz; return ptCompile(); } return; }
+    if (e.target.closest('[data-pt-add]')) {
+      // coupe en deux le bloc choisi (ou le plus long), au quart d'heure
+      var ta = ptType(PE.T.open); if (!ta) return;
+      var bi = PE.T.blk != null ? PE.T.blk : 0, best = -1;
+      if (PE.T.blk == null) ta.sl.forEach(function (x, i) { var len = (i + 1 < ta.sl.length ? ta.sl[i + 1][0] : 1440) - x[0]; if (len > best) { best = len; bi = i; } });
+      var a0 = ta.sl[bi][0], a1 = bi + 1 < ta.sl.length ? ta.sl[bi + 1][0] : 1440, mid = Math.round((a0 + a1) / 2 / 15) * 15;
+      if (a1 - a0 < 30) return toast('Ce bloc est trop court pour être coupé', true);
+      var conf = PE.data.zones.filter(function (z) { return z.type === 0; })[0] || PE.data.zones[0];
+      ta.sl.splice(bi + 1, 0, [mid, ta.sl[bi][1] === conf.id ? (PE.data.zones.filter(function (z) { return z.type === 1; })[0] || conf).id : conf.id]);
+      PE.T.blk = bi + 1; return ptCompile();
+    }
+    if (e.target.closest('[data-pt-drag]')) return; // poignée : géré par le glisser
+    if ((b = e.target.closest('[data-pt-blk]'))) { var nb = +b.dataset.ptBlk; PE.T.blk = PE.T.blk === nb ? null : nb; PE.T.temps = false; return renderPlan(); }
     if ((b = e.target.closest('[data-pday]'))) { PE.day = +b.dataset.pday; PE.copy = null; return renderPlan(); }
     if ((b = e.target.closest('[data-pe-del]'))) { peTT().splice(+b.dataset.peDel, 1); peSort(); return peChanged(); }
     if (e.target.closest('[data-pe-add]')) {
@@ -2730,6 +2840,7 @@
   sheet.addEventListener('change', function (e) {
     if (!PE) return;
     var t = e.target;
+    if (t.id === 'pt-name' && PE.T) { var ty = ptType(PE.T.open), tn = t.value.trim().slice(0, 24); if (ty && tn && tn !== ty.name) { ty.name = tn; ptSaveNames(); renderPlan(); } return; }
     if (t.id === 'pe-name') { var nv = t.value.trim().slice(0, 30); if (nv && nv !== PE.data.name) { PE.data.name = nv; peChanged(); } return; }
     if (t.hasAttribute('data-pe-zname')) { var zn = zoneById(+t.dataset.peZname); if (zn && t.value.trim()) { zn.name = t.value.trim().slice(0, 30); peChanged(); } return; }
     if (t.hasAttribute('data-pe-zone')) { peTT()[+t.dataset.peZone].z = +t.value; return peChanged(); }
@@ -2744,6 +2855,35 @@
     peTT()[i].o = o; peSort(); peChanged();
   }
   sheet.addEventListener('focusout', function (e) { var t = e.target; if (t && t.hasAttribute && t.hasAttribute('data-pe-time')) setTimeout(function () { peTimeCommit(t); }, 0); });
+  // Heure de début d'un bloc (journées types) : appliquée à la fermeture de la roue
+  sheet.addEventListener('focusout', function (e) {
+    var t = e.target; if (!t || !t.hasAttribute || !t.hasAttribute('data-pt-time') || !PE || !PE.T) return;
+    setTimeout(function () {
+      var ty = ptType(PE.T.open), i = +t.dataset.ptTime, m = /^([0-9][0-9]):([0-9][0-9])$/.exec(t.value || '');
+      if (!ty || !ty.sl[i] || !m) return renderPlan();
+      var o = (+m[1]) * 60 + (+m[2]); if (o === ty.sl[i][0]) return;
+      if (o === 0 || ty.sl.some(function (x, j) { return j !== i && x[0] === o; })) { toast('Un bloc commence déjà à cette heure', true); return renderPlan(); }
+      var z = ty.sl[i][1]; ty.sl[i][0] = o; ty.sl.sort(function (a, b) { return a[0] - b[0]; });
+      ty.sl.forEach(function (x, j) { if (x[0] === o && x[1] === z) PE.T.blk = j; }); ptCompile();
+    }, 0);
+  });
+  // Poignée d'un bloc : glisser verticalement change l'heure de début (par quart d'heure)
+  var ptDrag = null;
+  sheet.addEventListener('pointerdown', function (e) {
+    var hd = e.target.closest('[data-pt-drag]'); if (!hd || !PE || !PE.T) return;
+    var ty = ptType(PE.T.open), i = +hd.dataset.ptDrag; if (!ty || !ty.sl[i]) return;
+    e.preventDefault(); ptDrag = { i: i, y0: e.clientY, m0: ty.sl[i][0], moved: false }; PE.T.blk = i;
+  });
+  sheet.addEventListener('pointermove', function (e) {
+    if (!ptDrag) return; e.preventDefault();
+    var ty = ptType(PE.T.open); if (!ty) return;
+    var i = ptDrag.i, lo = ty.sl[i - 1][0] + 15, hi = (i + 1 < ty.sl.length ? ty.sl[i + 1][0] : 1440) - 15;
+    var m = Math.max(lo, Math.min(hi, Math.round((ptDrag.m0 + (e.clientY - ptDrag.y0) / PT_PX) / 15) * 15));
+    if (m !== ty.sl[i][0]) { ty.sl[i][0] = m; ptDrag.moved = true; if (!ptDrag.raf) ptDrag.raf = requestAnimationFrame(function () { if (ptDrag) ptDrag.raf = 0; renderPlan(); }); }
+  }, { passive: false });
+  function ptDragEnd() { if (!ptDrag) return; var mv = ptDrag.moved; ptDrag = null; if (mv) ptCompile(); else renderPlan(); }
+  sheet.addEventListener('pointerup', ptDragEnd);
+  sheet.addEventListener('pointercancel', ptDragEnd);
   // ---------- Barre d'onglets ----------
   tabsEl.addEventListener('click', function (e) {
     var b = e.target.closest('[data-tab]'); if (!b || !CFG) return;
