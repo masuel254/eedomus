@@ -1,7 +1,18 @@
 {
-  "version": "2.25.2",
+  "version": "2.26.0",
   "date": "2026-11-22",
   "releases": [
+    {
+      "version": "2.26.0",
+      "date": "2026-11-22",
+      "time": "11:31",
+      "title": "Température dehors sur les graphiques",
+      "changes": [
+        "Sous le graphique d’une pièce, un bandeau « Dehors » montre la température extérieure sur la même période (6H, 1J, 1S, 1M, 1A)",
+        "En glissant le doigt sur le graphique, la case Dehors donne la température extérieure à ce moment-là",
+        "Historique : sonde de la pergola jusqu’au 22/11, météo locale ensuite ; sur 1A, une moyenne par jour"
+      ]
+    },
     {
       "version": "2.25.2",
       "date": "2026-11-22",
@@ -1041,5 +1052,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "11:25"
+  "time": "11:31"
 }

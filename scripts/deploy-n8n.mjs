@@ -493,19 +493,48 @@ async function meteo(force) {
   M.at = Date.now();
   return M.data;
 }
-// Températures horaires déjà passées (7 jours), pour la courbe « extérieur » : source Météo-France via Open-Meteo
-async function meteoHist() {
-  const M = SD.meteo = SD.meteo || {};
-  if (M.hist && M.histAt > Date.now() - 1800000) return M.hist;
-  let H = CFG.meteoPos ? {} : await ntHomes();
-  const c = CFG.meteoPos ? [CFG.meteoPos.lon, CFG.meteoPos.lat] : H.heat && H.heat.coord;
-  if (!c) throw fail(503, 'no_location');
-  const j = await helpers.httpRequest({ method: 'GET', url: 'https://api.open-meteo.com/v1/forecast?latitude=' + c[1] + '&longitude=' + c[0] + '&timezone=Europe%2FParis&past_days=7&forecast_days=1&hourly=temperature_2m', json: true, timeout: 15000 });
-  const P = parisParts(), nowH = P.year + '-' + P.month + '-' + P.day + 'T' + P.hour, hh = j.hourly || {};
-  const pts = [];
-  (hh.time || []).forEach((t, i) => { if (hh.temperature_2m[i] != null && t.slice(0, 13) <= nowH) pts.push([t.slice(0, 10) + ' ' + t.slice(11, 16) + ':00', Math.round(hh.temperature_2m[i] * 10) / 10]); });
-  M.hist = { ok: true, points: pts }; M.histAt = Date.now();
-  return M.hist;
+// Historique de la température extérieure sur une période (heure de Paris, « AAAA-MM-JJ HH:MM ») :
+// sonde de la pergola (eedomus) jusqu'au 22/11/2026 11:30, puis la météo locale (Météo-France via Open-Meteo).
+// Au-delà de 40 jours : une moyenne par jour, pour garder une courbe lisible.
+const OUT_SENSOR = '3227865', OUT_CUT = '2026-11-22 11:30';
+async function outHist(from, to) {
+  const ok = (v) => typeof v === 'string' && /^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}$/.test(v);
+  if (!ok(from) || !ok(to) || from >= to) throw fail(400, 'bad_range');
+  SD.outh = SD.outh || {};
+  const key = from + '|' + to, c = SD.outh[key];
+  if (c && c.at > Date.now() - (to < OUT_CUT ? 86400000 : 900000)) return c.data;
+  let pts = [];
+  if (from < OUT_CUT) {
+    const r = await eedomus('get', 'action=periph.history&periph_id=' + OUT_SENSOR + '&start_date=' + encodeURIComponent(from + ':00') + '&end_date=' + encodeURIComponent((to < OUT_CUT ? to : OUT_CUT) + ':00'));
+    const list = r.success === 1 ? ((r.body && (r.body.history || r.body)) || []) : [];
+    (Array.isArray(list) ? list : []).forEach((x) => { const v = Number(x[0]), d = String(x[1] || '').slice(0, 16); if (d && !isNaN(v) && d < OUT_CUT) pts.push([d, v]); });
+  }
+  if (to > OUT_CUT) {
+    let H = CFG.meteoPos ? {} : await ntHomes();
+    const co = CFG.meteoPos ? [CFG.meteoPos.lon, CFG.meteoPos.lat] : H.heat && H.heat.coord;
+    if (co) {
+      const P = parisParts(), today = P.year + '-' + P.month + '-' + P.day, nowS = today + ' ' + P.hour + ':' + P.minute;
+      const a = (from > OUT_CUT ? from : OUT_CUT).slice(0, 10), b = to.slice(0, 10) < today ? to.slice(0, 10) : today;
+      // moins de 80 jours : prévisions récentes ; plus ancien : archive des prévisions
+      const recent = (Date.now() - new Date(a + 'T12:00:00Z').getTime()) < 80 * 86400000;
+      const host = recent ? 'https://api.open-meteo.com' : 'https://historical-forecast-api.open-meteo.com';
+      const j = await helpers.httpRequest({ method: 'GET', url: host + '/v1/forecast?latitude=' + co[1] + '&longitude=' + co[0] + '&timezone=Europe%2FParis&start_date=' + a + '&end_date=' + b + '&hourly=temperature_2m', json: true, timeout: 20000 });
+      const hh = j.hourly || {};
+      (hh.time || []).forEach((t, i) => { const d = t.slice(0, 10) + ' ' + t.slice(11, 16), v = hh.temperature_2m[i]; if (v != null && d >= OUT_CUT && d >= from && d <= to && d <= nowS) pts.push([d, Math.round(v * 10) / 10]); });
+    }
+  }
+  pts.sort((x, y) => (x[0] < y[0] ? -1 : 1));
+  const days = (new Date(to.slice(0, 10) + 'T12:00:00Z') - new Date(from.slice(0, 10) + 'T12:00:00Z')) / 86400000;
+  if (days > 40) {
+    const g = {}, order = [];
+    pts.forEach((p) => { const k = p[0].slice(0, 10); if (!g[k]) { g[k] = [0, 0]; order.push(k); } g[k][0] += p[1]; g[k][1]++; });
+    pts = order.map((k) => [k + ' 12:00', Math.round(g[k][0] / g[k][1] * 10) / 10]);
+  }
+  const data = { ok: true, daily: days > 40, points: pts };
+  SD.outh[key] = { at: Date.now(), data };
+  const ks = Object.keys(SD.outh).sort((x, y) => SD.outh[y].at - SD.outh[x].at);
+  ks.slice(12).forEach((k) => { delete SD.outh[k]; });
+  return data;
 }
 // Minuterie : prévisions rafraîchies toutes les 15 min ; notification une fois par épisode de rafales (≥ 50 km/h)
 async function meteoWatch() {
@@ -1558,7 +1587,7 @@ try {
   }
   // Correction manuelle de l'état de la porte de garage (après vérification sur la caméra)
   if (body.action === 'meteo') return reply(200, await meteo(!!body.force));
-  if (body.action === 'meteo.hist') return reply(200, await meteoHist());
+  if (body.action === 'out.hist') return reply(200, await outHist(body.from, body.to));
   if (body.action === 'garage.mark') {
     if (body.state !== 'open' && body.state !== 'closed') return reply(403, { ok: false, error: 'not_allowed' });
     garageSet(body.state, 'manuel');

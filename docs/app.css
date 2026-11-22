@@ -563,6 +563,13 @@ svg.gsvg { display: block; width: 100%; height: auto; user-select: none; -webkit
 .g-cur { stroke: #8B94A1; stroke-width: 1; }
 .g-dt { fill: #5B8CFF; stroke: #fff; stroke-width: 1.5; }
 .g-dsp { fill: #FF7A7A; stroke: #fff; stroke-width: 1.5; }
+/* Bandeau « Dehors » sous le graphique d'une pièce (même axe des heures, échelle propre) */
+.g-sep { stroke: var(--ln); stroke-width: 1; }
+.g-ot { fill: var(--amber); font-size: 11px; font-weight: 700; font-family: var(--f-ui); }
+.g-om { fill: var(--mu); font-size: 10px; font-family: var(--f-mono); }
+.g-o { fill: none; stroke: var(--amber); stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
+.g-oa { fill: var(--amber); opacity: .12; }
+.g-do { fill: var(--amber); stroke: #fff; stroke-width: 1.5; }
 .rchips.gch { width: 100%; margin: 12px 0 0; padding: 0; flex-wrap: wrap; overflow: visible; }
 
 /* Caméras : tout en direct */

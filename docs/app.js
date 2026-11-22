@@ -768,7 +768,7 @@
     var shut = [], allRooms = [];
     CFG.groups.forEach(function (g) { g.rooms.forEach(function (rm) { allRooms.push(rm); rm.items.forEach(function (it) { if (it.type === 'shutter') shut.push(it); }); }); });
     var up = shut.filter(function (i) { return shutterPos(i.id) === 'up'; }).length;
-    loadHistE(3557564, 168); loadHistE(3227865, 168); loadEnergyToday();
+    loadHistE(3557564, 168); loadEnergyToday();
     var ex = IQ && IQ.exo, ph = ex && ex.ph != null ? ex.ph : num(3557564), water = ex && ex.water != null ? ex.water : num(3557562);
     var et = energyToday(), hi = new Date().getHours();
     h += '<div class="lbl">Favoris</div><div class="fav">' +
@@ -1002,8 +1002,13 @@
       '<div class="gtile"><svg class="gti" style="color:#5B8CFF"><use href="#thermo"/></svg><b>' + (c ? fmt(c[1], 1) + '°' : '—') + '</b><small>Pièce</small></div>' +
       '<div class="gtile"><svg class="gti" viewBox="0 0 24 24" style="color:#FF7A7A" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/></svg><b>' + (c && c[2] != null ? fmt(c[2], 1) + '°' : '—') + '</b><small>Consigne</small></div>' +
       '<button class="gtile w' + (heatOn ? ' on' : '') + '" data-heatlog><svg class="gti"><use href="#flame"/></svg><b>' + (c ? (heatOn ? 'Chauffe' : 'Repos') : '—') + '</b><small>' + (c && !c[4] && c[3] > 0 ? 'Chauffage ' + c[3] + ' %' : 'Chauffage') + ' ›</small></button>' +
-      (function () { loadMeteo(false); var n = METEO && METEO.now; return '<div class="gtile"><span class="gti">' + (n && n.t != null ? wIcon(n.code, n.day, 20) : '') + '</span><b>' + (n && n.t != null ? fmt(n.t, 1) + '°' : '—') + '</b><small>Dehors</small></div>'; })() + '</div>';
-    h += '<div class="gwrap">' + (GR.loading && !d ? '<p class="muted">Chargement…</p>' : GR.error && !d ? '<p class="muted">Netatmo ne répond pas, réessaie.</p>' : graphSVG(d, GR.idx)) + '</div>';
+      (function () {
+        // curseur posé sur un moment passé : la température dehors à ce moment-là ; sinon la météo en direct
+        loadMeteo(false); var n = METEO && METEO.now, o = null;
+        if (c && GR.idx != null && !c[4] && d) { var rg = outRange(d.begin, grEnd(d)), oc = OUTH[rg.from + '|' + rg.to]; o = oc && outAt(oc.pts, c[0]); if (o && Math.abs(o[0] - c[0]) > (grEnd(d) - d.begin) / 20 + 3600) o = null; }
+        if (o) return '<div class="gtile"><svg class="gti" style="color:#F4B860"><use href="#thermo"/></svg><b>' + fmt(o[1], 1) + '°</b><small>Dehors</small></div>';
+        return '<div class="gtile"><span class="gti">' + (n && n.t != null ? wIcon(n.code, n.day, 20) : '') + '</span><b>' + (n && n.t != null ? fmt(n.t, 1) + '°' : '—') + '</b><small>Dehors</small></div>'; })() + '</div>';
+    h += '<div class="gwrap">' + (GR.loading && !d ? '<p class="muted">Chargement…</p>' : GR.error && !d ? '<p class="muted">Netatmo ne répond pas, réessaie.</p>' : graphSVG(d, GR.idx) + outBandSVG(d, GR.idx)) + '</div>';
     var ht = d && grHeatTime(d), per = { '6h': 'ces 6 heures', '1d': 'ces 24 heures', '1w': 'cette semaine', '1m': 'ce mois-ci', '1y': 'cette année' }[GR.range];
     if (GR.end) per = 'cette période';
     // Résumé de la période : chauffe à gauche, température moyenne de la pièce à droite
@@ -1206,23 +1211,53 @@
     h += '<p class="note-q">Prévisions Météo-France (modèles AROME et ARPEGE) via Open-Meteo, pour un carré d’environ 1 km autour de la commune. Une notification te prévient quand des rafales d’au moins 50 km/h sont prévues dans les 36 h.</p>';
     var keep = sheet.scrollTop; sheet.innerHTML = '<div class="sh-in">' + h + '</div>'; sheet.scrollTop = keep;
   }
-  // Température extérieure sur 7 jours : sondes de la pergola jusqu'au 22/11/2026 11:30, ensuite la météo locale
-  var OUT_CUT = new Date(2026, 10, 22, 11, 30).getTime(), HISTM = null, histmAt = 0;
-  try { HISTM = JSON.parse(localStorage.getItem('maison-outhist') || 'null'); } catch (e) {}
-  function loadOutHist() {
-    if (Date.now() - histmAt < 600000) return; histmAt = Date.now();
-    api({ action: 'meteo.hist' }).then(function (j) { HISTM = j.points || []; try { localStorage.setItem('maison-outhist', JSON.stringify(HISTM)); } catch (e) {} if (!busy()) render(); }).catch(function () {});
+  // ---------- Température extérieure (historique) ----------
+  // Le serveur assemble la sonde de la pergola (jusqu'au 22/11/2026) puis la météo locale ; moyenne par jour au-delà de 40 jours.
+  // Gardé sur l'iPhone : affiché tout de suite, redemandé au plus toutes les 10 min (les périodes passées ne changent plus).
+  var OUTH = {}; try { OUTH = JSON.parse(localStorage.getItem('maison-outh') || '{}') || {}; } catch (e) {}
+  function ltStr(ms) { var d = new Date(ms), p = function (v) { return (v < 10 ? '0' : '') + v; }; return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()); }
+  function outRange(begSec, endSec) { var st = 600000; return { from: ltStr(Math.floor(begSec * 1000 / st) * st), to: ltStr(Math.floor(endSec * 1000 / st) * st) }; }
+  function outGet(rg, onNew) {
+    var k = rg.from + '|' + rg.to, c = OUTH[k];
+    if (!c || (!c.busy && Date.now() - c.at > (c.past ? 864e5 : 600000))) {
+      OUTH[k] = { at: c ? c.at : 0, pts: c ? c.pts : null, busy: true };
+      api({ action: 'out.hist', from: rg.from, to: rg.to }).then(function (j) {
+        OUTH[k] = { at: Date.now(), past: rg.to < ltStr(Date.now() - 3600000), pts: (j.points || []).map(function (p) { return [new Date(p[0].replace(' ', 'T') + ':00').getTime() / 1000, p[1]]; }) };
+        var ks = Object.keys(OUTH).sort(function (a, b) { return OUTH[b].at - OUTH[a].at; }); ks.slice(16).forEach(function (x) { delete OUTH[x]; });
+        try { localStorage.setItem('maison-outh', JSON.stringify(OUTH)); } catch (e) {}
+        if (onNew) onNew();
+      }).catch(function () { OUTH[k] = { at: Date.now() - 480000, pts: c ? c.pts : null }; });
+    }
+    return OUTH[k].pts;
   }
-  function toMs(p) { return [new Date(String(p[0]).replace(' ', 'T')).getTime(), p[1]]; }
   function outTempHTML() {
-    loadOutHist();
-    var h = HISTE['3227865|168'], a = h && h.points ? h.points.map(toMs).filter(function (p) { return p[1] != null && p[0] < OUT_CUT; }) : [];
-    var b = HISTM ? HISTM.map(toMs).filter(function (p) { return p[1] != null && p[0] >= OUT_CUT; }) : [], pts = a.concat(b);
-    var n = METEO && METEO.now, cur = n && n.t != null ? n.t : (pts.length ? pts[pts.length - 1][1] : null), mn = null, mx = null;
-    pts.forEach(function (p) { if (mn == null || p[1] < mn) mn = p[1]; if (mx == null || p[1] > mx) mx = p[1]; });
+    var now = Date.now() / 1000, pts = outGet(outRange(now - 7 * 86400, now), function () { if (!busy() && TAB === 'more') render(); });
+    var n = METEO && METEO.now, cur = n && n.t != null ? n.t : (pts && pts.length ? pts[pts.length - 1][1] : null), mn = null, mx = null;
+    (pts || []).forEach(function (p) { if (mn == null || p[1] < mn) mn = p[1]; if (mx == null || p[1] > mx) mx = p[1]; });
     return '<div class="card2"><div class="row-hd"><b>Température extérieure · 7 jours</b><span class="mono">' + (cur != null ? fmt(cur, 1) + '°' : '—') + '</span></div>' +
-      spark(pts.length > 1 ? pts : (HISTE['3227865|168'] && HISTM ? pts : null), { w: 320, h: 80, color: '#F4B860', axis: true, zoom: true, labels: ['−7 j', '−5 j', '−3 j', '−1 j', 'auj.'] }) +
-      (mn != null ? '<p class="note-q">Mini ' + fmt(mn, 1) + '° · maxi ' + fmt(mx, 1) + '° sur la semaine · sondes jusqu’au 22/11, météo locale ensuite</p>' : '') + '</div>';
+      spark(pts, { w: 320, h: 80, color: '#F4B860', axis: true, zoom: true, labels: ['−7 j', '−5 j', '−3 j', '−1 j', 'auj.'] }) +
+      (mn != null ? '<p class="note-q">Mini ' + fmt(mn, 1) + '° · maxi ' + fmt(mx, 1) + '° sur la semaine</p>' : '') + '</div>';
+  }
+  // Bandeau « Dehors » sous le graphique d'une pièce : même axe des heures (W 340, marges 30 et 8), échelle propre
+  function outAt(pts, t) { var b = null, bd = Infinity; (pts || []).forEach(function (p) { var d = Math.abs(p[0] - t); if (d < bd) { bd = d; b = p; } }); return b; }
+  function outBandSVG(d, idx) {
+    if (!d) return '';
+    var x0 = d.begin, x1 = grEnd(d), pts = outGet(outRange(x0, x1), function () { if (GR && sheet.dataset.view === 'graph' && !sheet.hidden) renderGraph(); });
+    var W = 340, H = 84, L = 30, R = 8, T = 22, B = 8;
+    var s = '<svg class="gsvg" viewBox="0 0 ' + W + ' ' + H + '" data-gsvg><line x1="' + L + '" x2="' + (W - R) + '" y1="1" y2="1" class="g-sep"/><text x="' + L + '" y="15" class="g-ot">Dehors</text>';
+    pts = (pts || []).filter(function (p) { return p[0] >= x0 - 3600 && p[0] <= x1 + 60; });
+    if (pts.length < 2) return s + '<text x="' + ((L + W - R) / 2) + '" y="52" class="g-om" text-anchor="middle">' + (OUTH[outRange(x0, x1).from + '|' + outRange(x0, x1).to] && !OUTH[outRange(x0, x1).from + '|' + outRange(x0, x1).to].busy ? 'Pas de mesure extérieure sur cette période' : 'Chargement…') + '</text></svg>';
+    var mn = Infinity, mx = -Infinity; pts.forEach(function (p) { if (p[1] < mn) mn = p[1]; if (p[1] > mx) mx = p[1]; });
+    var lo = Math.floor(mn), hi = Math.ceil(mx); if (hi - lo < 2) { lo = Math.floor((mn + mx) / 2) - 1; hi = lo + 2; }
+    var X = function (t) { return L + (Math.max(x0, Math.min(x1, t)) - x0) / (x1 - x0) * (W - L - R); }, Y = function (v) { return T + (1 - (v - lo) / (hi - lo)) * (H - T - B); };
+    s += '<text x="' + (W - R) + '" y="15" class="g-om" text-anchor="end">min ' + fmt(mn, 1) + '° · max ' + fmt(mx, 1) + '°</text>';
+    [lo, hi].forEach(function (v) { s += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + Y(v).toFixed(1) + '" y2="' + Y(v).toFixed(1) + '" class="g-grid"/><text x="' + (L - 6) + '" y="' + (Y(v) + 3).toFixed(1) + '" class="g-yl" text-anchor="end">' + v + '</text>'; });
+    var dp = pts.map(function (p, i) { return (i ? 'L' : 'M') + X(p[0]).toFixed(1) + ' ' + Y(p[1]).toFixed(1); }).join(' ');
+    s += '<path d="' + dp + ' L' + X(pts[pts.length - 1][0]).toFixed(1) + ' ' + (H - B) + ' L' + X(pts[0][0]).toFixed(1) + ' ' + (H - B) + ' Z" class="g-oa"/><path d="' + dp + '" class="g-o"/>';
+    var rows = grRows(d), c = rows[idx == null ? rows.length - 1 : idx], o = c ? outAt(pts, c[0]) : null;
+    if (c) s += '<line x1="' + X(c[0]).toFixed(1) + '" x2="' + X(c[0]).toFixed(1) + '" y1="' + T + '" y2="' + (H - B) + '" class="g-cur"/>';
+    if (o && Math.abs(o[0] - c[0]) < (x1 - x0) / 20 + 3600) s += '<circle cx="' + X(c[0]).toFixed(1) + '" cy="' + Y(o[1]).toFixed(1) + '" r="4.5" class="g-do"/>';
+    return s + '</svg>';
   }
   // ---------- Onglet Plus (piscine, énergie, météo, réglages) ----------
   function moreHTML() {
@@ -2620,7 +2655,7 @@
     if (TAB === 'cams') liveCam = null;
     TAB = t; store.set('maison.tab', TAB); SLIDE = null; app.scrollTop = 0;
     if (t === 'cams') { loadCams(false); loadImou(false); }
-    if (t === 'more') { refreshIq(true); refreshTuya(true); loadEnergyToday(); loadHistE(3557564, 168); loadHistE(3227865, 168); }
+    if (t === 'more') { refreshIq(true); refreshTuya(true); loadEnergyToday(); loadHistE(3557564, 168); }
     if (t === 'climate') { var r = ntCurrentRoom(); if (r) loadRoomHist(r.id); }
     if (t === 'alarm') refresh();
     render();
@@ -2692,7 +2727,7 @@
     if (!token) return setup();
     render(); refresh(); refreshHeating(); refreshTuya(true); refreshIq(false);
     if (TAB === 'cams') { loadCams(false); loadImou(false); }
-    if (TAB === 'more') { loadEnergyToday(); loadHistE(3557564, 168); loadHistE(3227865, 168); }
+    if (TAB === 'more') { loadEnergyToday(); loadHistE(3557564, 168); }
     setInterval(function () { if (!document.hidden) refreshIq(false); }, 60000);
     setInterval(function () { if (!document.hidden) refresh(); }, 10000);
     setInterval(function () { if (!document.hidden && GAR && GAR.state === 'unknown') loadLogs('doors', true); }, 15000);
