@@ -1,7 +1,7 @@
-// ---------------- Notifications iPhone (Web Push, sans contenu chiffré) ----------------
-// Le nœud Code de n8n interdit le module crypto : la signature ES256 (ECDSA P-256 + SHA-256)
-// exigée par Apple pour les notifications est donc écrite ici en JavaScript pur (BigInt).
-// Le message lui-même n'est pas envoyé dans la notification : l'iPhone vient le chercher (action push.pending).
+// ---------------- Notifications iPhone (Web Push) ----------------
+// Le nœud Code de n8n interdit le module crypto : la signature ES256 (ECDSA P-256 + SHA-256) exigée par Apple
+// et le chiffrement du message (RFC 8291) sont donc écrits ici en JavaScript pur (BigInt).
+// Le message voyage chiffré dans la notification ; les anciennes inscriptions (sans clé) viennent le chercher (push.pending).
 const EC_P = 0xffffffff00000001000000000000000000000000ffffffffffffffffffffffffn;
 const EC_N = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551n;
 const EC_G = [0x6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296n, 0x4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5n];
@@ -123,6 +123,7 @@ function aesGcm(key, iv, data) {
 // Octets imprévisibles : HMAC de la clé privée du serveur (secrète) sur l'heure, un compteur et Math.random
 let wpSeq = 0;
 function wpRandom(secret, n) { return hmacBytes(secret, utf8(Date.now() + ':' + (wpSeq++) + ':' + Math.random() + ':' + Math.random())).slice(0, n); }
+function b64std(bytes) { return Buffer.from(bytes).toString('base64'); }
 function webPushEncrypt(plain, p256dh, auth, secret) {
   const ua = b64urlDecode(p256dh), au = b64urlDecode(auth);
   let x = 0n; while (x <= 0n || x >= EC_N) x = bytesToBig(wpRandom(secret, 32)) % EC_N;

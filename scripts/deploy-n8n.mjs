@@ -134,7 +134,10 @@ const req = $input.first().json;
 let body = req.body;
 if (typeof body === 'string') { try { body = JSON.parse(body); } catch (e) { body = {}; } }
 body = body || {};
-const reply = (status, data) => [{ json: { status, data } }];
+// Notifications chiffrées à envoyer : le code de n8n ne sait pas envoyer d'octets bruts (ils deviennent du texte),
+// elles sortent donc comme fichiers binaires vers le nœud « Envoi notification » (HTTP Request), qui les envoie tels quels.
+const OUT_PUSH = [];
+const reply = (status, data) => [{ json: { status, data } }].concat(OUT_PUSH);
 // Déclenchement par la minuterie (relevés d'énergie) : pas de requête HTTP, donc ni corps ni en-têtes.
 const isCron = req.body === undefined && req.headers === undefined;
 if (!isCron && body.action !== 'push.pending' && (!body.token || !CFG.tokens.includes(body.token))) return reply(401, { ok: false, error: 'unauthorized' });
@@ -817,17 +820,20 @@ async function pushNotify(item, onlyKey) {
     try {
       // Avec la clé de l'iPhone : le texte voyage chiffré DANS la notification (format « déclaratif » d'Apple, affiché même
       // si l'appli ne répond pas). Sans clé (ancienne inscription) : notification vide, l'iPhone vient chercher le texte.
-      let body = '', hd = { TTL: '3600', Urgency: 'high', Authorization: 'vapid t=' + vapidJwt(s.endpoint, CFG.push) + ', k=' + CFG.push.pub };
+      let hd = { TTL: '3600', Urgency: 'high', Authorization: 'vapid t=' + vapidJwt(s.endpoint, CFG.push) + ', k=' + CFG.push.pub };
       if (s.keys && s.keys.p256dh && s.keys.auth) {
         const tg = it.tag || 'maison', path = tg === 'garage' ? '#logs=doors' : /^water/.test(tg) ? '#water' : tg === 'meteo' ? '#meteo' : tg === 'smoke' ? '#smoke' : '#notifs';
         const n = { title: it.title || 'Maison', body: it.body || '', navigate: (s.app || 'https://localhost/') + path, tag: tg, silent: false };
         if (it.badge != null) n.app_badge = String(it.badge);
-        const plain = utf8(JSON.stringify({ web_push: 8030, notification: n, mutable: true, item: it }));
-        body = Buffer.from(webPushEncrypt(plain, s.keys.p256dh, s.keys.auth, b64urlDecode(CFG.push.d)));
-        hd['Content-Encoding'] = 'aes128gcm'; hd['Content-Type'] = 'application/octet-stream'; hd['Content-Length'] = String(body.length);
+        // format classique (iOS 16.4+) : un JSON simple, lu et affiché par l'appli ; le format « déclaratif » d'Apple était ignoré
+        const plain = utf8(JSON.stringify(SD.push.fmt === 'decl' ? { web_push: 8030, notification: n } : { maison: 1, item: it }));
+        const enc = webPushEncrypt(plain, s.keys.p256dh, s.keys.auth, b64urlDecode(CFG.push.d));
+        hd['Content-Encoding'] = 'aes128gcm';
+        OUT_PUSH.push({ json: { pushOut: { url: s.endpoint, headers: hd } }, binary: { data: { data: b64std(enc), mimeType: 'application/octet-stream', fileName: 'push.bin' } } });
+        s.q = s.q.filter((x) => x !== it); s.lastOk = Date.now(); s.lastErr = null; sent++;
+        continue;
       } else hd['Content-Length'] = '0';
-      const r = await helpers.httpRequest({ method: 'POST', url: s.endpoint, body: body, json: false, returnFullResponse: true, ignoreHttpStatusErrors: true, timeout: 10000, headers: hd });
-      if (body && r.statusCode >= 200 && r.statusCode < 300) s.q = s.q.filter((x) => x !== it); // déjà livré dans la notification
+      const r = await helpers.httpRequest({ method: 'POST', url: s.endpoint, body: '', json: false, returnFullResponse: true, ignoreHttpStatusErrors: true, timeout: 10000, headers: hd });
       const st = r.statusCode;
       if (st === 404 || st === 410) delete SD.push.subs[k];
       else if (st >= 200 && st < 300) { sent++; s.lastOk = Date.now(); s.lastErr = null; }
@@ -1465,7 +1471,7 @@ try {
     try { await meteoWatch(); } catch (e) {}
     try { await smokeWatch(); } catch (e) {}
     let gu = null; try { gu = await garageCamDue(); } catch (e) {}
-    return gu ? [{ json: { garageUrl: gu } }] : []; // aucune réponse HTTP à envoyer
+    return (gu ? [{ json: { garageUrl: gu } }] : []).concat(OUT_PUSH); // aucune réponse HTTP à envoyer
   }
   if (body.action === 'ping') return reply(200, { ok: true });
   // ---- Eau : état du compteur et des fuites ----
@@ -1562,6 +1568,13 @@ try {
     }
     if (body.action === 'push.unsub' && k) delete SD.push.subs[k];
     if (body.action === 'push.cfg') { const d = Number(body.delay); if ([1, 2, 3, 5, 10, 15, 20, 30, 45, 60].includes(d)) SD.push.delay = d; }
+    // Test lancé depuis le serveur (avec jeton) : une notification de test vers tous les iPhone inscrits
+    if (body.action === 'push.testall') {
+      if (!body.token || !CFG.tokens.includes(body.token)) return reply(401, { ok: false, error: 'unauthorized' });
+      if (body.fmt === 'decl' || body.fmt === 'plain') SD.push.fmt = body.fmt === 'decl' ? 'decl' : null;
+      const n = await pushNotify({ tag: 'test', title: 'Maison', body: String(body.text || 'Test des notifications').slice(0, 120), badge: null });
+      return reply(200, { ok: true, sent: n });
+    }
     if (body.action === 'push.test') { const n = k && SD.push.subs[k] ? await pushNotify({ tag: 'test', title: 'Maison', body: 'Les notifications fonctionnent sur cet iPhone 👍', badge: null }, k) : 0; if (!n) return reply(200, { ok: false, error: (k && SD.push.subs[k] && SD.push.subs[k].lastErr) || 'not_subscribed' }); }
     return reply(200, { ok: true, on: !!(k && SD.push.subs[k]), keys: !!(k && SD.push.subs[k] && SD.push.subs[k].keys), delay: SD.push.delay || 2, count: Object.keys(SD.push.subs).length });
   }
@@ -1676,7 +1689,7 @@ try {
 
   return reply(400, { ok: false, error: 'unknown_action' });
 } catch (e) {
-  if (isCron) return [];
+  if (isCron) return OUT_PUSH;
   if (e && e.httpStatus) return reply(e.httpStatus, { ok: false, error: e.code || 'error', detail: e.detail });
   return reply(500, { ok: false, error: 'exception', detail: String(e && e.message || e) });
 }
@@ -1812,6 +1825,21 @@ const workflow = {
       typeVersion: 1.1,
       position: [760, -120],
     },
+    // --- Notifications chiffrées : envoyées telles quelles (octets bruts) au service de notification d'Apple ---
+    {
+      parameters: { conditions: { string: [{ value1: '={{ $json.pushOut ? "oui" : "" }}', operation: 'isNotEmpty' }] } },
+      id: randomUUID(), name: 'Notification ?', type: 'n8n-nodes-base.if', typeVersion: 1, position: [380, -240],
+    },
+    {
+      parameters: {
+        method: 'POST', url: '={{ $json.pushOut.url }}',
+        sendHeaders: true, specifyHeaders: 'json', jsonHeaders: '={{ JSON.stringify($json.pushOut.headers) }}',
+        sendBody: true, contentType: 'binaryData', inputDataFieldName: 'data',
+        options: { timeout: 10000, response: { response: { neverError: true } } },
+      },
+      id: randomUUID(), name: 'Envoi notification', type: 'n8n-nodes-base.httpRequest', typeVersion: 4.2, position: [620, -300],
+      onError: 'continueRegularOutput',
+    },
     // --- Porte de garage vue par la caméra : photo → image réduite (32×24) → comparaison aux références ---
     {
       parameters: { conditions: { string: [{ value1: '={{ $json.garageUrl || "" }}', operation: 'isNotEmpty' }] } },
@@ -1833,7 +1861,8 @@ const workflow = {
   connections: {
     Webhook: { main: [[{ node: 'eedomus', type: 'main', index: 0 }]] },
     'Relevés énergie': { main: [[{ node: 'eedomus', type: 'main', index: 0 }]] },
-    eedomus: { main: [[{ node: 'Photo garage ?', type: 'main', index: 0 }]] },
+    eedomus: { main: [[{ node: 'Notification ?', type: 'main', index: 0 }]] },
+    'Notification ?': { main: [[{ node: 'Envoi notification', type: 'main', index: 0 }], [{ node: 'Photo garage ?', type: 'main', index: 0 }]] },
     'Photo garage ?': { main: [[{ node: 'Photo garage', type: 'main', index: 0 }], [{ node: 'Réponse', type: 'main', index: 0 }]] },
     'Photo garage': { main: [[{ node: 'Réduire', type: 'main', index: 0 }]] },
     'Réduire': { main: [[{ node: 'Analyse garage', type: 'main', index: 0 }]] },
