@@ -1,7 +1,18 @@
 {
-  "version": "2.27.1",
+  "version": "2.27.2",
   "date": "2026-11-22",
   "releases": [
+    {
+      "version": "2.27.2",
+      "date": "2026-11-22",
+      "time": "11:43",
+      "title": "Graphique de chauffe plus lisible",
+      "changes": [
+        "Courbe de montée bien plus précise : une mesure toutes les 10 minutes au lieu de 30",
+        "Le curseur suit le doigt en douceur, à la minute près, sans à-coups",
+        "Graphique plus grand, heures sous l’axe, chiffres dégagés ; la montée la plus rapide est calculée sur 30 minutes"
+      ]
+    },
     {
       "version": "2.27.1",
       "date": "2026-11-22",
@@ -1092,5 +1103,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "11:38"
+  "time": "11:43"
 }

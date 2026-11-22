@@ -1281,6 +1281,31 @@ async function netatmo(b) {
     return ntHeating(true);
   }
   // Graphique détaillé d'une pièce : température, consigne et % de chauffe, sur 6 h / 1 j / 1 sem / 1 mois / 1 an
+  // Mesures fines d'une pièce sur une courte période (graphique d'une chauffe) : toutes les mesures Netatmo (« max »), sinon à la demi-heure
+  if (b.action === 'nt.roomfine') {
+    const H = await ntHomes();
+    const room = H.heat && H.heat.rooms.find((r) => String(r.id) === String(b.room));
+    const now = Math.floor(Date.now() / 1000), end = Math.min(now, Math.floor(Number(b.end) || now)), begin = Math.floor(Number(b.begin) || 0);
+    if (!room || !begin || end - begin < 600 || end - begin > 12 * 3600) throw fail(403, 'not_allowed');
+    SD.ntFine = SD.ntFine || {};
+    const key = room.id + '|' + Math.floor(begin / 300) + '|' + Math.floor(end / 300), c = SD.ntFine[key];
+    if (c && c.at > Date.now() - (end < now - 3600 ? 86400000 : 180000)) return c.data;
+    const read = async (scale) => {
+      const r = await nt('GET', 'getroommeasure', { home_id: H.heat.id, room_id: room.id, scale: scale, type: 'temperature,sp_temperature', date_begin: begin, date_end: end, optimize: 'false', real_time: 'true' });
+      const rows = [], bd = r.body;
+      if (Array.isArray(bd)) bd.forEach((blk) => (blk.value || []).forEach((v, i) => rows.push([blk.beg_time + i * (blk.step_time || 1800)].concat(v))));
+      else if (bd && typeof bd === 'object') Object.keys(bd).forEach((ts) => rows.push([Number(ts)].concat(bd[ts])));
+      return rows.sort((x, y) => x[0] - y[0]);
+    };
+    let rows = [], scale = 'max';
+    try { rows = await read('max'); } catch (e) { rows = []; }
+    if (rows.length < 3) { scale = '30min'; rows = await read('30min'); }
+    const data = { ok: true, scale: scale, rows: rows };
+    SD.ntFine[key] = { at: Date.now(), data: data };
+    const ks = Object.keys(SD.ntFine).sort((x, y) => SD.ntFine[y].at - SD.ntFine[x].at);
+    ks.slice(20).forEach((k) => { delete SD.ntFine[k]; });
+    return data;
+  }
   if (b.action === 'nt.roomgraph') {
     const H = await ntHomes();
     const room = H.heat && H.heat.rooms.find((r) => String(r.id) === String(b.room));
