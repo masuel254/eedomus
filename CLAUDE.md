@@ -31,3 +31,10 @@
 ## Ce qui ne marche que sur le PC
 - Le dossier `private/` (captures d'écran, récupération des factures TotalEnergies et EDF avec Chrome, notes) n'est pas sur GitHub.
 - Dans le cloud, on ne peut pas faire de capture d'écran de l'appli avec Chrome. Vérifie au minimum la syntaxe avec `node -e "new Function(require('fs').readFileSync('docs/app.js','utf8'))"`.
+
+## Relais caméras (machine virtuelle de la Freebox)
+- Code dans `relais/` : `relais.js` (sert les vidéos, jetons signés), `record.sh` (enregistrement continu des 5 caméras Imou en tranches de 10 min), `install.sh` (installation, lancée dans la console de la VM avec `curl -L masuel254.github.io/eedomus/r | sudo bash`), `update.sh`.
+- **Le relais se met à jour tout seul** toutes les 15 min depuis GitHub (`main`) : pousser une correction dans `relais/` suffit, inutile de retaper une commande.
+- Ses réglages viennent du serveur n8n (`relayHello` → `cfg`) : conservation (`CFG.relay.retention`, `presRetention`) et nom internet (action `relay.host`, gardé hors du dépôt).
+- L'appli demande au serveur un jeton d'un jour (`relay.sign`) puis lit directement le relais ; en cas d'échec, elle revient à Imou (carte SD) ou Netatmo.
+- Ne jamais écrire dans le dépôt le nom de domaine du relais, l'adresse IP de la maison ni les codes des caméras.
