@@ -1,0 +1,3 @@
+#!/bin/bash
+# Raccourci pour installer le relais caméras (plus court à taper dans la console de la Freebox)
+curl -fsSL https://raw.githubusercontent.com/masuel254/eedomus/main/relais/install.sh -o /tmp/relais-install.sh && bash /tmp/relais-install.sh
