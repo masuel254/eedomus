@@ -1,7 +1,19 @@
 {
-  "version": "2.33.0",
+  "version": "2.34.0",
   "date": "2026-11-22",
   "releases": [
+    {
+      "version": "2.34.0",
+      "date": "2026-11-22",
+      "time": "19:39",
+      "title": "Relais caméras de la Freebox",
+      "changes": [
+        "Préparation du relais caméras dans la Freebox : les vidéos seront lues depuis la maison en environ une seconde, sans consommer le forfait Imou",
+        "Enregistrements Imou : la Freebox d’abord, la carte SD de la caméra en secours (bouton pour la voir)",
+        "Caméra Présence : vidéos gardées sur la Freebox, jour par jour",
+        "Réglages : état du relais et bouton « Associer le relais »"
+      ]
+    },
     {
       "version": "2.33.0",
       "date": "2026-11-22",
@@ -1303,5 +1315,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "19:16"
+  "time": "19:39"
 }

@@ -2007,23 +2007,81 @@
   function camById(id) { return allCams().filter(function (c) { return c.id === id; })[0] || null; }
   function openRec(camId, play) {
     REC = { cam: camId, date: ymd(new Date()), list: null, loading: false, error: false, play: play || null };
-    liveCam = null; sheet.scrollTop = 0; openSheet('rec'); loadRec();
+    liveCam = null; sheet.scrollTop = 0; relayGet(); openSheet('rec'); loadRec();
   }
   // Listes d'enregistrements gardées sur l'iPhone : un jour passé ne change plus (affiché sans rien redemander) ;
   // aujourd'hui s'affiche depuis le cache puis se met à jour.
   function recCache() { var c = pcGet('rec'); return c ? c.v : {}; }
+  // ---------- Relais caméras de la Freebox : vidéos lues depuis la maison, en ~1 s, sans forfait Imou ----------
+  // Le serveur donne l'adresse du relais et un jeton valable 1 jour (gardés sur l'iPhone). Sans relais : Imou / Netatmo comme avant.
+  var RELAY = (pcGet('relay') || {}).v || null, relayP = null, relayAsk = 0, RELAY_PAIR = null;
+  function relayGet(force) {
+    if (!force && RELAY && RELAY.url && RELAY.exp * 1000 - Date.now() > 3600e3) return Promise.resolve(RELAY);
+    if (!force && RELAY && !RELAY.url && pcGet('relay', 600e3)) return Promise.resolve(null); // pas de relais : on redemande toutes les 10 min
+    if (!relayP) relayP = api({ action: 'relay.sign' }).then(function (j) { RELAY = j; pcSet('relay', j); relayP = null; return j.url ? j : null; },
+      function () { relayP = null; return RELAY && RELAY.url && RELAY.exp * 1000 > Date.now() ? RELAY : null; });
+    return relayP;
+  }
+  function relayUrl(path) { return RELAY.url + path + (path.indexOf('?') < 0 ? '?' : '&') + 't=' + encodeURIComponent(RELAY.t); }
+  function relayJson(path) {
+    return relayGet().then(function (R) {
+      if (!R) throw new Error('no_relay');
+      return new Promise(function (ok, ko) {
+        var done = false, t = setTimeout(function () { if (!done) { done = true; ko(new Error('timeout')); } }, 5000);
+        fetch(relayUrl(path)).then(function (r) {
+          if (r.status === 401 && RELAY) RELAY.exp = 0; // jeton refusé : on en redemandera un
+          return r.json().then(function (j) { if (!r.ok || !j.ok) throw new Error('HTTP ' + r.status); return j; });
+        }).then(function (j) { if (!done) { done = true; clearTimeout(t); ok(j); } }, function (e) { if (!done) { done = true; clearTimeout(t); ko(e); } });
+      });
+    });
+  }
+  // La vidéo du relais ne se lit pas (Freebox injoignable…) : on bascule sur la source d'origine
+  function relayFail(P) {
+    if (!REC || REC.play !== P || P.fell) return; P.fell = true;
+    if (P.alt) { P.url = P.alt.url; P.urlHd = P.alt.urlHd; P.hdOk = !!P.alt.urlHd; P.relay = false; renderRec(); return; }
+    if (!P.imou) return;
+    toast('Freebox injoignable : lecture depuis la caméra');
+    api({ action: 'im.playback', cam: REC.cam, begin: P.imou.begin, end: P.imou.end, sd: true }).then(function (j) { if (REC && REC.play === P) { P.url = j.url; P.relay = false; renderRec(); } })
+      .catch(function () { toast('Lecture impossible pour le moment, réessaie', true); });
+  }
+  function presAll() { return (pcGet('pres') || {}).v || {}; }
+  function presStore(day, clips) {
+    var a = presAll(); a[day] = { at: Date.now(), list: clips };
+    Object.keys(a).sort().reverse().slice(15).forEach(function (k) { delete a[k]; }); pcSet('pres', a);
+  }
+  function presMatch(t) { // clip de la Freebox le plus proche d'un événement Netatmo (à 2 min près)
+    var best = null, a = presAll();
+    Object.keys(a).forEach(function (k) { (a[k].list || []).forEach(function (c) { var d = Math.abs(c.time - t); if (d <= 120 && (!best || d < best.d)) best = { d: d, c: c }; }); });
+    return best && best.c;
+  }
+  function loadPres() {
+    var want = REC.date, rc = presAll()[want];
+    REC.clips = rc ? rc.list : null;
+    relayJson('/api/presence?date=' + want).then(function (j) {
+      presStore(want, j.clips);
+      if (REC && REC.date === want) { REC.clips = j.clips; REC.relay = true; renderRec(); }
+    }).catch(function () { if (REC) { REC.relay = false; renderRec(); } });
+    renderRec();
+  }
   function loadRec() {
-    var c = REC && camById(REC.cam); if (!c || c.src !== 'imou') return;
-    var want = REC.date, key = c.id + '|' + want, rc = recCache()[key], past = want < ymd(new Date());
-    if (rc) REC.list = rc.list;
+    var c = REC && camById(REC.cam); if (!c) return;
+    if (c.src !== 'imou') return loadPres();
+    var want = REC.date, sd = !!REC.sd, key = c.id + '|' + want + (sd ? '|sd' : ''), rc = recCache()[key], past = want < ymd(new Date());
+    if (rc) { REC.list = rc.list; REC.relay = !!rc.relay; }
     REC.error = false;
     if (rc && (past ? rc.full : Date.now() - rc.at < 60000)) { REC.loading = false; return renderRec(); }
     REC.loading = !rc;
-    api({ action: 'im.records', cam: c.id, date: want }).then(function (j) {
-      var all = recCache(); all[key] = { at: Date.now(), list: j.records, full: past };
+    // Freebox d'abord (rapide, sans forfait) ; carte SD de la caméra en secours, ou si on la demande
+    (sd ? Promise.reject(new Error('sd')) : relayJson('/api/imou?cam=' + encodeURIComponent(c.id) + '&date=' + want).then(function (j) {
+      if (!j.records.length && !j.recording) throw new Error('vide'); // pas encore d'enregistrement sur la Freebox ce jour-là
+      return { records: j.records, relay: true };
+    })).catch(function () {
+      return api({ action: 'im.records', cam: c.id, date: want }).then(function (j) { return { records: j.records, relay: false }; });
+    }).then(function (j) {
+      var all = recCache(); all[key] = { at: Date.now(), list: j.records, full: past, relay: j.relay };
       var ks = Object.keys(all).sort(function (x, y) { return all[y].at - all[x].at; }); ks.slice(60).forEach(function (k) { delete all[k]; });
       pcSet('rec', all);
-      if (REC && REC.date === want && REC.cam === c.id) { REC.list = j.records; REC.loading = false; renderRec(); }
+      if (REC && REC.date === want && REC.cam === c.id && !!REC.sd === sd) { REC.list = j.records; REC.relay = j.relay; REC.loading = false; renderRec(); }
     }).catch(function () { if (REC) { REC.loading = false; if (!REC.list) REC.error = true; renderRec(); } });
     renderRec();
   }
@@ -2057,8 +2115,28 @@
           '<span><b>' + esc(r.begin.slice(11, 16)) + ' → ' + esc(r.end.slice(11, 16)) + '</b><small>' + esc(RT[String(r.type || '').toLowerCase()] || 'Enregistrement') + ' · ' + dur(r.begin, r.end) + '</small></span>' +
           '<span class="evt">' + (r.size ? fmt(r.size / 1048576, 1) + ' Mo' : '') + '</span></button>';
       }).join('') + '</div>';
-      h += '<p class="note-q">Enregistrements de la carte SD de la caméra. La lecture consomme le forfait vidéo Imou (2 Go gratuits).</p>';
+      h += REC.relay ? '<p class="note-q">Enregistrements gardés sur la Freebox (qualité réduite, 14 jours). « Passer en HD » lit la carte SD de la caméra.</p>' +
+        '<button class="act" data-recsd>Voir la carte SD de la caméra</button>'
+        : '<p class="note-q">Enregistrements de la carte SD de la caméra. La lecture consomme le forfait vidéo Imou (2 Go gratuits).</p>' +
+        (REC.sd ? '<button class="act" data-recsd>Revenir aux enregistrements de la Freebox</button>' : '');
     } else if (c) {
+      if (REC.clips || (RELAY && RELAY.url)) {
+        var pd = '';
+        for (var j = 0; j < 7; j++) {
+          var dd = new Date(); dd.setDate(dd.getDate() - j);
+          pd += '<button class="' + (ymd(dd) === REC.date ? 'on' : '') + '" data-recday="' + ymd(dd) + '">' + esc(j === 0 ? "Aujourd'hui" : j === 1 ? 'Hier' : dd.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' })) + '</button>';
+        }
+        h += '<h3>Vidéos gardées sur la Freebox</h3><div class="days">' + pd + '</div>';
+        if (!REC.clips) h += '<p class="muted">' + (REC.relay === false ? 'La Freebox ne répond pas pour le moment.' : 'Lecture de la Freebox…') + '</p>';
+        else if (!REC.clips.length) h += '<p class="muted">Aucune vidéo ce jour-là.</p>';
+        else h += '<div class="evlist">' + REC.clips.map(function (cl, i) {
+          var on = REC.play && REC.play.key === cl.url;
+          return '<button class="ev rec' + (on ? ' on' : '') + '" data-presplay="' + i + '"><span class="evic">' + icon('play') + '</span>' +
+            '<span><b>' + esc(cl.begin.slice(11, 16)) + '</b><small>' + dur(cl.begin, cl.end) + '</small></span>' +
+            '<span class="evt">' + fmt(cl.size / 1048576, 1) + ' Mo</span></button>';
+        }).join('') + '</div>';
+        h += '<h3>Derniers événements</h3>';
+      }
       var evs = ((CAMS && CAMS.events) || []).filter(function (e) { return e.camera === c.id && e.video; });
       h += evs.length ? '<div class="evlist">' + evs.map(function (e) {
         var day = new Date(e.time * 1000), today = new Date().toDateString() === day.toDateString();
@@ -2072,6 +2150,8 @@
     var keep = sheet.scrollTop;
     sheet.innerHTML = '<div class="sh-in">' + h + '</div>';
     sheet.scrollTop = keep;
+    var rv = document.getElementById('recv'), P = REC.play;
+    if (rv && P && P.relay) rv.addEventListener('error', function () { relayFail(P); });
   }
   // ---------- Consommation électrique (électrolyseur, pompe à chaleur, sauna) ----------
   var ENG = null; // { key, name, tab: 'day'|'month'|'year', day: 'AAAAMMJJ', month: 'AAAAMM', year: 'AAAA', data, loading }
@@ -2536,9 +2616,19 @@
     var e = ((CAMS && CAMS.events) || []).filter(function (x) { return x.id === id; })[0]; if (!e || !e.video) return;
     var lbl = (EV[e.type] || 'Événement') + ' · ' + new Date(e.time * 1000).toLocaleString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
     // basse définition d'abord (démarre bien plus vite), bouton « Passer en HD »
-    var pl = { url: e.video.replace('/files/high/', '/files/low/'), urlHd: e.video, hd: false, hdOk: /[/]files[/]high[/]/.test(e.video), label: lbl, key: e.id };
-    if (!REC || REC.cam !== e.camera) return openRec(e.camera, pl);
-    REC.play = pl; sheet.scrollTop = 0; renderRec();
+    var alt = { url: e.video.replace('/files/high/', '/files/low/'), urlHd: /[/]files[/]high[/]/.test(e.video) ? e.video : null };
+    var go = function () {
+      var m = RELAY && RELAY.url && presMatch(e.time);
+      // le clip déposé sur la Freebox (lu en ~1 s) ; sinon celui de la carte SD de la caméra
+      var pl = m ? { url: relayUrl(m.url), relay: true, alt: alt, hdOk: false, label: lbl, key: e.id }
+        : { url: alt.url, urlHd: alt.urlHd, hd: false, hdOk: !!alt.urlHd, label: lbl, key: e.id };
+      if (!REC || REC.cam !== e.camera) return openRec(e.camera, pl);
+      REC.play = pl; sheet.scrollTop = 0; renderRec();
+    };
+    if (RELAY && RELAY.url && !presMatch(e.time)) {
+      var day = ymd(new Date(e.time * 1000));
+      relayJson('/api/presence?date=' + day).then(function (j) { presStore(day, j.clips); }).catch(function () {}).then(go);
+    } else go();
   }
   var EV = { human: 'Personne', vehicle: 'Véhicule', animal: 'Animal', movement: 'Mouvement', outdoor: 'Mouvement', person: 'Personne' };
   function renderCams() {
@@ -2620,6 +2710,24 @@
       '</div><p class="note-q">Le délai est le même pour toute la famille. Chacun active les alertes sur son propre iPhone.</p>';
     return h;
   }
+  function relayHTML() {
+    if (!pcGet('relay', 300e3) && Date.now() - relayAsk > 60000) { // état rafraîchi à l'ouverture des Réglages
+      relayAsk = Date.now();
+      relayGet(true).then(function () { if (!sheet.hidden && sheet.dataset.view === 'settings') renderSettings(); });
+    }
+    var R = RELAY, st = R && R.status, h = '<h3>Relais caméras (Freebox)</h3><div class="card2 flat rs-list">';
+    if (R && R.url) {
+      var min = R.seen ? Math.round((Date.now() - R.seen) / 60000) : null, live = min !== null && min <= 35;
+      var cs = (st && st.cams) || [], okc = cs.filter(function (c) { return c.ok; }).length;
+      h += '<div class="row"><span class="ic">' + icon('cam') + '</span><span><b>Relais</b><small>' + (min === null ? 'Jamais vu' : min < 2 ? 'Vu à l’instant' : 'Vu il y a ' + (min < 120 ? min + ' min' : Math.round(min / 60) + ' h')) + '</small></span><span class="' + (live ? 'ok' : 'bad') + '">' + (live ? 'En ligne' : 'Injoignable') + '</span></div>';
+      if (st) h += '<div class="row"><span class="ic">' + icon('rec') + '</span><span><b>Caméras Imou enregistrées</b><small>' +
+        'Gardées ' + (st.retention || 14) + ' jours' + (st.disk ? ' · ' + st.disk.freeGb + ' Go libres' : '') + (st.presence && st.presence.clips ? ' · ' + st.presence.clips + ' vidéos de la Présence' : '') + '</small></span>' +
+        '<span class="' + (okc === cs.length && cs.length ? 'ok' : 'bad') + '">' + okc + ' / ' + cs.length + '</span></div>';
+    } else h += '<div class="row"><span class="ic">' + icon('cam') + '</span><span><b>Relais</b><small>Pas encore installé : les vidéos passent par Imou et Netatmo</small></span></div>';
+    if (RELAY_PAIR && RELAY_PAIR.exp > Date.now()) h += '<div class="row"><span class="ic">' + icon('play') + '</span><span><b>Code : ' + esc(RELAY_PAIR.code.slice(0, 3) + ' ' + RELAY_PAIR.code.slice(3)) + '</b><small>À taper dans la machine virtuelle de la Freebox (valable 15 min)</small></span></div>';
+    else h += '<button class="row" data-relay-pair><span class="ic">' + icon('play') + '</span><span><b>Associer le relais</b><small>Affiche un code pour l’installation sur la Freebox</small></span><span class="val">›</span></button>';
+    return h + '</div>';
+  }
   function renderSettings() {
     var L = LOG || { version: '—', releases: [], works: [], todo: [] };
     var h = '<div class="sh-hd"><h2>Réglages</h2><button class="close" data-close aria-label="Fermer">×</button></div>' +
@@ -2628,7 +2736,7 @@
       '<div class="card"><div class="kv"><span>Connecté en tant que</span><b>' + esc(userName || '—') + '</b></div>' +
       '<div class="kv"><span>Box eedomus</span><b class="' + (offline ? 'bad' : 'ok') + '">' + (offline ? 'Hors ligne' : lastOk ? 'Connectée' : '…') + '</b></div>' +
       '<div class="kv"><span>Netatmo</span><b class="' + (NT ? 'ok' : ntErr ? 'bad' : '') + '">' + (NT ? 'Connecté' : ntErr ? 'Indisponible' : '…') + '</b></div></div>' +
-      pushHTML() +
+      pushHTML() + relayHTML() +
       '<h3>Suivi du projet</h3>' +
       '<details class="acc2"><summary><span>Ce qui fonctionne</span><span class="cnt ok">' + L.works.length + '</span>' + icon('down') + '</summary>' +
       '<ul class="lst ok">' + L.works.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></details>' +
@@ -2996,10 +3104,26 @@
     if ((b = e.target.closest('[data-enstep]'))) return stepEnergy(+b.dataset.enstep);
     if (e.target.closest('[data-recback]')) return closeSheet(); // retour à l'onglet Caméras
     if ((b = e.target.closest('[data-recday]'))) { REC.date = b.dataset.recday; REC.list = null; return loadRec(); }
+    // fiche des enregistrements
     if ((b = e.target.closest('[data-evplay]'))) return playEvent(b.dataset.evplay);
+    if (e.target.closest('[data-recsd]')) { REC.sd = !REC.sd; REC.list = null; REC.play = null; return loadRec(); }
+    if ((b = e.target.closest('[data-presplay]'))) {
+      var cl = REC && REC.clips && REC.clips[+b.dataset.presplay]; if (!cl || !RELAY || !RELAY.url) return;
+      REC.play = { url: relayUrl(cl.url), relay: true, hdOk: false, key: cl.url, label: 'Vidéo de ' + cl.begin.slice(11, 16) + ' · ' + new Date(cl.time * 1000).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }) };
+      sheet.scrollTop = 0; return renderRec();
+    }
+    if (e.target.closest('[data-relay-pair]')) {
+      toast('Demande du code…');
+      return api({ action: 'relay.pair' }).then(function (j) { RELAY_PAIR = { code: j.code, exp: j.exp }; renderSettings(); })
+        .catch(function () { toast('Serveur injoignable, réessaie', true); });
+    }
     if ((b = e.target.closest('[data-recplay]'))) {
       var r = REC && REC.list && REC.list[+b.dataset.recplay]; if (!r) return;
       var label = r.begin.slice(11, 16) + ' → ' + r.end.slice(11, 16) + ' · ' + new Date(r.begin.replace(' ', 'T')).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+      if (r.url && RELAY && RELAY.url) { // enregistrement gardé sur la Freebox : lecture immédiate
+        REC.play = { url: relayUrl(r.url), relay: true, label: label, key: r.begin, hd: false, hdOk: true, imou: { begin: r.begin, end: r.end } };
+        sheet.scrollTop = 0; return renderRec();
+      }
       b.classList.add('busy');
       // qualité réduite d'abord : démarre plus vite et consomme moins le forfait vidéo Imou ; « Passer en HD » relance en pleine qualité
       return api({ action: 'im.playback', cam: REC.cam, begin: r.begin, end: r.end, sd: true }).then(function (j) {

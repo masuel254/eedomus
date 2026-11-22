@@ -119,6 +119,8 @@ const CODE_CFG = {
   push: env.VAPID_PRIVATE ? { d: env.VAPID_PRIVATE, pub: env.VAPID_PUBLIC, sub: env.APP_URL || 'https://example.invalid/' } : null,
   iq: env.IAQUA_EMAIL ? { email: env.IAQUA_EMAIL, password: env.IAQUA_PASSWORD, exo: env.IAQUA_EXO_SN || null, hpm: env.IAQUA_HPM_SN || null } : null,
   im: env.IMOU_APP_ID ? { id: env.IMOU_APP_ID, secret: env.IMOU_APP_SECRET } : null,
+  // clé commune avec le relais caméras de la Freebox : déduite du jeton principal (même valeur depuis le PC ou le cloud)
+  relay: { secret: createHash('sha256').update('relais-cameras|' + env.MAISON_TOKEN).digest('hex') },
   tu: env.TUYA_CLIENT_ID ? {
     id: env.TUYA_CLIENT_ID, secret: env.TUYA_CLIENT_SECRET, base: 'https://openapi.tuyaeu.com',
     devices: { sauna: env.TUYA_DEV_SAUNA, pac: env.TUYA_DEV_PAC, elec: env.TUYA_DEV_ELEC },
@@ -140,7 +142,8 @@ const OUT_PUSH = [];
 const reply = (status, data) => [{ json: { status, data } }].concat(OUT_PUSH);
 // Déclenchement par la minuterie (relevés d'énergie) : pas de requête HTTP, donc ni corps ni en-têtes.
 const isCron = req.body === undefined && req.headers === undefined;
-if (!isCron && body.action !== 'push.pending' && (!body.token || !CFG.tokens.includes(body.token))) return reply(401, { ok: false, error: 'unauthorized' });
+// relay.hello : appel du relais caméras de la Freebox, authentifié par sa propre signature (voir relayHello)
+if (!isCron && body.action !== 'push.pending' && body.action !== 'relay.hello' && (!body.token || !CFG.tokens.includes(body.token))) return reply(401, { ok: false, error: 'unauthorized' });
 
 const auth = 'api_user=' + encodeURIComponent(CFG.user) + '&api_secret=' + encodeURIComponent(CFG.secret);
 async function eedomus(kind, query, attempt) {
@@ -792,6 +795,43 @@ async function imou(b) {
     return { ok: true, url: r.data.url };
   }
   throw fail(400, 'unknown_action');
+}
+
+// ---------------- Relais caméras (machine virtuelle de la Freebox) ----------------
+// Le relais enregistre les caméras Imou et sert les clips de la Présence en HTTPS, depuis la maison.
+// Le serveur ne fait que délivrer des jetons signés (valables 1 jour) : les vidéos vont directement du relais à l'iPhone.
+// Jumelage : l'appli demande un code (relay.pair), on le tape dans la VM, qui reçoit la clé commune.
+// Ensuite la VM se signale toutes les 15 min (adresse publique, état) avec une signature faite avec cette clé.
+async function relay(b) {
+  const R = SD.relay = SD.relay || {};
+  if (b.action === 'relay.pair') {
+    R.pair = { code: String(100000 + Math.floor(Math.random() * 900000)), exp: Date.now() + 15 * 60000 };
+    return { ok: true, code: R.pair.code, exp: R.pair.exp };
+  }
+  if (b.action === 'relay.sign') {
+    if (!R.url) return { ok: true, url: null };
+    const exp = (Math.floor(Date.now() / 3600000) + 25) * 3600; // change toutes les heures : les vidéos restent en cache sur l'iPhone
+    return { ok: true, url: R.url, t: exp + '.' + hmac256hex(CFG.relay.secret, 'relais|' + exp), exp, seen: R.seen || null, status: R.status || null };
+  }
+  throw fail(400, 'unknown_action');
+}
+async function relayHello(b) {
+  const R = SD.relay = SD.relay || {};
+  const url = String(b.url || '');
+  if (!/^https:[/][/][a-z0-9.-]+(:[0-9]+)?$/i.test(url)) return reply(400, { ok: false, error: 'bad_url' });
+  const cams = async () => (CFG.im ? (await imDevices()).map((d) => ({ id: d.id, name: d.name, model: d.model })) : []);
+  if (b.code) {
+    if (!R.pair || R.pair.exp < Date.now() || String(b.code) !== R.pair.code) return reply(403, { ok: false, error: 'bad_code' });
+    R.pair = null; R.url = url; R.seen = Date.now();
+    return reply(200, { ok: true, secret: CFG.relay.secret, cams: await cams(), url });
+  }
+  const ts = Number(b.ts) || 0;
+  if (Math.abs(Date.now() / 1000 - ts) > 300 || String(b.sig || '') !== hmac256hex(CFG.relay.secret, 'hello|' + url + '|' + ts)) return reply(401, { ok: false, error: 'unauthorized' });
+  R.url = url; R.seen = Date.now();
+  if (b.status && typeof b.status === 'object') R.status = { disk: b.status.disk || null, retention: b.status.retention || null,
+    cams: (b.status.cams || []).slice(0, 12).map((c) => ({ id: String(c.id), ok: !!c.ok, gb: Number(c.gb) || 0, from: c.from || null })),
+    presence: b.status.presence || null };
+  return reply(200, { ok: true, url });
 }
 
 // ---------------- Smart Life / Tuya ----------------
@@ -1724,6 +1764,8 @@ try {
     if (!CFG.nt) return reply(503, { ok: false, error: 'netatmo_not_configured' });
     return reply(200, await netatmo(body));
   }
+  if (body.action === 'relay.hello') return await relayHello(body);
+  if (String(body.action || '').startsWith('relay.')) return reply(200, await relay(body));
   if (String(body.action || '').startsWith('im.')) return reply(200, await imou(body));
   if (String(body.action || '').startsWith('tu.')) return reply(200, await tuya(body));
   if (String(body.action || '').startsWith('iq.')) return reply(200, await iaqua(body));
