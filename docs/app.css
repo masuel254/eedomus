@@ -1009,3 +1009,5 @@ svg.hl-svg { touch-action: none; }
 .pt-zrow .pt-chip { flex: none; }
 .pt-pa { display: flex; align-items: center; gap: 8px; }
 .pt-del { background: none; border: 1px solid rgba(248,113,113,.35); color: var(--warn); border-radius: 10px; padding: 6px 10px; font: 600 13px var(--f-ui); cursor: pointer; }
+.pt-type.none { border-style: dashed; }
+.pt-none { margin: 0; font-size: 12.5px; color: #F4B860; line-height: 1.35; }

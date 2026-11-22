@@ -1622,9 +1622,14 @@
     if (days.length === 1) return DAYS[days[0]];
     return null; // nommée ensuite « Type A », « Type B »…
   }
+  // Netatmo ne connaît que les jours : les journées types (noms, et celles attribuées à aucun jour) sont gardées sur l'iPhone
+  function ptSaved() { try { return JSON.parse(localStorage.getItem('maison-ptt-' + PE.src) || '[]') || []; } catch (e) { return []; } }
   function ptSaveNames() {
     var n = ptNames(); PE.T.types.forEach(function (t) { var k = ptKey(t); if (k) n[k] = t.name; });
-    try { localStorage.setItem('maison-ptn-' + PE.src, JSON.stringify(n)); } catch (e) {}
+    try {
+      localStorage.setItem('maison-ptn-' + PE.src, JSON.stringify(n));
+      localStorage.setItem('maison-ptt-' + PE.src, JSON.stringify(PE.T.types.map(function (t) { return { name: t.name, sl: t.sl }; })));
+    } catch (e) {}
   }
   function ptBuild() {
     var sig = {}, types = [], days = [], names = ptNames();
@@ -1635,8 +1640,15 @@
       if (!sig[k]) { sig[k] = { id: types.length + 1, sl: sl, d: [] }; types.push(sig[k]); }
       sig[k].d.push(d); days.push(sig[k].id);
     }
-    var letter = 0;
-    types.forEach(function (t, i) { t.name = names[t.d.join(',')] || ptAuto(t.d) || 'Type ' + 'ABCDEFG'.charAt(letter++); t.col = PT_COL[i % PT_COL.length]; delete t.d; });
+    var letter = 0, saved = ptSaved(), bySl = {};
+    saved.forEach(function (x) { bySl[JSON.stringify(x.sl)] = x.name; });
+    types.forEach(function (t, i) { t.name = bySl[JSON.stringify(t.sl)] || names[t.d.join(',')] || ptAuto(t.d) || 'Type ' + 'ABCDEFG'.charAt(letter++); t.col = PT_COL[i % PT_COL.length]; delete t.d; });
+    // journées types créées mais attribuées à aucun jour : on les remet
+    saved.forEach(function (x) {
+      if (types.length >= 7 || types.some(function (t) { return JSON.stringify(t.sl) === JSON.stringify(x.sl); })) return;
+      if (!x.sl || !x.sl.length || !x.sl.every(function (b) { return PE.data.zones.some(function (z) { return z.id === b[1]; }); })) return;
+      types.push({ id: types.length + 1, name: x.name, sl: x.sl, col: PT_COL[types.length % PT_COL.length] });
+    });
     PE.T = { types: types, days: days, open: null, blk: null, nid: types.length + 1 };
   }
   function ptType(id) { return PE.T.types.filter(function (t) { return t.id === id; })[0]; }
@@ -1670,7 +1682,9 @@
     }).join('') + '</div></div>';
     h += '<div class="lbl">Journées types</div>';
     h += T.types.map(function (t) {
-      return '<button class="pt-type" data-pt-open="' + t.id + '"><div class="pt-th"><b><i style="background:' + t.col + '"></i>' + esc(t.name) + '</b><small>' + ptDaysTxt(t) + ' ›</small></div>' + ptBar(t.sl) + '</button>';
+      var none = !T.days.some(function (x) { return x === t.id; });
+      return '<button class="pt-type' + (none ? ' none' : '') + '" data-pt-open="' + t.id + '"><div class="pt-th"><b><i style="background:' + t.col + '"></i>' + esc(t.name) + '</b><small>' + ptDaysTxt(t) + ' ›</small></div>' + ptBar(t.sl) +
+        (none ? '<p class="pt-none">Pas encore utilisée : touche un jour dans « Ma semaine » jusqu’à ce qu’il affiche « ' + esc(t.name) + ' », puis Enregistrer.</p>' : '') + '</button>';
     }).join('');
     h += '<button class="act wide" data-pt-new>+ Nouvelle journée type</button>';
     var used = {}; T.types.forEach(function (t) { t.sl.forEach(function (x) { used[x[1]] = 1; }); });
@@ -2717,11 +2731,11 @@
     if (e.target.closest('[data-pt-new]')) {
       if (PE.T.types.length >= 7) return toast('7 journées types au maximum', true);
       var src0 = ptType(PE.T.days[0]), nt0 = { id: PE.T.nid++, name: 'Nouvelle journée', col: PT_COL[PE.T.types.length % PT_COL.length], sl: JSON.parse(JSON.stringify(src0.sl)) };
-      PE.T.types.push(nt0); PE.T.open = nt0.id; PE.T.blk = null; sheet.scrollTop = 0; return renderPlan();
+      PE.T.types.push(nt0); ptSaveNames(); PE.T.open = nt0.id; PE.T.blk = null; sheet.scrollTop = 0; return renderPlan();
     }
     if ((b = e.target.closest('[data-pt-del]'))) {
       if (!confirmed(b)) return;
-      PE.T.types = PE.T.types.filter(function (t) { return t.id !== PE.T.open; }); PE.T.open = null; return renderPlan();
+      PE.T.types = PE.T.types.filter(function (t) { return t.id !== PE.T.open; }); ptSaveNames(); PE.T.open = null; return renderPlan();
     }
     if ((b = e.target.closest('[data-pt-zone]'))) { PE.tab = 'zones'; PE.zopen = +b.dataset.ptZone; return renderPlan(); }
     if (e.target.closest('[data-pt-blkclose]')) { PE.T.blk = null; PE.T.temps = false; return renderPlan(); }
