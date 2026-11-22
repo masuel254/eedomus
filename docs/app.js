@@ -2424,9 +2424,17 @@
   function pushLoad() {
     if (!pushSupported() || !CFG.push) return;
     PUSH.loaded = true;
-    pushSub().then(function (s) { return api({ action: 'push.get', endpoint: s ? s.endpoint : '' }); }).then(function (j) {
+    var sub = null;
+    pushSub().then(function (s) { sub = s; return api({ action: 'push.get', endpoint: s ? s.endpoint : '' }); }).then(function (j) {
       PUSH.on = j.on; PUSH.delay = j.delay; if (sheet.dataset.view === 'settings' && !sheet.hidden) renderSettings();
+      // inscription d'avant (sans clé) : on envoie la clé de l'iPhone pour que le texte voyage dans la notification
+      if (j.on && sub && !j.keys) api(pushSubBody(sub)).catch(function () {});
     }).catch(function () { PUSH.loaded = false; });
+  }
+  // Inscription : adresse de l'iPhone, sa clé de chiffrement et l'adresse de l'appli (ouverte en touchant la notification)
+  function pushSubBody(s) {
+    var j = s.toJSON ? s.toJSON() : {}, app = location.href.split('#')[0].split('?')[0];
+    return { action: 'push.sub', endpoint: s.endpoint, keys: j.keys || null, app: app, name: userName };
   }
   function b64key(s) { var b = atob(s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4)), u = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; }
   function pushToggle() {
@@ -2439,7 +2447,7 @@
     Notification.requestPermission().then(function (perm) {
       if (perm !== 'granted') throw new Error('refus');
       return navigator.serviceWorker.ready.then(function (reg) { return reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64key(CFG.push.key) }); });
-    }).then(function (s) { return api({ action: 'push.sub', endpoint: s.endpoint, name: userName }); })
+    }).then(function (s) { return api(pushSubBody(s)); })
       .then(function (j) { PUSH.on = j.on; PUSH.delay = j.delay; toast('Alertes activées sur cet iPhone'); })
       .catch(function (err) { toast(err && err.message === 'refus' ? 'Notifications refusées : autorise-les dans Réglages iPhone › Notifications › Maison' : 'Activation impossible, réessaie', true); })
       .then(end);
@@ -2985,6 +2993,8 @@
     CFG = c;
     if (!token) return setup();
     render(); refresh(); refreshHeating(); refreshTuya(true); refreshIq(false);
+    // alertes déjà activées sur cet iPhone : on vérifie l'inscription (et on envoie la clé si elle manque), sans attendre les Réglages
+    setTimeout(function () { try { if (window.Notification && Notification.permission === 'granted' && !PUSH.loaded) pushLoad(); } catch (e) {} }, 4000);
     if (TAB === 'cams') { loadCams(false); loadImou(false); }
     if (TAB === 'more') { loadEnergyToday(); loadHistE(3557564, 168); }
     setInterval(function () { if (!document.hidden) refreshIq(false); }, 60000);

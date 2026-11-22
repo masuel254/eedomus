@@ -1,6 +1,6 @@
 // Service worker : réseau d'abord (toujours la dernière version), cache en secours hors ligne.
 // Les appels à la maison (n8n) ne passent jamais par le cache.
-var V = 'maison-2.28.5';
+var V = 'maison-2.29.0';
 // Les notifications reçues sont gardées à part (30 dernières) : une mise à jour de l'appli ne les efface pas
 var NOTIFS = 'maison-notifs';
 var SHELL = ['./', './index.html', './app.css', './app.js', './config.json', './changelog.json', './manifest.webmanifest', './icons/icon-192-v2.png'];
@@ -51,6 +51,18 @@ function saveNotifs(items) {
   }).catch(function () {});
 }
 self.addEventListener('push', function (e) {
+  // Nouveau : le texte arrive chiffré DANS la notification (l'iPhone le déchiffre) ; on l'affiche directement
+  var direct = null; try { direct = e.data ? e.data.json() : null; } catch (er) { direct = null; }
+  if (direct && (direct.item || direct.notification)) {
+    var n = direct.notification || {}, it = direct.item || { title: n.title, body: n.body, tag: n.tag };
+    if (it.badge == null && n.app_badge != null) it.badge = +n.app_badge;
+    it = Object.assign({}, it, { title: clearTitle(it), at: it.at || Date.now() });
+    e.waitUntil(Promise.all([
+      self.registration.showNotification(it.title, { body: it.body || '', tag: it.tag || 'maison', icon: './icons/icon-192-v2.png', data: { tag: it.tag } }),
+      saveNotifs([it])
+    ].concat(it.badge != null ? [setBadge(it.badge)] : [])));
+    return;
+  }
   e.waitUntil(Promise.all([fetch('./config.json').then(function (r) { return r.json(); }), self.registration.pushManager.getSubscription()]).then(function (x) {
     return fetch(x[0].api, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'push.pending', endpoint: x[1] && x[1].endpoint }) }).then(function (r) { return r.json(); });
   }).catch(function () { return null; }).then(function (j) {
