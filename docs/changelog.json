@@ -1,7 +1,17 @@
 {
-  "version": "2.25.1",
+  "version": "2.25.2",
   "date": "2026-11-22",
   "releases": [
+    {
+      "version": "2.25.2",
+      "date": "2026-11-22",
+      "time": "11:25",
+      "title": "Outils réparés",
+      "changes": [
+        "Le contrôle du code du serveur fonctionne de nouveau avant chaque mise en ligne",
+        "La mise en ligne du serveur depuis le cloud se termine sans message d’erreur"
+      ]
+    },
     {
       "version": "2.25.1",
       "date": "2026-11-22",
@@ -1031,5 +1041,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "11:23"
+  "time": "11:25"
 }

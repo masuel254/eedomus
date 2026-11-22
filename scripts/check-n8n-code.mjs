@@ -8,7 +8,9 @@ const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'deploy-n
 const start = src.indexOf('const code = `') + 'const code = `'.length;
 const end = src.indexOf('`;', start);
 // Reproduit l'évaluation du gabarit (les \n deviennent de vrais retours à la ligne, comme dans n8n)
-const body = new Function('CODE_CFG', 'return `' + src.slice(start, end) + '`;')({});
+// Le gabarit insère aussi la bibliothèque Web Push (PUSH_LIB) : on la lit comme le fait deploy-n8n.mjs
+const PUSH_LIB = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'webpush-lib.js'), 'utf8');
+const body = new Function('CODE_CFG', 'PUSH_LIB', 'return `' + src.slice(start, end) + '`;')({}, PUSH_LIB);
 try {
   new Function('$input', '$getWorkflowStaticData', 'Buffer', 'return (async function(){' + body + '\n});');
   console.log('Code n8n : syntaxe OK');

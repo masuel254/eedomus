@@ -1787,4 +1787,5 @@ if (existing) {
 }
 await api('POST', `/workflows/${wf.id}/activate`);
 console.log('Workflow activé. URL :', `${base}/webhook/${PATH}`);
-writeFileSync(join(root, 'private', 'n8n-workflow-id.txt'), wf.id);
+// Mémo local de l'identifiant (dossier private/ : seulement sur le PC, absent dans le cloud)
+if (existsSync(join(root, 'private'))) writeFileSync(join(root, 'private', 'n8n-workflow-id.txt'), wf.id);
