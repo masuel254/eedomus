@@ -493,6 +493,20 @@ async function meteo(force) {
   M.at = Date.now();
   return M.data;
 }
+// Températures horaires déjà passées (7 jours), pour la courbe « extérieur » : source Météo-France via Open-Meteo
+async function meteoHist() {
+  const M = SD.meteo = SD.meteo || {};
+  if (M.hist && M.histAt > Date.now() - 1800000) return M.hist;
+  let H = CFG.meteoPos ? {} : await ntHomes();
+  const c = CFG.meteoPos ? [CFG.meteoPos.lon, CFG.meteoPos.lat] : H.heat && H.heat.coord;
+  if (!c) throw fail(503, 'no_location');
+  const j = await helpers.httpRequest({ method: 'GET', url: 'https://api.open-meteo.com/v1/forecast?latitude=' + c[1] + '&longitude=' + c[0] + '&timezone=Europe%2FParis&past_days=7&forecast_days=1&hourly=temperature_2m', json: true, timeout: 15000 });
+  const P = parisParts(), nowH = P.year + '-' + P.month + '-' + P.day + 'T' + P.hour, hh = j.hourly || {};
+  const pts = [];
+  (hh.time || []).forEach((t, i) => { if (hh.temperature_2m[i] != null && t.slice(0, 13) <= nowH) pts.push([t.slice(0, 10) + ' ' + t.slice(11, 16) + ':00', Math.round(hh.temperature_2m[i] * 10) / 10]); });
+  M.hist = { ok: true, points: pts }; M.histAt = Date.now();
+  return M.hist;
+}
 // Minuterie : prévisions rafraîchies toutes les 15 min ; notification une fois par épisode de rafales (≥ 50 km/h)
 async function meteoWatch() {
   const M = SD.meteo = SD.meteo || {};
@@ -1544,6 +1558,7 @@ try {
   }
   // Correction manuelle de l'état de la porte de garage (après vérification sur la caméra)
   if (body.action === 'meteo') return reply(200, await meteo(!!body.force));
+  if (body.action === 'meteo.hist') return reply(200, await meteoHist());
   if (body.action === 'garage.mark') {
     if (body.state !== 'open' && body.state !== 'closed') return reply(403, { ok: false, error: 'not_allowed' });
     garageSet(body.state, 'manuel');

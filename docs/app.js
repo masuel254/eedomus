@@ -1206,14 +1206,23 @@
     h += '<p class="note-q">Prévisions Météo-France (modèles AROME et ARPEGE) via Open-Meteo, pour un carré d’environ 1 km autour de la commune. Une notification te prévient quand des rafales d’au moins 50 km/h sont prévues dans les 36 h.</p>';
     var keep = sheet.scrollTop; sheet.innerHTML = '<div class="sh-in">' + h + '</div>'; sheet.scrollTop = keep;
   }
-  // Température extérieure (sonde du jardin) sur 7 jours
+  // Température extérieure sur 7 jours : sondes de la pergola jusqu'au 22/11/2026 11:30, ensuite la météo locale
+  var OUT_CUT = new Date(2026, 10, 22, 11, 30).getTime(), HISTM = null, histmAt = 0;
+  try { HISTM = JSON.parse(localStorage.getItem('maison-outhist') || 'null'); } catch (e) {}
+  function loadOutHist() {
+    if (Date.now() - histmAt < 600000) return; histmAt = Date.now();
+    api({ action: 'meteo.hist' }).then(function (j) { HISTM = j.points || []; try { localStorage.setItem('maison-outhist', JSON.stringify(HISTM)); } catch (e) {} if (!busy()) render(); }).catch(function () {});
+  }
+  function toMs(p) { return [new Date(String(p[0]).replace(' ', 'T')).getTime(), p[1]]; }
   function outTempHTML() {
-    var h = HISTE['3227865|168'], pts = h && h.points ? h.points.map(function (p) { return [new Date(String(p[0]).replace(' ', 'T')).getTime(), p[1]]; }).filter(function (p) { return p[1] != null && !isNaN(p[0]); }) : null;
-    var cur = pts && pts.length ? pts[pts.length - 1][1] : num(3227865), mn = null, mx = null;
-    if (pts) pts.forEach(function (p) { if (mn == null || p[1] < mn) mn = p[1]; if (mx == null || p[1] > mx) mx = p[1]; });
-    return '<div class="card2"><div class="row-hd"><b>Température extérieure (pergola) · 7 jours</b><span class="mono">' + (cur != null && !isNaN(cur) ? fmt(cur, 1) + '°' : '—') + '</span></div>' +
-      spark(pts, { w: 320, h: 80, color: '#F4B860', axis: true, zoom: true, labels: ['−7 j', '−5 j', '−3 j', '−1 j', 'auj.'] }) +
-      (mn != null ? '<p class="note-q">Mini ' + fmt(mn, 1) + '° · maxi ' + fmt(mx, 1) + '° sur la semaine</p>' : '') + '</div>';
+    loadOutHist();
+    var h = HISTE['3227865|168'], a = h && h.points ? h.points.map(toMs).filter(function (p) { return p[1] != null && p[0] < OUT_CUT; }) : [];
+    var b = HISTM ? HISTM.map(toMs).filter(function (p) { return p[1] != null && p[0] >= OUT_CUT; }) : [], pts = a.concat(b);
+    var n = METEO && METEO.now, cur = n && n.t != null ? n.t : (pts.length ? pts[pts.length - 1][1] : null), mn = null, mx = null;
+    pts.forEach(function (p) { if (mn == null || p[1] < mn) mn = p[1]; if (mx == null || p[1] > mx) mx = p[1]; });
+    return '<div class="card2"><div class="row-hd"><b>Température extérieure · 7 jours</b><span class="mono">' + (cur != null ? fmt(cur, 1) + '°' : '—') + '</span></div>' +
+      spark(pts.length > 1 ? pts : (HISTE['3227865|168'] && HISTM ? pts : null), { w: 320, h: 80, color: '#F4B860', axis: true, zoom: true, labels: ['−7 j', '−5 j', '−3 j', '−1 j', 'auj.'] }) +
+      (mn != null ? '<p class="note-q">Mini ' + fmt(mn, 1) + '° · maxi ' + fmt(mx, 1) + '° sur la semaine · sondes jusqu’au 22/11, météo locale ensuite</p>' : '') + '</div>';
   }
   // ---------- Onglet Plus (piscine, énergie, météo, réglages) ----------
   function moreHTML() {

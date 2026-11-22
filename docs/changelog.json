@@ -1,7 +1,17 @@
 {
-  "version": "2.25.0",
+  "version": "2.25.1",
   "date": "2026-11-22",
   "releases": [
+    {
+      "version": "2.25.1",
+      "date": "2026-11-22",
+      "time": "11:23",
+      "title": "Extérieur : sondes puis météo",
+      "changes": [
+        "La courbe de température extérieure garde l’historique des sondes jusqu’au 22/11, puis utilise la météo locale",
+        "La température affichée à côté de la courbe est celle de la météo, comme sur l’accueil"
+      ]
+    },
     {
       "version": "2.25.0",
       "date": "2026-11-22",
@@ -1021,5 +1031,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "11:21"
+  "time": "11:23"
 }
