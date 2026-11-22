@@ -54,6 +54,21 @@ function okToken(t) {
 }
 
 // ---------- Enregistrements Imou : REC_DIR/<caméra>/AAAAMMJJ-HHMMSS.mp4 ----------
+// Un morceau terminé commence par « ftyp » puis « moov » (ffmpeg le réécrit ainsi à la fin des 10 min) :
+// sinon il est encore en cours d'écriture, ou a été coupé net (illisible), et on ne le montre pas.
+const headOk = new Map();
+function complete(p, st) {
+  const k = p + '|' + st.size;
+  if (headOk.has(k)) return headOk.get(k);
+  let ok = false;
+  try {
+    const fd = fs.openSync(p, 'r'), b = Buffer.alloc(64); fs.readSync(fd, b, 0, 64, 0); fs.closeSync(fd);
+    const n = b.readUInt32BE(0);
+    ok = b.toString('latin1', 4, 8) === 'ftyp' && n >= 8 && n <= 56 && b.toString('latin1', n + 4, n + 8) === 'moov';
+  } catch (e) {}
+  if (ok || Date.now() - st.mtimeMs > 900000) { headOk.set(k, ok); if (headOk.size > 30000) headOk.clear(); }
+  return ok;
+}
 function imouDay(cam, date) {
   const dir = path.join(REC(), safeDir(cam));
   const day = date.replace(/-/g, '');
@@ -64,8 +79,7 @@ function imouDay(cam, date) {
     if (n.slice(0, 8) !== day) return;
     let st; try { st = fs.statSync(path.join(dir, n)); } catch (e) { return; }
     // le morceau en cours d'écriture n'est pas encore lisible (il le sera à la fin des 10 min)
-    if (i === names.length - 1 && Date.now() - st.mtimeMs < 30000) { recording = true; return; }
-    if (st.size < 20000) return;
+    if (st.size < 20000 || !complete(path.join(dir, n), st)) { if (i === names.length - 1) recording = true; return; }
     const b = new Date(+n.slice(0, 4), +n.slice(4, 6) - 1, +n.slice(6, 8), +n.slice(9, 11), +n.slice(11, 13), +n.slice(13, 15));
     const e = st.mtimeMs > b.getTime() && st.mtimeMs - b.getTime() < 3600000 ? new Date(st.mtimeMs) : new Date(b.getTime() + 600000);
     out.push({ begin: local(b), end: local(e), type: 'regular', size: st.size, url: '/v/imou/' + safeDir(cam) + '/' + n });
