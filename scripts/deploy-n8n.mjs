@@ -120,7 +120,8 @@ const CODE_CFG = {
   iq: env.IAQUA_EMAIL ? { email: env.IAQUA_EMAIL, password: env.IAQUA_PASSWORD, exo: env.IAQUA_EXO_SN || null, hpm: env.IAQUA_HPM_SN || null } : null,
   im: env.IMOU_APP_ID ? { id: env.IMOU_APP_ID, secret: env.IMOU_APP_SECRET } : null,
   // clé commune avec le relais caméras de la Freebox : déduite du jeton principal (même valeur depuis le PC ou le cloud)
-  relay: { secret: createHash('sha256').update('relais-cameras|' + env.MAISON_TOKEN).digest('hex') },
+  // retention / presRetention : jours de conservation des vidéos Imou et Présence sur la Freebox (envoyés au relais)
+  relay: { secret: createHash('sha256').update('relais-cameras|' + env.MAISON_TOKEN).digest('hex'), retention: 30, presRetention: 30 },
   tu: env.TUYA_CLIENT_ID ? {
     id: env.TUYA_CLIENT_ID, secret: env.TUYA_CLIENT_SECRET, base: 'https://openapi.tuyaeu.com',
     devices: { sauna: env.TUYA_DEV_SAUNA, pac: env.TUYA_DEV_PAC, elec: env.TUYA_DEV_ELEC },
@@ -831,7 +832,7 @@ async function relayHello(b) {
   if (b.status && typeof b.status === 'object') R.status = { disk: b.status.disk || null, retention: b.status.retention || null,
     cams: (b.status.cams || []).slice(0, 12).map((c) => ({ id: String(c.id), ok: !!c.ok, gb: Number(c.gb) || 0, from: c.from || null })),
     presence: b.status.presence || null };
-  return reply(200, { ok: true, url });
+  return reply(200, { ok: true, url, cfg: { retention: CFG.relay.retention, presRetention: CFG.relay.presRetention } });
 }
 
 // ---------------- Smart Life / Tuya ----------------

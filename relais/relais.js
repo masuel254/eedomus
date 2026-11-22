@@ -95,8 +95,8 @@ const presDirs = {}; // dossier -> { mtime, clips: [...], subs: [...] }
 function clipTime(rel, st) {
   // date dans le nom (2026-11-22_18-05-03, 20261122_180503…) ou nombre de secondes ; sinon date du fichier
   const b = path.basename(rel);
-  let m = /(20[0-9]{2})[-_.]?([01][0-9])[-_.]?([0-3][0-9])[-_T. ]?([0-2][0-9])[-_.:h]?([0-5][0-9])[-_.:m]?([0-5][0-9])/.exec(b);
-  if (m) return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]);
+  let m = /(20[0-9]{2})[-_.]?([01][0-9])[-_.]?([0-3][0-9])[-_T. ]?([0-2][0-9])[-_.:h]?([0-5][0-9])(?:[-_.:m]?([0-5][0-9])(?![0-9A-Za-z]))?/.exec(b);
+  if (m) return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +(m[6] || 0));
   m = /(1[6-9][0-9]{8})/.exec(b);
   if (m) return new Date(+m[1] * 1000);
   return new Date(st.mtimeMs);
@@ -235,6 +235,27 @@ function clean() {
   const free = () => { try { const s = fs.statfsSync(REC()); return s.bavail * s.bsize; } catch (e) { return Infinity; } };
   for (const f of files) { if (free() >= minFree) break; if (f.gone) continue; try { fs.unlinkSync(f.p); gone++; } catch (e) {} }
   console.log('Nettoyage : ' + gone + ' fichier(s) supprimé(s)');
+  cleanPresence();
+}
+// Vidéos de la Présence : rangées par Netatmo dans PRESENCE_DIR/AAAA/MM/JJ/. On ne supprime que les vidéos
+// de ces dossiers datés, au-delà de PRESENCE_RETENTION_DAYS (0 ou absent : on ne supprime rien).
+function cleanPresence() {
+  const root = PRES(), days = Number(E.PRESENCE_RETENTION_DAYS) || 0;
+  if (!root || days < 7) return;
+  const limit = new Date(Date.now() - days * 86400000), lim = limit.getFullYear() * 10000 + (limit.getMonth() + 1) * 100 + limit.getDate();
+  const ls = (d) => { try { return fs.readdirSync(d).filter((n) => /^[0-9]+$/.test(n)); } catch (e) { return []; } };
+  let gone = 0;
+  ls(root).filter((y) => y.length === 4).forEach((y) => ls(path.join(root, y)).filter((mo) => mo.length === 2).forEach((mo) => {
+    ls(path.join(root, y, mo)).filter((d) => d.length === 2).forEach((d) => {
+      if (Number(y + mo + d) >= lim) return;
+      const dir = path.join(root, y, mo, d);
+      let names = []; try { names = fs.readdirSync(dir); } catch (e) { return; }
+      names.filter((n) => /\.(mp4|m4v|mov|jpg)$/i.test(n)).forEach((n) => { try { fs.unlinkSync(path.join(dir, n)); gone++; } catch (e) {} });
+      try { fs.rmdirSync(dir); } catch (e) { /* pas vide : on laisse */ }
+    });
+    try { fs.rmdirSync(path.join(root, y, mo)); } catch (e) {}
+  }));
+  if (gone) console.log('Présence : ' + gone + ' vieille(s) vidéo(s) supprimée(s)');
 }
 
 // ---------- Échanges avec le serveur n8n ----------
@@ -251,6 +272,11 @@ async function hello() {
   let st = null; try { st = status(); } catch (e) {}
   const j = await post({ action: 'relay.hello', url, ts, sig, status: st });
   console.log('Serveur prévenu : ' + (j.url || url));
+  // réglages décidés côté serveur (durées de conservation)
+  const C = j.cfg || {};
+  [['RETENTION_DAYS', C.retention], ['PRESENCE_RETENTION_DAYS', C.presRetention]].forEach(([k, v]) => {
+    if (Number(v) >= 7 && Number(v) <= 365 && String(E[k]) !== String(v)) { saveEnv(k, Number(v)); console.log(k + ' = ' + v); }
+  });
 }
 async function pair(code) {
   const j = await post({ action: 'relay.hello', url: E.PUBLIC_URL, code: String(code).replace(/[^0-9]/g, '') });

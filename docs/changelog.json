@@ -1,7 +1,17 @@
 {
-  "version": "2.35.2",
+  "version": "2.36.0",
   "date": "2026-11-22",
   "releases": [
+    {
+      "version": "2.36.0",
+      "date": "2026-11-22",
+      "time": "21:35",
+      "title": "Vidéos gardées 30 jours",
+      "changes": [
+        "Caméras Imou : vidéos gardées 30 jours sur la Freebox (au lieu de 14)",
+        "Présence : les vidéos de plus de 30 jours sont supprimées automatiquement pour faire de la place"
+      ]
+    },
     {
       "version": "2.35.2",
       "date": "2026-11-22",
@@ -1391,5 +1401,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "21:31"
+  "time": "21:35"
 }
