@@ -1,7 +1,16 @@
 {
-  "version": "2.29.3",
+  "version": "2.29.4",
   "date": "2026-11-22",
   "releases": [
+    {
+      "version": "2.29.4",
+      "date": "2026-11-22",
+      "time": "15:15",
+      "title": "Test d’alerte garage",
+      "changes": [
+        "Le serveur peut simuler une alerte (garage, eau, vent…) pour vérifier l’affichage, sans toucher aux appareils"
+      ]
+    },
     {
       "version": "2.29.3",
       "date": "2026-11-22",
@@ -1212,5 +1221,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "15:13"
+  "time": "15:15"
 }
