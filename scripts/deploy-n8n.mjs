@@ -1312,8 +1312,15 @@ async function tuya(b) {
   }
   if (b.action === 'tu.energy') {
     if (!CFG.tu.devices[b.key]) throw fail(403, 'not_allowed');
-    const st = await tuState(!(SD.tuState && SD.tuState.at > Date.now() - 5000));
+    // les relevés d'énergie sont pris toutes les 30 s par la minuterie : un état Tuya de moins d'une minute suffit
+    const st = await tuState(!(SD.tuState && SD.tuState.at > Date.now() - 60000));
     return Object.assign({ ok: true, key: b.key, now: st.devices[b.key] || null }, enSeries(b.key));
+  }
+  // Les trois compteurs d'un coup (accueil, onglet Plus) : une seule demande au lieu de trois
+  if (b.action === 'tu.energyall') {
+    const st = await tuState(!(SD.tuState && SD.tuState.at > Date.now() - 60000)), out = {};
+    Object.keys(CFG.tu.devices).forEach((k) => { if (CFG.tu.devices[k].meter !== false) out[k] = Object.assign({ ok: true, key: k, now: st.devices[k] || null }, enSeries(k)); });
+    return { ok: true, all: out };
   }
   // fresh : lecture directe chez Tuya (retour dans l'appli, ouverture d'une pièce), au plus une fois toutes les 5 s
   if (b.action === 'tu.state') return tuState(!!b.fresh && !(SD.tuState && SD.tuState.at > Date.now() - 5000));

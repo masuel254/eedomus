@@ -22,6 +22,24 @@
   var CAMS = null, camsAt = 0, camsLoading = false, liveCam = null, liveHd = true;
   var IM = null, imAt = 0, imLoading = false;
   var TU = null, tuPend = {};   // Smart Life : état des appareils, actions en cours
+  // ---------- Cache commun gardé sur l'iPhone ----------
+  // Dernières données reçues (appareils, chauffage, courbes, énergie…) : affichées dès l'ouverture, puis mises à jour derrière.
+  var PC = {}; try { PC = JSON.parse(localStorage.getItem('maison-pc') || '{}') || {}; } catch (e) { PC = {}; }
+  var pcTimer = 0;
+  function pcGet(k, maxAge) { var c = PC[k]; return c && (!maxAge || Date.now() - c.at < maxAge) ? c : null; }
+  function pcSet(k, v) {
+    PC[k] = { at: Date.now(), v: v };
+    clearTimeout(pcTimer); pcTimer = setTimeout(function () {
+      try { localStorage.setItem('maison-pc', JSON.stringify(PC)); }
+      catch (e) { PC = {}; try { localStorage.removeItem('maison-pc'); } catch (e2) {} } // place pleine : on repart de zéro
+    }, 400);
+  }
+  (function () {
+    var c;
+    if ((c = pcGet('state', 12 * 3600e3))) { STATES = c.v || {}; lastOk = c.at; } // l'en-tête indique l'âge (« il y a 2 h ») jusqu'à la mise à jour
+    if ((c = pcGet('nt', 12 * 3600e3))) NT = c.v;
+    if ((c = pcGet('tu', 12 * 3600e3))) TU = c.v;
+  })();
   var openRoom = store.get('maison.open') || 'salon';
   var newVersion = false;
   var pending = {};            // id -> { value, until } : affichage immédiat avant confirmation
@@ -70,7 +88,7 @@
     if (refreshing || !token) return; refreshing = true;
     api({ action: 'state' }).then(function (j) {
       if (j.names && JSON.stringify(j.names) !== JSON.stringify(NAMES)) { NAMES = j.names; try { localStorage.setItem('maison-names', JSON.stringify(NAMES)); } catch (e) {} }
-      STATES = j.states; lastOk = Date.now(); fails = 0; offline = false; if (!busy()) render();
+      STATES = j.states; pcSet('state', j.states); lastOk = Date.now(); fails = 0; offline = false; if (!busy()) render();
     }).catch(function (e) {
       if (e.status === 401) { token = null; return setup(); }
       fails++;
@@ -87,7 +105,7 @@
   }
   function refreshHeating() {
     if (!token) return;
-    api({ action: 'nt.heating' }).then(function (j) { NT = j; ntErr = false; presenceGuard(j); if (!busy()) render(); setTimeout(preloadGraphs, 4000); })
+    api({ action: 'nt.heating' }).then(function (j) { NT = j; pcSet('nt', j); ntErr = false; presenceGuard(j); if (!busy()) render(); setTimeout(preloadGraphs, 4000); })
       .catch(function () { ntErr = true; if (!NT) render(); });
   }
   // dernière liste de caméras gardée sur l'iPhone (affichée tout de suite, rechargée derrière)
@@ -105,7 +123,7 @@
   var IQ = null, iqPend = {};
   function refreshIq(fresh) {
     if (!token) return;
-    api({ action: 'iq.state', fresh: fresh === true }).then(function (j) { IQ = j; if (!sheet.hidden && sheet.dataset.view === 'timers' && !TED) renderTimers(); if (!busy() && !Object.keys(iqPend).some(function (k) { return iqPend[k].timer; })) render(); }).catch(function () { if (!IQ) IQ = { error: true }; });
+    api({ action: 'iq.state', fresh: fresh === true }).then(function (j) { IQ = j; pcSet('iq', j); if (!sheet.hidden && sheet.dataset.view === 'timers' && !TED) renderTimers(); if (!busy() && !Object.keys(iqPend).some(function (k) { return iqPend[k].timer; })) render(); }).catch(function () { if (!IQ) IQ = { error: true }; });
   }
   function iqVal(dev, key, base) { var p = iqPend[dev + ':' + key]; return p && p.until > Date.now() ? p.v : base; }
   function iqSend(dev, key, value, msg) {
@@ -171,7 +189,7 @@
 
   function refreshTuya(fresh) {
     if (!token) return;
-    api({ action: 'tu.state', fresh: fresh === true }).then(function (j) { TU = j; if (!busy()) render(); }).catch(function () {});
+    api({ action: 'tu.state', fresh: fresh === true }).then(function (j) { TU = j; pcSet('tu', j); if (!busy()) render(); }).catch(function () {});
   }
   function tuDev(key) { return TU && TU.devices ? TU.devices[key] : null; }
   function tuOn(key) { var p = tuPend[key]; if (p && p.until > Date.now()) return p.on; var d = tuDev(key); return !!(d && d.on); }
@@ -454,23 +472,37 @@
 
   // ---------- Graphiques (historique réel) ----------
   var HISTN = {}, HISTE = {}, ENGT = null, engtAt = 0;
+  // courbes déjà vues : reprises du cache (leur date d'origine est gardée, donc elles se mettent à jour si elles ont vieilli)
+  (function () {
+    var c;
+    if ((c = pcGet('histn', 48 * 3600e3))) HISTN = c.v || {};
+    if ((c = pcGet('histe', 7 * 86400e3))) HISTE = c.v || {};
+    if ((c = pcGet('engt', 12 * 3600e3))) { ENGT = c.v; engtAt = c.at; }
+    if ((c = pcGet('iq', 12 * 3600e3))) IQ = c.v;
+  })();
+  function histSave() {
+    var strip = function (m) { var o = {}; Object.keys(m).forEach(function (k) { if (m[k] && m[k].points) o[k] = { at: m[k].at, points: m[k].points }; }); return o; };
+    pcSet('histn', strip(HISTN)); pcSet('histe', strip(HISTE));
+  }
   function loadRoomHist(room) {
     var c = HISTN[room]; if (c && (c.loading || Date.now() - c.at < 600000)) return;
     HISTN[room] = { loading: true, at: Date.now(), points: c ? c.points : null };
-    api({ action: 'nt.roomhist', room: room, hours: 24 }).then(function (j) { HISTN[room] = { at: Date.now(), points: j.points }; if (!busy()) render(); })
+    api({ action: 'nt.roomhist', room: room, hours: 24 }).then(function (j) { HISTN[room] = { at: Date.now(), points: j.points }; histSave(); if (!busy()) render(); })
       .catch(function () { HISTN[room] = { at: Date.now() - 540000, points: c ? c.points : null }; });
   }
   function loadHistE(id, hours) {
     var key = id + '|' + hours, c = HISTE[key]; if (c && (c.loading || Date.now() - c.at < 600000)) return;
     HISTE[key] = { loading: true, at: Date.now(), points: c ? c.points : null };
-    api({ action: 'hist', id: id, hours: hours }).then(function (j) { HISTE[key] = { at: Date.now(), points: j.points }; if (!busy()) render(); })
+    api({ action: 'hist', id: id, hours: hours }).then(function (j) { HISTE[key] = { at: Date.now(), points: j.points }; histSave(); if (!busy()) render(); })
       .catch(function () { HISTE[key] = { at: Date.now() - 540000, points: c ? c.points : null }; });
   }
   function loadEnergyToday() {
     if (Date.now() - engtAt < 300000) return; engtAt = Date.now();
-    var keys = ['elec', 'pac', 'sauna'], out = {};
-    Promise.all(keys.map(function (k) { return api({ action: 'tu.energy', key: k }).then(function (j) { out[k] = j; }).catch(function () {}); }))
-      .then(function () { ENGT = out; if (!busy()) render(); });
+    // une seule demande pour les trois compteurs (repli sur trois demandes si le serveur ne la connaît pas encore)
+    api({ action: 'tu.energyall' }).then(function (j) { return j.all; }).catch(function () {
+      var keys = ['elec', 'pac', 'sauna'], out = {};
+      return Promise.all(keys.map(function (k) { return api({ action: 'tu.energy', key: k }).then(function (j) { out[k] = j; }).catch(function () {}); })).then(function () { return out; });
+    }).then(function (out) { if (!out) return; ENGT = out; pcSet('engt', out); if (!busy()) render(); });
   }
   function energyToday() {
     // Somme des 3 appareils, heure par heure, pour aujourd'hui
@@ -2035,12 +2067,12 @@
   function ymdK(d) { return ymd(d).replace(/-/g, ''); }
   function openEnergy(key, name) {
     var t = new Date();
-    ENG = { key: key, name: name, tab: 'day', day: ymdK(t), month: ymdK(t).slice(0, 6), year: String(t.getFullYear()), data: null, loading: true };
+    ENG = { key: key, name: name, tab: 'day', day: ymdK(t), month: ymdK(t).slice(0, 6), year: String(t.getFullYear()), data: (pcGet('eng-' + key) || {}).v || (ENGT && ENGT[key]) || null, loading: true };
     sheet.scrollTop = 0; openSheet('energy'); loadEnergy();
   }
   function loadEnergy() {
     if (!ENG) return; var k = ENG.key;
-    api({ action: 'tu.energy', key: k }).then(function (j) { if (ENG && ENG.key === k) { ENG.data = j; ENG.loading = false; renderEnergy(); } })
+    api({ action: 'tu.energy', key: k }).then(function (j) { pcSet('eng-' + k, j); if (ENG && ENG.key === k) { ENG.data = j; ENG.loading = false; renderEnergy(); } })
       .catch(function () { if (ENG) { ENG.loading = false; ENG.error = true; renderEnergy(); } });
   }
   function kwh(v) { return v == null ? '—' : v < 10 ? fmt(v, 2) : v < 100 ? fmt(v, 1) : fmt(v, 0); }
@@ -2412,9 +2444,18 @@
     waterHours(ymdK(new Date()));
   }
   function waterHours(dk) {
-    if (!WAT || WAT.hours[dk]) return;
-    WAT.hours[dk] = { loading: true };
-    api({ action: 'water.hours', day: dk }).then(function (j) { if (!WAT) return; WAT.hours[dk] = { h: j.hours }; if (sheet.dataset.view === 'water') renderWater(); })
+    if (!WAT) return;
+    var today = ymdK(new Date()), wc = pcGet('wh', 0), wh = wc ? wc.v : {};
+    // jours passés gardés sur l'iPhone ; aujourd'hui affiché depuis le cache puis relu (au plus toutes les 3 min)
+    if (!WAT.hours[dk] && wh[dk]) WAT.hours[dk] = { h: wh[dk].h, at: wh[dk].at };
+    var cur = WAT.hours[dk];
+    if (cur && (cur.loading || (cur.h && (dk !== today || Date.now() - (cur.at || 0) < 180000)))) return;
+    WAT.hours[dk] = { loading: true, h: cur && cur.h, at: cur && cur.at };
+    api({ action: 'water.hours', day: dk }).then(function (j) {
+      if (!WAT) return; WAT.hours[dk] = { h: j.hours, at: Date.now() };
+      var keep = {}; Object.keys(wh).sort().slice(-20).forEach(function (d) { keep[d] = wh[d]; }); keep[dk] = { h: j.hours, at: Date.now() }; pcSet('wh', keep);
+      if (sheet.dataset.view === 'water') renderWater();
+    })
       .catch(function () { if (WAT) WAT.hours[dk] = { error: true }; if (sheet.dataset.view === 'water') renderWater(); });
   }
   function litres(v) { return v == null ? '—' : v >= 1000 ? fmt(v / 1000, 2) + ' m³' : fmt(v, 0) + ' L'; }

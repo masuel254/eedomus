@@ -1,7 +1,18 @@
 {
-  "version": "2.31.1",
+  "version": "2.32.0",
   "date": "2026-11-22",
   "releases": [
+    {
+      "version": "2.32.0",
+      "date": "2026-11-22",
+      "time": "18:58",
+      "title": "Ouverture instantanée",
+      "changes": [
+        "Toutes les dernières données sont gardées sur l’iPhone (appareils, chauffage, petites courbes, pH, énergie, eau heure par heure, piscine, Smart Life) : l’appli s’affiche tout de suite puis se met à jour",
+        "L’en-tête indique l’âge des données (« il y a 2 h ») le temps de la mise à jour",
+        "Énergie : une seule demande pour les trois compteurs au lieu de trois, et moins d’appels à Tuya"
+      ]
+    },
     {
       "version": "2.31.1",
       "date": "2026-11-22",
@@ -1281,5 +1292,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "18:53"
+  "time": "18:58"
 }
