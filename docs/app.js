@@ -993,6 +993,12 @@
       '<h2 class="hl-t">Chauffe · ' + esc(rm ? rm.name : 'Pièce') + '</h2><p class="muted hl-s">Allumages et arrêts des 7 derniers jours, à la demi-heure près' + (HL.loading ? ' · lecture en cours…' : '') + '</p>';
     var ss = heatSessions(HL.rows), live = rm && roomHeat(rm), now = Date.now() / 1000;
     if (!HL.rows) h += '<p class="muted">Lecture de l’historique Netatmo…</p>';
+    // chauffe en direct pas encore dans l'historique Netatmo (transmis avec environ 1 h de retard)
+    if (live && HL.rows && !ss.some(function (x) { return !x.end; })) {
+      h += '<div class="hl-dh"><span>En ce moment</span><span>chauffe en cours</span></div><div class="hl-card"><div class="hl-row hl-live"><div class="hl-tl"><i class="live"></i></div><div class="hl-tx">' +
+        '<div><b class="lv">Chauffe en cours</b>' + (rm && rm.temp != null ? ' <em>' + fmt(rm.temp, 1) + '° → consigne ' + fmt(rm.setpoint, 1) + '°</em>' : '') + '</div>' +
+        '<div class="hl-mid">L’heure d’allumage exacte apparaîtra ici d’ici une heure environ : Netatmo transmet son historique avec du retard.</div></div></div></div>';
+    }
     else if (!ss.length) h += '<p class="muted">Aucune chauffe enregistrée sur cette période.</p>';
     var byDay = {}, order = [];
     ss.slice().reverse().forEach(function (x) {
@@ -1040,6 +1046,9 @@
     // % de chauffe (barres orange en bas)
     var step = rows.length > 1 ? (X(rows[1][0]) - X(rows[0][0])) : 6, bw = Math.max(1.5, step * 0.6);
     rows.forEach(function (r) { if (r[3] > 0) { var hh = r[3] / 100 * bandH; s += '<rect x="' + (X(r[0]) - bw / 2).toFixed(1) + '" y="' + (H - B - hh).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + hh.toFixed(1) + '" rx="1" class="g-heat"/>'; } });
+    // chauffe en cours (état en direct) : Netatmo transmet son historique avec ~1 h de retard, on montre donc la période depuis la dernière mesure
+    var lvr = rows[rows.length - 1];
+    if (lvr && lvr[4] && lvr[5] && rows.length > 1) { var pt0 = rows[rows.length - 2][0]; if (X(lvr[0]) - X(pt0) > 1) s += '<rect x="' + X(pt0).toFixed(1) + '" y="' + (H - B - bandH * 0.85).toFixed(1) + '" width="' + (X(lvr[0]) - X(pt0)).toFixed(1) + '" height="' + (bandH * 0.85).toFixed(1) + '" rx="2" class="g-heatlive"/>'; }
     // consigne (escalier rouge)
     var sp = rows.filter(function (r) { return r[2] != null; });
     if (sp.length) {
@@ -1320,7 +1329,7 @@
     if (!c || (!c.busy && Date.now() - c.at > (c.past ? 864e5 : 600000))) {
       OUTH[k] = { at: c ? c.at : 0, pts: c ? c.pts : null, busy: true };
       api({ action: 'out.hist', from: rg.from, to: rg.to }).then(function (j) {
-        OUTH[k] = { at: Date.now(), past: rg.to < ltStr(Date.now() - 3600000), pts: (j.points || []).map(function (p) { return [new Date(p[0].replace(' ', 'T') + ':00').getTime() / 1000, p[1]]; }) };
+        OUTH[k] = { at: j.partial ? Date.now() - 540000 : Date.now(), past: !j.partial && rg.to < ltStr(Date.now() - 3600000), pts: (j.points || []).map(function (p) { return [new Date(p[0].replace(' ', 'T') + ':00').getTime() / 1000, p[1]]; }) };
         var ks = Object.keys(OUTH).sort(function (a, b) { return OUTH[b].at - OUTH[a].at; }); ks.slice(16).forEach(function (x) { delete OUTH[x]; });
         try { localStorage.setItem('maison-outh', JSON.stringify(OUTH)); } catch (e) {}
         if (onNew) onNew();

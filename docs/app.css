@@ -1050,3 +1050,6 @@ svg.hl-svg { touch-action: none; }
 .nf-new { font-style: normal; font: 700 10.5px var(--f-ui); letter-spacing: .04em; text-transform: uppercase; color: #0C0E11; background: var(--cool); border-radius: 999px; padding: 2px 7px; margin-left: 6px; vertical-align: 2px; white-space: nowrap; }
 .nf-cnt { display: flex; align-items: center; gap: 8px; margin: 4px 4px 8px; font-size: 13px; font-weight: 700; color: var(--cool); }
 .nf-cnt i { width: 8px; height: 8px; border-radius: 50%; background: var(--warn); }
+.g-heatlive { fill: #FFB37A; opacity: .38; }
+.hl-row.hl-live { cursor: default; }
+.hl-row.hl-live .hl-mid { color: var(--mu); line-height: 1.35; }

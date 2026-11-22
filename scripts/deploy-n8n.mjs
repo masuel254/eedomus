@@ -508,11 +508,15 @@ async function outHist(from, to) {
   if (!ok(from) || !ok(to) || from >= to) throw fail(400, 'bad_range');
   SD.outh = SD.outh || {};
   const key = from + '|' + to, c = SD.outh[key];
-  if (c && c.at > Date.now() - (to < OUT_CUT ? 86400000 : 900000)) return c.data;
-  let pts = [];
+  if (c && c.at > Date.now() - (c.data.partial ? 30000 : to < OUT_CUT ? 86400000 : 900000)) return c.data;
+  let pts = [], partial = false;
   if (from < OUT_CUT) {
-    const r = await eedomus('get', 'action=periph.history&periph_id=' + OUT_SENSOR + '&start_date=' + encodeURIComponent(from + ':00') + '&end_date=' + encodeURIComponent((to < OUT_CUT ? to : OUT_CUT) + ':00'));
-    const list = r.success === 1 ? ((r.body && (r.body.history || r.body)) || []) : [];
+    // eedomus limite les demandes rapprochées : en cas d'échec, on réessaie une fois après une courte pause
+    const ask = () => eedomus('get', 'action=periph.history&periph_id=' + OUT_SENSOR + '&start_date=' + encodeURIComponent(from + ':00') + '&end_date=' + encodeURIComponent((to < OUT_CUT ? to : OUT_CUT) + ':00'));
+    let r = null; try { r = await ask(); } catch (e) { r = null; }
+    if (!r || r.success !== 1) { await new Promise((ok) => setTimeout(ok, 800)); try { r = await ask(); } catch (e) { r = null; } }
+    if (!r || r.success !== 1) partial = true;
+    const list = r && r.success === 1 ? ((r.body && (r.body.history || r.body)) || []) : [];
     (Array.isArray(list) ? list : []).forEach((x) => { const v = Number(x[0]), d = String(x[1] || '').slice(0, 16); if (d && !isNaN(v) && d < OUT_CUT) pts.push([d, v]); });
   }
   if (to > OUT_CUT) {
@@ -536,7 +540,7 @@ async function outHist(from, to) {
     pts.forEach((p) => { const k = p[0].slice(0, 10); if (!g[k]) { g[k] = [0, 0]; order.push(k); } g[k][0] += p[1]; g[k][1]++; });
     pts = order.map((k) => [k + ' 12:00', Math.round(g[k][0] / g[k][1] * 10) / 10]);
   }
-  const data = { ok: true, daily: days > 40, points: pts };
+  const data = { ok: true, daily: days > 40, points: pts, partial: partial };
   SD.outh[key] = { at: Date.now(), data };
   const ks = Object.keys(SD.outh).sort((x, y) => SD.outh[y].at - SD.outh[x].at);
   ks.slice(12).forEach((k) => { delete SD.outh[k]; });
