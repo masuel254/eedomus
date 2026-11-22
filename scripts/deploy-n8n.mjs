@@ -809,6 +809,13 @@ async function relay(b) {
     R.pair = { code: String(100000 + Math.floor(Math.random() * 900000)), exp: Date.now() + 15 * 60000 };
     return { ok: true, code: R.pair.code, exp: R.pair.exp };
   }
+  // Nom internet du relais (distinct de celui de la Freebox, pour marcher aussi en Wi-Fi à la maison) : transmis au relais
+  if (b.action === 'relay.host') {
+    const h = String(b.host || '').toLowerCase();
+    if (!/^[a-z0-9-]+([.][a-z0-9-]+)+$/.test(h) || h.length > 100) throw fail(403, 'not_allowed');
+    R.host = h;
+    return { ok: true, host: h };
+  }
   if (b.action === 'relay.sign') {
     if (!R.url) return { ok: true, url: null };
     const exp = (Math.floor(Date.now() / 3600000) + 25) * 3600; // change toutes les heures : les vidéos restent en cache sur l'iPhone
@@ -832,7 +839,7 @@ async function relayHello(b) {
   if (b.status && typeof b.status === 'object') R.status = { disk: b.status.disk || null, retention: b.status.retention || null,
     cams: (b.status.cams || []).slice(0, 12).map((c) => ({ id: String(c.id), ok: !!c.ok, gb: Number(c.gb) || 0, from: c.from || null })),
     presence: b.status.presence || null };
-  return reply(200, { ok: true, url, cfg: { retention: CFG.relay.retention, presRetention: CFG.relay.presRetention } });
+  return reply(200, { ok: true, url, cfg: { retention: CFG.relay.retention, presRetention: CFG.relay.presRetention, host: R.host || null } });
 }
 
 // ---------------- Smart Life / Tuya ----------------

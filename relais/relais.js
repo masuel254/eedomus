@@ -277,6 +277,16 @@ async function hello() {
   [['RETENTION_DAYS', C.retention], ['PRESENCE_RETENTION_DAYS', C.presRetention]].forEach(([k, v]) => {
     if (Number(v) >= 7 && Number(v) <= 365 && String(E[k]) !== String(v)) { saveEnv(k, Number(v)); console.log(k + ' = ' + v); }
   });
+  // nouveau nom internet décidé côté serveur : certificat HTTPS (Caddy) et adresse annoncée
+  if (C.host && /^[a-z0-9-]+([.][a-z0-9-]+)+$/.test(C.host) && 'https://' + C.host !== E.PUBLIC_URL) {
+    fs.writeFileSync('/etc/caddy/Caddyfile', '# Relais caméras : HTTPS automatique (certificat Let\'s Encrypt), tout est transmis au relais\n' +
+      C.host + ' {\n\treverse_proxy 127.0.0.1:' + (Number(E.PORT) || 8080) + '\n}\n');
+    require('child_process').execFileSync('systemctl', ['restart', 'caddy']);
+    saveEnv('PUBLIC_URL', 'https://' + C.host); E = loadEnv();
+    console.log('Nouveau nom : ' + C.host);
+    await new Promise((ok) => setTimeout(ok, 20000)); // le temps d'obtenir le certificat
+    return hello();
+  }
 }
 async function pair(code) {
   const j = await post({ action: 'relay.hello', url: E.PUBLIC_URL, code: String(code).replace(/[^0-9]/g, '') });
