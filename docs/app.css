@@ -1041,3 +1041,12 @@ svg.hl-svg { touch-action: none; }
 .sched-edit:active { transform: scale(.96); }
 .schedrow .sched { grid-template-columns: 36px 1fr auto; gap: 10px; padding-right: 10px; }
 .schedrow .sched-ch svg.i { width: 18px; height: 18px; }
+/* Cloche : les alertes arrivées depuis la dernière visite ressortent, les anciennes sont plus discrètes */
+.lg.nf b { font-weight: 500; color: #C9D0D9; }
+.lg.nf.new { background: rgba(124,178,255,.09); box-shadow: inset 3px 0 0 var(--cool); }
+.lg.nf.new b { font-weight: 800; color: var(--tx); }
+.lg.nf.new small { color: #C9D0D9; }
+.lg.nf.new .lt { color: var(--tx); font-weight: 600; }
+.nf-new { font-style: normal; font: 700 10.5px var(--f-ui); letter-spacing: .04em; text-transform: uppercase; color: #0C0E11; background: var(--cool); border-radius: 999px; padding: 2px 7px; margin-left: 6px; vertical-align: 2px; white-space: nowrap; }
+.nf-cnt { display: flex; align-items: center; gap: 8px; margin: 4px 4px 8px; font-size: 13px; font-weight: 700; color: var(--cool); }
+.nf-cnt i { width: 8px; height: 8px; border-radius: 50%; background: var(--warn); }

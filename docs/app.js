@@ -695,7 +695,9 @@
       else if (CFG && lastOk && !busy()) render();
     }).catch(function () {});
   }
-  function openNotifs() { sheet.scrollTop = 0; store.set('maison.notifs.seen', Date.now()); openSheet('notifs'); loadNotifs(); if (CFG) render(); }
+  // NF_PREV : date de la visite précédente de la cloche ; les alertes plus récentes sont mises en avant (« Nouveau »)
+  var NF_PREV = 0;
+  function openNotifs() { sheet.scrollTop = 0; NF_PREV = notifSeen(); store.set('maison.notifs.seen', Date.now()); openSheet('notifs'); loadNotifs(); if (CFG) render(); }
   function goNotif(tag) {
     closeSheet();
     if (tag === 'garage') return openLogs('doors');
@@ -709,13 +711,16 @@
       '<p class="muted" style="margin:0 4px 6px">Les 30 dernières reçues sur cet iPhone. Touche une alerte pour voir le détail.</p>';
     if (!NOTIFS.length) h += '<p class="muted" style="margin:14px 4px">Aucune notification enregistrée pour l’instant. Les prochaines s’afficheront ici.</p>';
     var ICN = { garage: 'garage', water: 'drop', wateroff: 'drop', meteo: 'wind', smoke: 'flame' }, cur = '';
+    var nNew = NOTIFS.filter(function (n) { return n.at > NF_PREV; }).length;
+    if (nNew && NOTIFS.length > nNew) h += '<p class="nf-cnt"><i></i>' + nNew + ' nouvelle' + (nNew > 1 ? 's' : '') + ' depuis ta dernière visite</p>';
     NOTIFS.slice().reverse().forEach(function (n) {
       var dt = new Date(n.at), p2 = function (x) { return (x < 10 ? '0' : '') + x; };
       var ds = dt.getFullYear() + '-' + p2(dt.getMonth() + 1) + '-' + p2(dt.getDate()) + ' ' + p2(dt.getHours()) + ':' + p2(dt.getMinutes());
       var dl = dayLabel(ds); if (dl !== cur) { if (cur) h += '</div>'; h += '<div class="lday">' + esc(dl) + '</div><div class="card2 flat logs">'; cur = dl; }
       var bad = /ouverte|fuite|fumée|hors ligne|rafales|gel|pluie|pleut/i.test(n.title) && !/fermée|terminée|fin d/i.test(n.title);
-      h += '<button class="lg nf' + (bad ? ' bad' : ' ok') + '" data-notif="' + esc(n.tag || '') + '"><span class="lt">' + esc(ds.slice(11)) + '</span><span class="li">' + icon(ICN[n.tag] || 'bell') + '</span>' +
-        '<span><b>' + esc(n.title) + '</b><small>' + esc(n.body || '') + '</small></span></button>';
+      var nw = n.at > NF_PREV;
+      h += '<button class="lg nf' + (bad ? ' bad' : ' ok') + (nw ? ' new' : '') + '" data-notif="' + esc(n.tag || '') + '"><span class="lt">' + esc(ds.slice(11)) + '</span><span class="li">' + icon(ICN[n.tag] || 'bell') + '</span>' +
+        '<span><b>' + esc(n.title) + (nw ? ' <em class="nf-new">Nouveau</em>' : '') + '</b><small>' + esc(n.body || '') + '</small></span></button>';
     });
     if (cur) h += '</div>';
     var keep = sheet.scrollTop; sheet.innerHTML = '<div class="sh-in">' + h + '</div>'; sheet.scrollTop = keep;
