@@ -1022,7 +1022,7 @@
     if (!d) return '<p class="muted">Chargement…</p>';
     var rows = grRows(d);
     if (rows.length < 2) return '<div class="spark-empty">Pas de mesures sur cette période.</div>';
-    var W = 340, H = 300, L = 30, R = 8, T = 18, B = 22, x0 = d.begin, x1 = grEnd(d);
+    var W = 340, H = 245, L = 30, R = 8, T = 16, B = 20, x0 = d.begin, x1 = grEnd(d);
     var temps = [], sps = [];
     rows.forEach(function (r) { temps.push(r[1]); if (r[2] != null) sps.push(r[2]); });
     var lo = Math.floor(Math.min.apply(null, temps.concat(sps)) - 0.5), hi = Math.ceil(Math.max.apply(null, temps.concat(sps)) + 0.5);
@@ -1334,14 +1334,14 @@
   function outBandSVG(d, idx) {
     if (!d) return '';
     var x0 = d.begin, x1 = grEnd(d), pts = outGet(outRange(x0, x1), function () { if (GR && sheet.dataset.view === 'graph' && !sheet.hidden) renderGraph(); });
-    var W = 340, H = 84, L = 30, R = 8, T = 22, B = 8;
-    var s = '<svg class="gsvg" viewBox="0 0 ' + W + ' ' + H + '" data-gsvg><line x1="' + L + '" x2="' + (W - R) + '" y1="1" y2="1" class="g-sep"/><text x="' + L + '" y="15" class="g-ot">Dehors</text>';
+    var W = 340, H = 64, L = 30, R = 8, T = 19, B = 5;
+    var s = '<svg class="gsvg" viewBox="0 0 ' + W + ' ' + H + '" data-gsvg><line x1="' + L + '" x2="' + (W - R) + '" y1="1" y2="1" class="g-sep"/><text x="' + L + '" y="13" class="g-ot">Dehors</text>';
     pts = (pts || []).filter(function (p) { return p[0] >= x0 - 3600 && p[0] <= x1 + 60; });
-    if (pts.length < 2) return s + '<text x="' + ((L + W - R) / 2) + '" y="52" class="g-om" text-anchor="middle">' + (OUTH[outRange(x0, x1).from + '|' + outRange(x0, x1).to] && !OUTH[outRange(x0, x1).from + '|' + outRange(x0, x1).to].busy ? 'Pas de mesure extérieure sur cette période' : 'Chargement…') + '</text></svg>';
+    if (pts.length < 2) return s + '<text x="' + ((L + W - R) / 2) + '" y="42" class="g-om" text-anchor="middle">' + (OUTH[outRange(x0, x1).from + '|' + outRange(x0, x1).to] && !OUTH[outRange(x0, x1).from + '|' + outRange(x0, x1).to].busy ? 'Pas de mesure extérieure sur cette période' : 'Chargement…') + '</text></svg>';
     var mn = Infinity, mx = -Infinity; pts.forEach(function (p) { if (p[1] < mn) mn = p[1]; if (p[1] > mx) mx = p[1]; });
     var lo = Math.floor(mn), hi = Math.ceil(mx); if (hi - lo < 2) { lo = Math.floor((mn + mx) / 2) - 1; hi = lo + 2; }
     var X = function (t) { return L + (Math.max(x0, Math.min(x1, t)) - x0) / (x1 - x0) * (W - L - R); }, Y = function (v) { return T + (1 - (v - lo) / (hi - lo)) * (H - T - B); };
-    s += '<text x="' + (W - R) + '" y="15" class="g-om" text-anchor="end">min ' + fmt(mn, 1) + '° · max ' + fmt(mx, 1) + '°</text>';
+    s += '<text x="' + (W - R) + '" y="13" class="g-om" text-anchor="end">min ' + fmt(mn, 1) + '° · max ' + fmt(mx, 1) + '°</text>';
     [lo, hi].forEach(function (v) { s += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + Y(v).toFixed(1) + '" y2="' + Y(v).toFixed(1) + '" class="g-grid"/><text x="' + (L - 6) + '" y="' + (Y(v) + 3).toFixed(1) + '" class="g-yl" text-anchor="end">' + v + '</text>'; });
     var dp = pts.map(function (p, i) { return (i ? 'L' : 'M') + X(p[0]).toFixed(1) + ' ' + Y(p[1]).toFixed(1); }).join(' ');
     s += '<path d="' + dp + ' L' + X(pts[pts.length - 1][0]).toFixed(1) + ' ' + (H - B) + ' L' + X(pts[0][0]).toFixed(1) + ' ' + (H - B) + ' Z" class="g-oa"/><path d="' + dp + '" class="g-o"/>';
