@@ -2704,6 +2704,34 @@
       .catch(function (err) { toast(err && err.message === 'refus' ? 'Notifications refusées : autorise-les dans Réglages iPhone › Notifications › Maison' : 'Activation impossible, réessaie', true); })
       .then(end);
   }
+  // Alertes envoyées par le serveur : titre, résumé, quand, et conditions exactes de déclenchement (affichées en accordéon)
+  var ALR_OPEN = {}; // alertes dépliées (gardées quand les Réglages se redessinent)
+  sheet.addEventListener('toggle', function (e) { var t = e.target; if (t && t.dataset && t.dataset.alr) ALR_OPEN[t.dataset.alr] = t.open; }, true);
+  var ALERTS = [
+    { k: 'garage', ic: 'garage', t: 'Porte de garage ouverte', w: 'Toujours', s: function (d) { return 'Après ' + d + ' min ouverte'; }, c: [
+      function (d) { return 'La porte de garage est ouverte depuis ' + d + ' min (réglable ci-dessous).'; },
+      'Rappel toutes les 30 min tant qu’elle reste ouverte.',
+      'L’état vient des commandes et des photos de contrôle de la caméra du garage.'] },
+    { k: 'water', ic: 'drop', t: 'Fuite d’eau', w: 'Toujours', s: 'Alerte immédiate', c: [
+      'Le compteur d’eau détecte une fuite (petite, moyenne ou grosse) : alerte immédiate.',
+      'Rappel toutes les 15 min tant que la fuite dure, puis message « fuite terminée ».',
+      'Alerte aussi si le compteur ne donne plus de nouvelles depuis 3 h.'] },
+    { k: 'smoke', ic: 'flame', t: 'Détecteur de fumée', w: 'Toujours', s: 'Alerte immédiate', c: [
+      'Un détecteur de fumée passe en alarme : alerte immédiate (vérifié toutes les 30 s).',
+      'Rappel toutes les 3 min tant qu’il est en alarme, puis message de fin d’alerte.'] },
+    { k: 'boiler', ic: 'flame', t: 'Chaudière', w: 'Toujours', s: 'Chauffe sans effet', c: [
+      'La chaudière chauffe depuis au moins 45 min sans que le séjour ne se réchauffe.',
+      'Pas d’alerte si le séjour est déjà presque à sa consigne (elle chauffe alors d’autres pièces).',
+      'Une période de chauffe se termine après 15 min d’arrêt complet.'] },
+    { k: 'wind', ic: 'wind', t: 'Coup de vent', w: 'Toujours', s: 'Rafales de 50 km/h ou plus', c: [
+      'Des rafales d’au moins 50 km/h sont prévues dans les 36 prochaines heures.',
+      'Une seule alerte par épisode : replier la pergola et bien fermer le dôme de la piscine.'] },
+    { k: 'morning', ic: 'thermo', t: 'Gel et neige le matin', w: 'Semaine', s: 'Vers 7h30, du lundi au vendredi', c: [
+      'Du lundi au vendredi, entre 7h30 et 8h, une seule fois par jour.',
+      'Gel : 2° ou moins dehors, maintenant ou d’ici 9h.',
+      'Neige : prévue à n’importe quelle heure de la journée.',
+      'Pas de notification si aucune des deux conditions n’est remplie.'] }
+  ];
   function pushHTML() {
     if (!CFG.push) return '';
     if (!PUSH.loaded) pushLoad();
@@ -2712,13 +2740,17 @@
     var d = PUSH.delay, i = PUSH_DELAYS.indexOf(d);
     h += '<div class="card2 flat rs-list">' +
       '<button class="row' + (PUSH.on ? ' is-on' : '') + (PUSH.busy ? ' busy' : '') + '" data-push-toggle><span class="ic">' + icon('bell') + '</span><span><b>Alertes sur cet iPhone</b><small>' + (PUSH.on ? 'Notification et pastille sur l’icône' : 'Désactivées') + '</small></span><span class="sw"></span></button>' +
-      '<div class="row"><span class="ic">' + icon('garage') + '</span><span><b>Porte de garage ouverte</b><small>Alerte après ' + d + ' min, rappel toutes les 30 min</small></span>' +
-      '<span class="stp2"><button data-push-delay="' + (PUSH_DELAYS[i - 1] || d) + '" aria-label="Moins">−</button><button data-push-delay="' + (PUSH_DELAYS[i + 1] || d) + '" aria-label="Plus">+</button></span></div>' +
       (PUSH.on ? '<button class="row" data-push-test><span class="ic">' + icon('play') + '</span><span><b>Envoyer une notification de test</b><small>Pour vérifier que tout marche</small></span><span class="val">›</span></button>' : '') +
-      '<div class="row"><span class="ic">' + icon('drop') + '</span><span><b>Fuite d’eau</b><small>Alerte immédiate, rappel toutes les 15 min, puis « fuite terminée ». Alerte aussi si le compteur ne répond plus depuis 3 h.</small></span><span class="ok">Toujours</span></div>' +
-      '<div class="row"><span class="ic">' + icon('flame') + '</span><span><b>Chaudière</b><small>Alerte si la chaudière chauffe depuis 45 min sans que le séjour ne se réchauffe : « vérifier la chaudière ».</small></span><span class="ok">Toujours</span></div>' +
-      '<div class="row"><span class="ic">' + icon('drop') + '</span><span><b>Gel et neige le matin</b><small>Du lundi au vendredi vers 7h30 : alerte s’il fait 2° ou moins dehors (maintenant ou avant 9h) ou si de la neige est prévue dans la journée.</small></span><span class="ok">Semaine</span></div>' +
-      '</div><p class="note-q">Le délai est le même pour toute la famille. Chacun active les alertes sur son propre iPhone.</p>';
+      '</div>' +
+      // Une ligne repliée par alerte : touche pour voir exactement quand elle se déclenche
+      '<h3>Alertes</h3>' + ALERTS.map(function (a) {
+        return '<details class="acc2 alr" data-alr="' + a.k + '"' + (ALR_OPEN[a.k] ? ' open' : '') + '><summary><span class="ic">' + icon(a.ic) + '</span><span class="alr-t"><b>' + esc(a.t) + '</b><small>' + esc(typeof a.s === 'function' ? a.s(d) : a.s) + '</small></span>' +
+          '<span class="ok">' + esc(a.w) + '</span>' + icon('down') + '</summary><div class="alr-b"><ul>' +
+          a.c.map(function (x) { return '<li>' + esc(typeof x === 'function' ? x(d) : x) + '</li>'; }).join('') + '</ul>' +
+          (a.k === 'garage' ? '<div class="alr-set"><span>Délai avant l’alerte : <b>' + d + ' min</b></span><span class="stp2"><button data-push-delay="' + (PUSH_DELAYS[i - 1] || d) + '" aria-label="Moins">−</button><button data-push-delay="' + (PUSH_DELAYS[i + 1] || d) + '" aria-label="Plus">+</button></span></div>' : '') +
+          '</div></details>';
+      }).join('') +
+      '<p class="note-q">Touche une alerte pour voir exactement quand elle se déclenche. Le délai du garage est le même pour toute la famille. Chacun active les alertes sur son propre iPhone.</p>';
     return h;
   }
   function relayHTML() {

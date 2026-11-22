@@ -1075,3 +1075,16 @@ svg.hl-svg { touch-action: none; }
 /* origine de la vidéo lue : Freebox (relais) ou carte SD de la caméra */
 .src-tag { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 8px; font-size: 11px; font-weight: 700; vertical-align: 1px; background: var(--s2); color: var(--mu); border: 1px solid var(--ln); }
 .src-tag.fb { color: #34c759; border-color: rgba(52,199,89,.4); }
+
+/* Réglages : alertes en accordéon (conditions de déclenchement) */
+.acc2.alr > summary { font-weight: 400; }
+.acc2.alr > summary .ic { flex: none; }
+.alr-t { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.alr-t b { font-weight: 700; }
+.alr-t small { color: var(--mu); font-size: 13px; }
+.acc2.alr > summary > .ok { margin-left: auto; font-size: 13px; }
+.acc2.alr > summary > svg.i { margin-left: 4px; }
+.alr-b { border-top: 1px solid var(--ln); background: #111418; padding: 10px 14px 14px; }
+.alr-b ul { margin: 0; padding-left: 18px; color: var(--mu); font-size: 13.5px; line-height: 1.6; }
+.alr-set { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; font-size: 14px; }
+.acc2.alr .ic { width: 38px; height: 38px; border-radius: 12px; background: var(--s2); display: grid; place-items: center; color: var(--mu); }

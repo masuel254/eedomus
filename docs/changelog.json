@@ -1,7 +1,17 @@
 {
-  "version": "2.37.0",
+  "version": "2.38.0",
   "date": "2026-11-22",
   "releases": [
+    {
+      "version": "2.38.0",
+      "date": "2026-11-22",
+      "time": "22:25",
+      "title": "Alertes en accordéon",
+      "changes": [
+        "Réglages : chaque alerte est repliée sur une ligne ; touche-la pour voir exactement quand elle se déclenche",
+        "Alertes détecteur de fumée et coup de vent ajoutées à la liste"
+      ]
+    },
     {
       "version": "2.37.0",
       "date": "2026-11-22",
@@ -1428,5 +1438,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "22:11"
+  "time": "22:25"
 }
