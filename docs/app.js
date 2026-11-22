@@ -2009,11 +2009,22 @@
     REC = { cam: camId, date: ymd(new Date()), list: null, loading: false, error: false, play: play || null };
     liveCam = null; sheet.scrollTop = 0; openSheet('rec'); loadRec();
   }
+  // Listes d'enregistrements gardées sur l'iPhone : un jour passé ne change plus (affiché sans rien redemander) ;
+  // aujourd'hui s'affiche depuis le cache puis se met à jour.
+  function recCache() { var c = pcGet('rec'); return c ? c.v : {}; }
   function loadRec() {
     var c = REC && camById(REC.cam); if (!c || c.src !== 'imou') return;
-    REC.loading = true; REC.error = false; var want = REC.date;
-    api({ action: 'im.records', cam: c.id, date: want }).then(function (j) { if (REC && REC.date === want) { REC.list = j.records; REC.loading = false; renderRec(); } })
-      .catch(function () { if (REC) { REC.loading = false; REC.error = true; renderRec(); } });
+    var want = REC.date, key = c.id + '|' + want, rc = recCache()[key], past = want < ymd(new Date());
+    if (rc) REC.list = rc.list;
+    REC.error = false;
+    if (rc && (past ? rc.full : Date.now() - rc.at < 60000)) { REC.loading = false; return renderRec(); }
+    REC.loading = !rc;
+    api({ action: 'im.records', cam: c.id, date: want }).then(function (j) {
+      var all = recCache(); all[key] = { at: Date.now(), list: j.records, full: past };
+      var ks = Object.keys(all).sort(function (x, y) { return all[y].at - all[x].at; }); ks.slice(60).forEach(function (k) { delete all[k]; });
+      pcSet('rec', all);
+      if (REC && REC.date === want && REC.cam === c.id) { REC.list = j.records; REC.loading = false; renderRec(); }
+    }).catch(function () { if (REC) { REC.loading = false; if (!REC.list) REC.error = true; renderRec(); } });
     renderRec();
   }
   var RT = { videomotion: 'Mouvement', alarm: 'Alarme', human: 'Personne', manual: 'Manuel', regular: 'Continu', all: 'Enregistrement' };
@@ -2027,7 +2038,7 @@
     var h = '<div class="sh-hd"><button class="back2" data-recback>' + icon('down') + 'Caméras</button><button class="close" data-close aria-label="Fermer">×</button></div>' +
       '<h2 class="rec-title">' + esc(c ? c.name : 'Caméra') + ' · enregistrements</h2>';
     h += REC.play ? '<div class="camcard player"><video id="recv" src="' + esc(REC.play.url) + '" autoplay playsinline controls></video>' +
-      '<div class="cammeta"><b>' + esc(REC.play.label) + '</b></div></div>'
+      '<div class="cammeta"><b>' + esc(REC.play.label) + '</b>' + (REC.play.hdOk ? '<button class="hdbtn' + (REC.play.hd ? ' on' : '') + '" data-rechd>' + (REC.play.hd ? 'HD' : 'Passer en HD') + '</button>' : '') + '</div></div>'
       : '<div class="camcard player empty"><span>' + icon('play') + 'Choisis un enregistrement ci-dessous</span></div>';
     if (c && c.src === 'imou') {
       var days = '';
@@ -2524,8 +2535,10 @@
   function playEvent(id) {
     var e = ((CAMS && CAMS.events) || []).filter(function (x) { return x.id === id; })[0]; if (!e || !e.video) return;
     var lbl = (EV[e.type] || 'Événement') + ' · ' + new Date(e.time * 1000).toLocaleString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-    if (!REC || REC.cam !== e.camera) return openRec(e.camera, { url: e.video, label: lbl, key: e.id });
-    REC.play = { url: e.video, label: lbl, key: e.id }; sheet.scrollTop = 0; renderRec();
+    // basse définition d'abord (démarre bien plus vite), bouton « Passer en HD »
+    var pl = { url: e.video.replace('/files/high/', '/files/low/'), urlHd: e.video, hd: false, hdOk: /[/]files[/]high[/]/.test(e.video), label: lbl, key: e.id };
+    if (!REC || REC.cam !== e.camera) return openRec(e.camera, pl);
+    REC.play = pl; sheet.scrollTop = 0; renderRec();
   }
   var EV = { human: 'Personne', vehicle: 'Véhicule', animal: 'Animal', movement: 'Mouvement', outdoor: 'Mouvement', person: 'Personne' };
   function renderCams() {
@@ -2988,9 +3001,19 @@
       var r = REC && REC.list && REC.list[+b.dataset.recplay]; if (!r) return;
       var label = r.begin.slice(11, 16) + ' → ' + r.end.slice(11, 16) + ' · ' + new Date(r.begin.replace(' ', 'T')).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
       b.classList.add('busy');
-      return api({ action: 'im.playback', cam: REC.cam, begin: r.begin, end: r.end }).then(function (j) {
-        REC.play = { url: j.url, label: label, key: r.begin }; sheet.scrollTop = 0; renderRec();
+      // qualité réduite d'abord : démarre plus vite et consomme moins le forfait vidéo Imou ; « Passer en HD » relance en pleine qualité
+      return api({ action: 'im.playback', cam: REC.cam, begin: r.begin, end: r.end, sd: true }).then(function (j) {
+        REC.play = { url: j.url, label: label, key: r.begin, hd: false, hdOk: true, imou: { begin: r.begin, end: r.end } }; sheet.scrollTop = 0; renderRec();
       }).catch(function () { b.classList.remove('busy'); toast('Lecture impossible pour le moment, réessaie', true); });
+    }
+    if ((b = e.target.closest('[data-rechd]'))) {
+      var P = REC && REC.play; if (!P || P.hd) return;
+      var vv = document.getElementById('recv'), at = vv ? vv.currentTime : 0;
+      var go = function (url) { P.url = url; P.hd = true; renderRec(); var v2 = document.getElementById('recv'); if (v2 && at) v2.addEventListener('loadedmetadata', function () { try { v2.currentTime = at; } catch (er) {} }, { once: true }); };
+      if (P.urlHd) return go(P.urlHd);
+      b.textContent = 'Chargement HD…';
+      return api({ action: 'im.playback', cam: REC.cam, begin: P.imou.begin, end: P.imou.end }).then(function (j) { if (REC && REC.play === P) go(j.url); })
+        .catch(function () { toast('HD indisponible pour le moment', true); renderRec(); });
     }
     if (e.target.closest('[data-push-toggle]')) return pushToggle();
     if ((b = e.target.closest('[data-push-delay]'))) {

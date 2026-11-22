@@ -1069,3 +1069,5 @@ svg.hl-svg { touch-action: none; }
 .nf-sw.drag .nf-del, .nf-sw.open .nf-del { visibility: visible; }
 .nf-sw .lg.nf { border-radius: 0; box-shadow: none; }
 .nf-sw .lg.nf.new { box-shadow: inset 3px 0 0 var(--cool); }
+.cammeta .hdbtn { margin-left: auto; background: var(--s3); color: var(--cool); border: 0; border-radius: 999px; padding: 5px 11px; font: 700 12px var(--f-ui); cursor: pointer; }
+.cammeta .hdbtn.on { background: var(--cool); color: #0C0E11; cursor: default; }

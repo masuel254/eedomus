@@ -1,7 +1,18 @@
 {
-  "version": "2.32.0",
+  "version": "2.33.0",
   "date": "2026-11-22",
   "releases": [
+    {
+      "version": "2.33.0",
+      "date": "2026-11-22",
+      "time": "19:16",
+      "title": "Vidéos plus rapides",
+      "changes": [
+        "Clips de la caméra Présence et enregistrements Imou : lecture en qualité réduite d’abord (démarrage plus rapide), avec un bouton « Passer en HD » qui reprend au même moment",
+        "Imou : la qualité réduite consomme beaucoup moins le forfait vidéo",
+        "Listes d’enregistrements gardées sur l’iPhone : les jours passés s’affichent instantanément"
+      ]
+    },
     {
       "version": "2.32.0",
       "date": "2026-11-22",
@@ -1292,5 +1303,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "18:58"
+  "time": "19:16"
 }
