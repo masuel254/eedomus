@@ -768,7 +768,7 @@
     var shut = [], allRooms = [];
     CFG.groups.forEach(function (g) { g.rooms.forEach(function (rm) { allRooms.push(rm); rm.items.forEach(function (it) { if (it.type === 'shutter') shut.push(it); }); }); });
     var up = shut.filter(function (i) { return shutterPos(i.id) === 'up'; }).length;
-    loadHistE(3557564, 168); loadEnergyToday();
+    loadHistE(3557564, 168); loadHistE(3227865, 168); loadEnergyToday();
     var ex = IQ && IQ.exo, ph = ex && ex.ph != null ? ex.ph : num(3557564), water = ex && ex.water != null ? ex.water : num(3557562);
     var et = energyToday(), hi = new Date().getHours();
     h += '<div class="lbl">Favoris</div><div class="fav">' +
@@ -1206,11 +1206,20 @@
     h += '<p class="note-q">Prévisions Météo-France (modèles AROME et ARPEGE) via Open-Meteo, pour un carré d’environ 1 km autour de la commune. Une notification te prévient quand des rafales d’au moins 50 km/h sont prévues dans les 36 h.</p>';
     var keep = sheet.scrollTop; sheet.innerHTML = '<div class="sh-in">' + h + '</div>'; sheet.scrollTop = keep;
   }
+  // Température extérieure (sonde du jardin) sur 7 jours
+  function outTempHTML() {
+    var h = HISTE['3227865|168'], pts = h && h.points ? h.points.map(function (p) { return [new Date(String(p[0]).replace(' ', 'T')).getTime(), p[1]]; }).filter(function (p) { return p[1] != null && !isNaN(p[0]); }) : null;
+    var cur = pts && pts.length ? pts[pts.length - 1][1] : num(3227865), mn = null, mx = null;
+    if (pts) pts.forEach(function (p) { if (mn == null || p[1] < mn) mn = p[1]; if (mx == null || p[1] > mx) mx = p[1]; });
+    return '<div class="card2"><div class="row-hd"><b>Température extérieure (pergola) · 7 jours</b><span class="mono">' + (cur != null && !isNaN(cur) ? fmt(cur, 1) + '°' : '—') + '</span></div>' +
+      spark(pts, { w: 320, h: 80, color: '#F4B860', axis: true, zoom: true, labels: ['−7 j', '−5 j', '−3 j', '−1 j', 'auj.'] }) +
+      (mn != null ? '<p class="note-q">Mini ' + fmt(mn, 1) + '° · maxi ' + fmt(mx, 1) + '° sur la semaine</p>' : '') + '</div>';
+  }
   // ---------- Onglet Plus (piscine, énergie, météo, réglages) ----------
   function moreHTML() {
     var pis = findRoom('piscine'), sdb = findRoom('sdb'), h = '';
     var ph = HISTE['3557564|168'];
-    h += '<div class="lbl">Météo</div>' + meteoHTML();
+    h += '<div class="lbl">Météo</div>' + meteoHTML() + outTempHTML();
     var wh = waterHTML(); if (wh) h += '<div class="lbl">Eau</div>' + wh;
     h += '<div class="lbl">Énergie</div><div class="card2 flat">' +
       '<button class="row" data-cost><span class="ic" style="color:#FF8A5B">' + icon('flame') + '</span><span><b>Coût total</b><small>Gaz, électricité et eau · en €</small></span><span class="val">›</span></button>' +
@@ -2602,7 +2611,7 @@
     if (TAB === 'cams') liveCam = null;
     TAB = t; store.set('maison.tab', TAB); SLIDE = null; app.scrollTop = 0;
     if (t === 'cams') { loadCams(false); loadImou(false); }
-    if (t === 'more') { refreshIq(true); refreshTuya(true); loadEnergyToday(); loadHistE(3557564, 168); }
+    if (t === 'more') { refreshIq(true); refreshTuya(true); loadEnergyToday(); loadHistE(3557564, 168); loadHistE(3227865, 168); }
     if (t === 'climate') { var r = ntCurrentRoom(); if (r) loadRoomHist(r.id); }
     if (t === 'alarm') refresh();
     render();
@@ -2674,7 +2683,7 @@
     if (!token) return setup();
     render(); refresh(); refreshHeating(); refreshTuya(true); refreshIq(false);
     if (TAB === 'cams') { loadCams(false); loadImou(false); }
-    if (TAB === 'more') { loadEnergyToday(); loadHistE(3557564, 168); }
+    if (TAB === 'more') { loadEnergyToday(); loadHistE(3557564, 168); loadHistE(3227865, 168); }
     setInterval(function () { if (!document.hidden) refreshIq(false); }, 60000);
     setInterval(function () { if (!document.hidden) refresh(); }, 10000);
     setInterval(function () { if (!document.hidden && GAR && GAR.state === 'unknown') loadLogs('doors', true); }, 15000);

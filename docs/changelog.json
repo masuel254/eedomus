@@ -1,7 +1,17 @@
 {
-  "version": "2.24.0",
-  "date": "2026-11-21",
+  "version": "2.25.0",
+  "date": "2026-11-22",
   "releases": [
+    {
+      "version": "2.25.0",
+      "date": "2026-11-22",
+      "time": "11:21",
+      "title": "Température extérieure",
+      "changes": [
+        "Dans l’onglet Plus, sous la météo : courbe de la température extérieure sur 7 jours, avec le mini et le maxi de la semaine",
+        "La consommation de la semaine reste dans Plus › Coût total › Semaine"
+      ]
+    },
     {
       "version": "2.24.0",
       "date": "2026-11-21",
@@ -1002,14 +1012,14 @@
     "Tester les réglages iAquaLink depuis l’appli (chloration, pH, Boost, filtration, programmes)",
     "Pompe à chaleur Zodiac hors ligne depuis le 27/09 : à retester quand elle sera rallumée",
     "Tester la modification d’un planning (de préférence sur une copie d’abord)",
-    "Graphiques supplémentaires : température extérieure, consommation sur la semaine",
     "Surveiller le forfait vidéo Imou avec « Tout en direct » activé",
     "Garage : confirmer une fois de nuit « Elle est ouverte » et « Elle est fermée » (références infrarouge)",
     "Option : capteur d'ouverture sur la porte de garage (fiable à 100 %, même si la caméra est hors ligne)",
     "Notifications : activer « Alertes sur cet iPhone » dans Réglages (sur chaque iPhone de la famille) puis toucher « Envoyer une notification de test »",
     "Révoquer à la fin : mot de passe Quandify",
     "Révoquer à la fin : mot de passe TotalEnergies",
-    "Révoquer à la fin : mot de passe EDF"
+    "Révoquer à la fin : mot de passe EDF",
+    "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "22:56"
+  "time": "11:21"
 }
