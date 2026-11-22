@@ -2063,28 +2063,36 @@
     }).catch(function () { if (REC) { REC.relay = false; renderRec(); } });
     renderRec();
   }
+  // Deux listes : les mouvements (carte SD, liste donnée par Imou) et la journée entière gardée sur la Freebox (tranches de 10 min).
+  // Un mouvement se lit depuis la Freebox, au bon moment, quand la tranche qui le contient y est déjà.
   function loadRec() {
     var c = REC && camById(REC.cam); if (!c) return;
     if (c.src !== 'imou') return loadPres();
-    var want = REC.date, sd = !!REC.sd, key = c.id + '|' + want + (sd ? '|sd' : ''), rc = recCache()[key], past = want < ymd(new Date());
-    if (rc) { REC.list = rc.list; REC.relay = !!rc.relay; }
+    var want = REC.date, key = c.id + '|' + want, fk = key + '|fb', C = recCache(), rc = C[key], fc = C[fk], past = want < ymd(new Date());
+    if (rc) REC.list = rc.list;
+    if (fc) REC.segs = fc.list;
     REC.error = false;
-    if (rc && (past ? rc.full : Date.now() - rc.at < 60000)) { REC.loading = false; return renderRec(); }
-    REC.loading = !rc;
-    // Freebox d'abord (rapide, sans forfait) ; carte SD de la caméra en secours, ou si on la demande
-    (sd ? Promise.reject(new Error('sd')) : relayJson('/api/imou?cam=' + encodeURIComponent(c.id) + '&date=' + want).then(function (j) {
-      if (!j.records.length && !j.recording) throw new Error('vide'); // pas encore d'enregistrement sur la Freebox ce jour-là
-      return { records: j.records, relay: true };
-    })).catch(function () {
-      return api({ action: 'im.records', cam: c.id, date: want }).then(function (j) { return { records: j.records, relay: false }; });
-    }).then(function (j) {
-      var all = recCache(); all[key] = { at: Date.now(), list: j.records, full: past, relay: j.relay };
-      var ks = Object.keys(all).sort(function (x, y) { return all[y].at - all[x].at; }); ks.slice(60).forEach(function (k) { delete all[k]; });
+    var fresh = function (x) { return x && (past ? x.full : Date.now() - x.at < 60000); };
+    var save = function (k, list) {
+      var all = recCache(); all[k] = { at: Date.now(), list: list, full: past };
+      var ks = Object.keys(all).sort(function (x, y) { return all[y].at - all[x].at; }); ks.slice(80).forEach(function (q) { delete all[q]; });
       pcSet('rec', all);
-      if (REC && REC.date === want && REC.cam === c.id && !!REC.sd === sd) { REC.list = j.records; REC.relay = j.relay; REC.loading = false; renderRec(); }
-    }).catch(function () { if (REC) { REC.loading = false; if (!REC.list) REC.error = true; renderRec(); } });
+    };
+    var mine = function () { return REC && REC.date === want && REC.cam === c.id; };
+    if (!fresh(rc)) {
+      REC.loading = !rc;
+      api({ action: 'im.records', cam: c.id, date: want }).then(function (j) { save(key, j.records); if (mine()) { REC.list = j.records; REC.loading = false; renderRec(); } })
+        .catch(function () { if (REC) { REC.loading = false; if (!REC.list) REC.error = true; renderRec(); } });
+    } else REC.loading = false;
+    if (!fresh(fc)) relayJson('/api/imou?cam=' + encodeURIComponent(c.id) + '&date=' + want)
+      .then(function (j) { save(fk, j.records); if (mine()) { REC.segs = j.records; renderRec(); } })
+      .catch(function () { if (mine() && !REC.segs) { REC.segs = null; renderRec(); } });
     renderRec();
   }
+  function segAt(t) { // tranche de la Freebox qui contient l'instant t (« AAAA-MM-JJ hh:mm:ss »)
+    return ((REC && REC.segs) || []).filter(function (g) { return g.url && g.begin <= t && t < g.end; })[0] || null;
+  }
+  function secs(a, b) { return Math.max(0, Math.round((new Date(b.replace(' ', 'T')) - new Date(a.replace(' ', 'T'))) / 1000)); }
   var RT = { videomotion: 'Mouvement', alarm: 'Alarme', human: 'Personne', manual: 'Manuel', regular: 'Continu', all: 'Enregistrement' };
   function dur(a, b) {
     var s = Math.max(0, (new Date(b.replace(' ', 'T')) - new Date(a.replace(' ', 'T'))) / 1000);
@@ -2108,17 +2116,18 @@
       h += '<div class="days">' + days + '</div>';
       if (REC.loading && !REC.list) h += '<p class="muted">Lecture de la carte SD…</p>';
       else if (REC.error) h += '<p class="muted">La caméra ne répond pas. Réessaie dans un instant.</p>';
-      else if (REC.list && !REC.list.length) h += '<p class="muted">Aucun enregistrement ce jour-là.</p>';
-      else if (REC.list) h += '<div class="evlist">' + REC.list.map(function (r, i) {
+      var L = REC.all ? REC.segs : REC.list;
+      if (REC.segs && REC.segs.length) h += '<div class="days seg2"><button class="' + (REC.all ? '' : 'on') + '" data-recall="0">Mouvements</button><button class="' + (REC.all ? 'on' : '') + '" data-recall="1">Toute la journée</button></div>';
+      if (REC.all && !L) h += '<p class="muted">Lecture de la Freebox…</p>';
+      else if (L && !L.length) h += '<p class="muted">' + (REC.all ? 'Rien d’enregistré sur la Freebox ce jour-là.' : 'Aucun mouvement ce jour-là.') + '</p>';
+      else if (L) h += '<div class="evlist">' + L.map(function (r, i) {
         var playing = REC.play && REC.play.key === r.begin;
         return '<button class="ev rec' + (playing ? ' on' : '') + '" data-recplay="' + i + '"><span class="evic">' + icon('play') + '</span>' +
           '<span><b>' + esc(r.begin.slice(11, 16)) + ' → ' + esc(r.end.slice(11, 16)) + '</b><small>' + esc(RT[String(r.type || '').toLowerCase()] || 'Enregistrement') + ' · ' + dur(r.begin, r.end) + '</small></span>' +
           '<span class="evt">' + (r.size ? fmt(r.size / 1048576, 1) + ' Mo' : '') + '</span></button>';
       }).join('') + '</div>';
-      h += REC.relay ? '<p class="note-q">Enregistrements gardés sur la Freebox (qualité réduite, 14 jours). « Passer en HD » lit la carte SD de la caméra.</p>' +
-        '<button class="act" data-recsd>Voir la carte SD de la caméra</button>'
-        : '<p class="note-q">Enregistrements de la carte SD de la caméra. La lecture consomme le forfait vidéo Imou (2 Go gratuits).</p>' +
-        (REC.sd ? '<button class="act" data-recsd>Revenir aux enregistrements de la Freebox</button>' : '');
+      h += REC.segs && REC.segs.length ? '<p class="note-q">Les vidéos se lisent depuis la Freebox (qualité réduite, la caméra filme en continu). Les 10 dernières minutes et « Passer en HD » passent par la carte SD de la caméra.</p>'
+        : '<p class="note-q">Enregistrements de la carte SD de la caméra. La lecture consomme le forfait vidéo Imou (2 Go gratuits).</p>';
     } else if (c) {
       if (REC.clips || (RELAY && RELAY.url)) {
         var pd = '';
@@ -2152,6 +2161,7 @@
     sheet.scrollTop = keep;
     var rv = document.getElementById('recv'), P = REC.play;
     if (rv && P && P.relay) rv.addEventListener('error', function () { relayFail(P); });
+    if (rv && P && P.relay && P.seek) rv.addEventListener('loadedmetadata', function () { try { if (rv.currentTime < P.seek - 2) rv.currentTime = P.seek; } catch (er) {} }, { once: true });
   }
   // ---------- Consommation électrique (électrolyseur, pompe à chaleur, sauna) ----------
   var ENG = null; // { key, name, tab: 'day'|'month'|'year', day: 'AAAAMMJJ', month: 'AAAAMM', year: 'AAAA', data, loading }
@@ -3103,10 +3113,10 @@
     }
     if ((b = e.target.closest('[data-enstep]'))) return stepEnergy(+b.dataset.enstep);
     if (e.target.closest('[data-recback]')) return closeSheet(); // retour à l'onglet Caméras
-    if ((b = e.target.closest('[data-recday]'))) { REC.date = b.dataset.recday; REC.list = null; return loadRec(); }
+    if ((b = e.target.closest('[data-recday]'))) { REC.date = b.dataset.recday; REC.list = null; REC.segs = null; return loadRec(); }
     // fiche des enregistrements
     if ((b = e.target.closest('[data-evplay]'))) return playEvent(b.dataset.evplay);
-    if (e.target.closest('[data-recsd]')) { REC.sd = !REC.sd; REC.list = null; REC.play = null; return loadRec(); }
+    if ((b = e.target.closest('[data-recall]'))) { REC.all = b.dataset.recall === '1'; return renderRec(); }
     if ((b = e.target.closest('[data-presplay]'))) {
       var cl = REC && REC.clips && REC.clips[+b.dataset.presplay]; if (!cl || !RELAY || !RELAY.url) return;
       REC.play = { url: relayUrl(cl.url), relay: true, hdOk: false, key: cl.url, label: 'Vidéo de ' + cl.begin.slice(11, 16) + ' · ' + new Date(cl.time * 1000).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }) };
@@ -3118,10 +3128,13 @@
         .catch(function () { toast('Serveur injoignable, réessaie', true); });
     }
     if ((b = e.target.closest('[data-recplay]'))) {
-      var r = REC && REC.list && REC.list[+b.dataset.recplay]; if (!r) return;
+      var r = REC && (REC.all ? REC.segs : REC.list); r = r && r[+b.dataset.recplay]; if (!r) return;
       var label = r.begin.slice(11, 16) + ' → ' + r.end.slice(11, 16) + ' · ' + new Date(r.begin.replace(' ', 'T')).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
-      if (r.url && RELAY && RELAY.url) { // enregistrement gardé sur la Freebox : lecture immédiate
-        REC.play = { url: relayUrl(r.url), relay: true, label: label, key: r.begin, hd: false, hdOk: true, imou: { begin: r.begin, end: r.end } };
+      // gardé sur la Freebox : lecture immédiate (un mouvement démarre au bon moment dans sa tranche de 10 min)
+      var g = r.url ? r : segAt(r.begin);
+      if (g && RELAY && RELAY.url) {
+        var off = g === r ? 0 : Math.max(0, secs(g.begin, r.begin) - 3);
+        REC.play = { url: relayUrl(g.url) + (off ? '#t=' + off : ''), seek: off, relay: true, label: label, key: r.begin, hd: false, hdOk: true, imou: { begin: r.begin, end: r.end } };
         sheet.scrollTop = 0; return renderRec();
       }
       b.classList.add('busy');
@@ -3132,8 +3145,8 @@
     }
     if ((b = e.target.closest('[data-rechd]'))) {
       var P = REC && REC.play; if (!P || P.hd) return;
-      var vv = document.getElementById('recv'), at = vv ? vv.currentTime : 0;
-      var go = function (url) { P.url = url; P.hd = true; renderRec(); var v2 = document.getElementById('recv'); if (v2 && at) v2.addEventListener('loadedmetadata', function () { try { v2.currentTime = at; } catch (er) {} }, { once: true }); };
+      var vv = document.getElementById('recv'), at = vv ? Math.max(0, vv.currentTime - (P.relay ? P.seek || 0 : 0)) : 0; // la HD démarre au début du mouvement
+      var go = function (url) { P.url = url; P.hd = true; P.relay = false; P.seek = 0; renderRec(); var v2 = document.getElementById('recv'); if (v2 && at) v2.addEventListener('loadedmetadata', function () { try { v2.currentTime = at; } catch (er) {} }, { once: true }); };
       if (P.urlHd) return go(P.urlHd);
       b.textContent = 'Chargement HD…';
       return api({ action: 'im.playback', cam: REC.cam, begin: P.imou.begin, end: P.imou.end }).then(function (j) { if (REC && REC.play === P) go(j.url); })
