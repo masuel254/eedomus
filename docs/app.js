@@ -2090,6 +2090,7 @@
     var want = REC.date, key = c.id + '|' + want, fk = key + '|fb', C = recCache(), rc = C[key], fc = C[fk], past = want < ymd(new Date());
     if (rc) REC.list = rc.list;
     if (fc) REC.segs = fc.list;
+    if (REC.ialKey !== key) { REC.ial = null; REC.ialKey = key; } loadIal(c.id, want);
     REC.error = false;
     var fresh = function (x) { return x && (past ? x.full : Date.now() - x.at < 60000); };
     var save = function (k, list) {
@@ -2107,6 +2108,25 @@
       .then(function (j) { save(fk, j.records); if (mine()) { REC.segs = j.records; renderRec(); } })
       .catch(function () { if (mine() && !REC.segs) { REC.segs = null; renderRec(); } });
     renderRec();
+  }
+  // Alertes Imou de la journée (personne, véhicule…) pour légender mouvements et tranches
+  function ialAll() { return (pcGet('ial') || {}).v || {}; }
+  function loadIal(cam, day) {
+    var key = cam + '|' + day, past = day < ymd(new Date()), c = ialAll()[key];
+    if (c) REC.ial = c.list;
+    if (c && (past ? c.full : Date.now() - c.at < 120000)) return;
+    api({ action: 'im.alarms', cam: cam, date: day }).then(function (j) {
+      var a = ialAll(); a[key] = { at: Date.now(), list: j.alarms, full: past };
+      Object.keys(a).sort(function (x, y) { return a[y].at - a[x].at; }).slice(40).forEach(function (k) { delete a[k]; }); pcSet('ial', a);
+      if (REC && REC.cam === cam && REC.date === day) { REC.ial = j.alarms; renderRec(); }
+    }).catch(function () {});
+  }
+  function ikind(k) { k = String(k || '').toLowerCase(); return /human|person/.test(k) ? 'Personne' : /car|vehicle|motor/.test(k) ? 'Véhicule' : /animal|pet/.test(k) ? 'Animal' : /motion|video/.test(k) ? 'Mouvement' : ''; }
+  function recTypes(r) { // ce que la caméra Imou a détecté pendant cet enregistrement
+    var b = new Date(r.begin.replace(' ', 'T')).getTime() / 1000, e = new Date(r.end.replace(' ', 'T')).getTime() / 1000, seen = {};
+    ((REC && REC.ial) || []).forEach(function (a) { if (a.time >= b - 5 && a.time <= e + 5) { var k = ikind(a.kind); if (k) seen[k] = 1; } });
+    var k = Object.keys(seen); if (k.length > 1) k = k.filter(function (x) { return x !== 'Mouvement'; });
+    return k.join(' + ');
   }
   function segAt(t) { // tranche de la Freebox qui contient l'instant t (« AAAA-MM-JJ hh:mm:ss »)
     return ((REC && REC.segs) || []).filter(function (g) { return g.url && g.begin <= t && t < g.end; })[0] || null;
@@ -2142,7 +2162,7 @@
       else if (L) h += '<div class="evlist">' + L.map(function (r, i) {
         var playing = REC.play && REC.play.key === r.begin;
         return '<button class="ev rec' + (playing ? ' on' : '') + '" data-recplay="' + i + '"><span class="evic">' + icon('play') + '</span>' +
-          '<span><b>' + esc(r.begin.slice(11, 16)) + ' → ' + esc(r.end.slice(11, 16)) + '</b><small>' + esc(RT[String(r.type || '').toLowerCase()] || 'Enregistrement') + ' · ' + dur(r.begin, r.end) + '</small></span>' +
+          '<span><b>' + esc(r.begin.slice(11, 16)) + ' → ' + esc(r.end.slice(11, 16)) + '</b><small>' + esc(recTypes(r) || RT[String(r.type || '').toLowerCase()] || 'Enregistrement') + ' · ' + dur(r.begin, r.end) + '</small></span>' +
           '<span class="evt">' + (r.size ? fmt(r.size / 1048576, 1) + ' Mo' : '') + '</span></button>';
       }).join('') + '</div>';
       h += REC.segs && REC.segs.length ? '<p class="note-q">Les vidéos se lisent depuis la Freebox (qualité réduite, la caméra filme en continu). Les 10 dernières minutes et « Passer en HD » passent par la carte SD de la caméra.</p>'
@@ -3195,7 +3215,7 @@
     }
     if ((b = e.target.closest('[data-recplay]'))) {
       var r = REC && (REC.all ? REC.segs : REC.list); r = r && r[+b.dataset.recplay]; if (!r) return;
-      var label = r.begin.slice(11, 16) + ' → ' + r.end.slice(11, 16) + ' · ' + new Date(r.begin.replace(' ', 'T')).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+      var label = (recTypes(r) ? recTypes(r) + ' · ' : '') + r.begin.slice(11, 16) + ' → ' + r.end.slice(11, 16) + ' · ' + new Date(r.begin.replace(' ', 'T')).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
       // gardé sur la Freebox : lecture immédiate (un mouvement démarre au bon moment dans sa tranche de 10 min)
       var g = r.url ? r : segAt(r.begin);
       if (g && RELAY && RELAY.url) {

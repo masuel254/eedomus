@@ -807,6 +807,27 @@ async function imou(b) {
     Object.keys(SD.imRec).forEach((k) => { if (SD.imRec[k].at < Date.now() - 600000) delete SD.imRec[k]; });
     return data;
   }
+  // Alertes Imou d'une journée (personne, véhicule, animal, mouvement) : pour légender les enregistrements
+  if (b.action === 'im.alarms') {
+    const d = (await imDevices()).find((x) => x.id === b.cam);
+    if (!d || !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(String(b.date))) throw fail(403, 'not_allowed');
+    SD.imAl = SD.imAl || {};
+    const P = parisParts(), today = P.year + '-' + P.month + '-' + P.day, key = d.id + '|' + b.date, c = SD.imAl[key];
+    if (c && (b.date < today ? true : c.at > Date.now() - 120000)) return c.data;
+    const out = []; let next = '-1';
+    for (let page = 0; page < 10; page++) {
+      const r = await im('getAlarmMessage', { deviceId: d.deviceId, channelId: d.channelId, beginTime: b.date + ' 00:00:00', endTime: b.date + ' 23:59:59', count: '100', nextAlarmId: next });
+      if (r.code !== '0') break;
+      const L = (r.data && r.data.alarms) || [];
+      L.forEach((a) => out.push({ time: Number(a.time) || 0, kind: String(a.msgType || '') + ' ' + String(a.labelType || '') }));
+      if (L.length < 100 || !r.data.nextAlarmId || String(r.data.nextAlarmId) === next) break;
+      next = String(r.data.nextAlarmId);
+    }
+    const data = { ok: true, cam: d.id, date: b.date, alarms: out };
+    SD.imAl[key] = { at: Date.now(), data };
+    Object.keys(SD.imAl).forEach((k) => { if (SD.imAl[k].at < Date.now() - 3 * 86400000) delete SD.imAl[k]; });
+    return data;
+  }
   // Lien de lecture HLS d'un enregistrement (valable quelques minutes)
   if (b.action === 'im.playback') {
     const d = (await imDevices()).find((x) => x.id === b.cam);
