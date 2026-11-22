@@ -1,7 +1,16 @@
 {
-  "version": "2.28.4",
+  "version": "2.28.5",
   "date": "2026-11-22",
   "releases": [
+    {
+      "version": "2.28.5",
+      "date": "2026-11-22",
+      "time": "14:57",
+      "title": "Telegram garage fiable",
+      "changes": [
+        "Le message Telegram « porte de garage ouverte » part à chaque alerte, même si le précédent était identique"
+      ]
+    },
     {
       "version": "2.28.4",
       "date": "2026-11-22",
@@ -1164,5 +1173,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "14:55"
+  "time": "14:57"
 }

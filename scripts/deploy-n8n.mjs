@@ -828,7 +828,14 @@ async function pushNotify(item, onlyKey) {
 // Message Telegram d'eedomus (module InfluBot, périphérique « Notifications Telegram ») : la valeur 18 envoie
 // « Porte de garage ouverte depuis plus de 10 minutes ! Dois-je la fermer ? » avec un bouton OUI.
 const TG_PERIPH = '1887810', TG_GARAGE = '18';
-async function garageTelegram() { try { await eedomus('set', 'action=periph.value&periph_id=' + TG_PERIPH + '&value=' + TG_GARAGE); } catch (e) { /* Telegram indisponible : la notification iPhone part quand même */ } }
+// eedomus n'envoie que si la valeur change : on repasse d'abord par 0 (« Ready », sans message), puis 18
+async function garageTelegram() {
+  try {
+    await eedomus('set', 'action=periph.value&periph_id=' + TG_PERIPH + '&value=0');
+    await new Promise((r) => setTimeout(r, 2500));
+    await eedomus('set', 'action=periph.value&periph_id=' + TG_PERIPH + '&value=' + TG_GARAGE);
+  } catch (e) { /* Telegram indisponible : la notification iPhone part quand même */ }
+}
 async function garageAlert() {
   if (!SD.garage) return;
   // notification iPhone seulement si un iPhone est inscrit ; le message Telegram part dans tous les cas
