@@ -1,7 +1,16 @@
 {
-  "version": "2.39.0",
+  "version": "2.40.0",
   "date": "2026-11-22",
   "releases": [
+    {
+      "version": "2.40.0",
+      "date": "2026-11-22",
+      "time": "22:37",
+      "title": "Présence : type de détection",
+      "changes": [
+        "Présence : chaque vidéo de la Freebox indique ce que la caméra a vu (Personne, Véhicule, Animal, ou plusieurs)"
+      ]
+    },
     {
       "version": "2.39.0",
       "date": "2026-11-22",
@@ -1447,5 +1456,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "22:31"
+  "time": "22:37"
 }

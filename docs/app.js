@@ -2054,9 +2054,28 @@
     Object.keys(a).forEach(function (k) { (a[k].list || []).forEach(function (c) { var d = Math.abs(c.time - t); if (d <= 120 && (!best || d < best.d)) best = { d: d, c: c }; }); });
     return best && best.c;
   }
+  // Détections Netatmo de la journée (personne, véhicule…), pour légender les vidéos de la Freebox
+  var NTYPE = { human: 'Personne', vehicle: 'Véhicule', animal: 'Animal', movement: 'Mouvement', outdoor: 'Mouvement' };
+  function nevAll() { return (pcGet('nev') || {}).v || {}; }
+  function loadNev(day) {
+    var past = day < ymd(new Date()), c = nevAll()[day];
+    if (c) REC.nev = c.list;
+    if (c && (past ? c.full : Date.now() - c.at < 120000)) return;
+    api({ action: 'nt.dayevents', date: day }).then(function (j) {
+      var a = nevAll(); a[day] = { at: Date.now(), list: j.events, full: past };
+      Object.keys(a).sort().reverse().slice(15).forEach(function (k) { delete a[k]; }); pcSet('nev', a);
+      if (REC && REC.date === day) { REC.nev = j.events; renderRec(); }
+    }).catch(function () {});
+  }
+  function clipTypes(cl) { // ce que Netatmo a détecté pendant la vidéo
+    var end = cl.time + Math.max(60, secs(cl.begin, cl.end)), seen = {};
+    ((REC && REC.nev) || []).forEach(function (e) { if (e.time >= cl.time - 30 && e.time <= end) (e.types || []).forEach(function (t) { if (NTYPE[t]) seen[NTYPE[t]] = 1; }); });
+    var k = Object.keys(seen); if (k.length > 1) k = k.filter(function (x) { return x !== 'Mouvement'; });
+    return k.join(' + ');
+  }
   function loadPres() {
     var want = REC.date, rc = presAll()[want];
-    REC.clips = rc ? rc.list : null;
+    REC.clips = rc ? rc.list : null; REC.nev = null; loadNev(want);
     relayJson('/api/presence?date=' + want).then(function (j) {
       presStore(want, j.clips);
       if (REC && REC.date === want) { REC.clips = j.clips; REC.relay = true; renderRec(); }
@@ -2141,7 +2160,7 @@
         else h += '<div class="evlist">' + REC.clips.map(function (cl, i) {
           var on = REC.play && REC.play.key === cl.url;
           return '<button class="ev rec' + (on ? ' on' : '') + '" data-presplay="' + i + '"><span class="evic">' + icon('play') + '</span>' +
-            '<span><b>' + esc(cl.begin.slice(11, 16)) + '</b><small>' + dur(cl.begin, cl.end) + '</small></span>' +
+            '<span><b>' + esc(cl.begin.slice(11, 16)) + (clipTypes(cl) ? ' · ' + esc(clipTypes(cl)) : '') + '</b><small>' + dur(cl.begin, cl.end) + '</small></span>' +
             '<span class="evt">' + fmt(cl.size / 1048576, 1) + ' Mo</span></button>';
         }).join('') + '</div>';
         h += '<h3>Derniers événements</h3>';
@@ -3166,7 +3185,7 @@
     if ((b = e.target.closest('[data-recall]'))) { REC.all = b.dataset.recall === '1'; return renderRec(); }
     if ((b = e.target.closest('[data-presplay]'))) {
       var cl = REC && REC.clips && REC.clips[+b.dataset.presplay]; if (!cl || !RELAY || !RELAY.url) return;
-      REC.play = { url: relayUrl(cl.url), relay: true, hdOk: false, key: cl.url, label: 'Vidéo de ' + cl.begin.slice(11, 16) + ' · ' + new Date(cl.time * 1000).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }) };
+      REC.play = { url: relayUrl(cl.url), relay: true, hdOk: false, key: cl.url, label: (clipTypes(cl) || 'Vidéo') + ' · ' + cl.begin.slice(11, 16) + ' · ' + new Date(cl.time * 1000).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }) };
       sheet.scrollTop = 0; return renderRec();
     }
     if (e.target.closest('[data-relay-pair]')) {

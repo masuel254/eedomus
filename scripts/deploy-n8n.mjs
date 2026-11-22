@@ -1406,6 +1406,32 @@ async function tuya(b) {
 async function netatmo(b) {
   if (b.action === 'nt.heating') return ntHeating(false);
   if (b.action === 'nt.cameras') return ntCameras(!!b.fresh);
+  // Détections Netatmo d'une journée (personne, véhicule, animal…) : pour légender les vidéos de la Présence gardées sur la Freebox.
+  // Pages de 50 événements en remontant le temps ; journées passées gardées en mémoire, aujourd'hui relu au plus toutes les 2 min.
+  if (b.action === 'nt.dayevents') {
+    const day = String(b.date || '');
+    if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(day)) throw fail(403, 'not_allowed');
+    SD.ntDay = SD.ntDay || {};
+    const P = parisParts(), today = P.year + '-' + P.month + '-' + P.day, c = SD.ntDay[day];
+    if (c && (day < today ? true : c.at > Date.now() - 120000)) return c.data;
+    const H = await ntHomes(), out = [];
+    const t0 = Math.floor(new Date(day + 'T00:00:00+01:00').getTime() / 1000) - 3600, t1 = t0 + 26 * 3600; // marge pour l'heure d'été
+    for (const hid of [...new Set(H.cams.map((x) => x.home))]) {
+      let from = null;
+      for (let page = 0; page < 20; page++) {
+        const p = { home_id: hid, size: 50 }; if (from) p.event_id = from;
+        const r = await nt('GET', 'getevents', p);
+        const ev = ((r.body && r.body.home && r.body.home.events) || []).filter((e) => e.id !== from);
+        ev.forEach((e) => { if (e.time >= t0 && e.time < t1) out.push({ time: e.time, cam: e.module_id, types: [...new Set((e.subevents || []).map((x) => x.type).filter(Boolean))].concat((e.subevents || []).length ? [] : [e.type]) }); });
+        if (!ev.length || ev[ev.length - 1].time < t0) break;
+        from = ev[ev.length - 1].id;
+      }
+    }
+    const data = { ok: true, date: day, events: out.sort((x, y) => y.time - x.time) };
+    SD.ntDay[day] = { at: Date.now(), data };
+    Object.keys(SD.ntDay).sort().slice(0, -10).forEach((k) => { delete SD.ntDay[k]; });
+    return data;
+  }
   if (b.action === 'nt.setpoint') {
     const H = await ntHomes();
     const room = H.heat && H.heat.rooms.find((r) => String(r.id) === String(b.room));
