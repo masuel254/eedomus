@@ -905,6 +905,43 @@
     return out;
   }
   function hlTime(t) { var d = new Date(t * 1000); return String(d.getHours()).padStart(2, '0') + 'h' + String(d.getMinutes()).padStart(2, '0'); }
+  // Graphique de montée en température d'une chauffe (mesures Netatmo à la demi-heure, déjà sur l'iPhone)
+  function hlGraph(x, on, rm) {
+    var t0 = x.start, t1 = on ? Date.now() / 1000 : (x.end || x.last + 1800), a = t0 - 1800, b = t1 + 3600;
+    var rows = (HL.rows || []).filter(function (r) { return r[0] >= a && r[0] <= b && r[1] != null; });
+    if (on && rm && rm.temp != null) rows = rows.concat([[Math.floor(Date.now() / 1000), rm.temp, rm.setpoint, null]]);
+    if (rows.length < 2) return '<div class="hl-g"><p class="muted">Pas assez de mesures pour cette chauffe.</p></div>';
+    var W = 320, H = 150, L = 30, R = 8, T = 12, B = 22, x0 = rows[0][0], x1 = rows[rows.length - 1][0];
+    var vs = []; rows.forEach(function (r) { vs.push(r[1]); if (r[2] != null) vs.push(r[2]); });
+    var lo = Math.floor(Math.min.apply(null, vs) * 2) / 2 - 0.5, hi = Math.ceil(Math.max.apply(null, vs) * 2) / 2 + 0.5;
+    var X = function (t) { return L + (t - x0) / Math.max(1, x1 - x0) * (W - L - R); }, Y = function (v) { return T + (1 - (v - lo) / (hi - lo)) * (H - T - B); };
+    var s = '<svg class="gsvg" viewBox="0 0 ' + W + ' ' + H + '">';
+    // zone de chauffe
+    s += '<rect x="' + X(Math.max(x0, t0)).toFixed(1) + '" y="' + T + '" width="' + Math.max(1, X(Math.min(x1, t1)) - X(Math.max(x0, t0))).toFixed(1) + '" height="' + (H - T - B) + '" class="hl-zone"/>';
+    var stp = hi - lo > 3 ? 1 : 0.5;
+    for (var v = Math.ceil(lo / stp) * stp; v <= hi + 1e-6; v += stp) s += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + Y(v).toFixed(1) + '" y2="' + Y(v).toFixed(1) + '" class="g-grid"/><text x="' + (L - 5) + '" y="' + (Y(v) + 3).toFixed(1) + '" class="g-yl" text-anchor="end">' + fmt(v, v % 1 ? 1 : 0) + '</text>';
+    var sp = rows.filter(function (r) { return r[2] != null; });
+    if (sp.length) { var dp = 'M' + X(sp[0][0]).toFixed(1) + ' ' + Y(sp[0][2]).toFixed(1); for (var i = 1; i < sp.length; i++) dp += ' H' + X(sp[i][0]).toFixed(1) + ' V' + Y(sp[i][2]).toFixed(1); s += '<path d="' + dp + ' H' + X(x1).toFixed(1) + '" class="g-sp" stroke-dasharray="4 3"/>'; }
+    s += '<path d="' + rows.map(function (r, k) { return (k ? 'L' : 'M') + X(r[0]).toFixed(1) + ' ' + Y(r[1]).toFixed(1); }).join(' ') + '" class="g-t"/>';
+    rows.forEach(function (r) { s += '<circle cx="' + X(r[0]).toFixed(1) + '" cy="' + Y(r[1]).toFixed(1) + '" r="2.6" class="g-dt" style="stroke-width:1"/>'; });
+    // heures sous l'axe : toutes les heures (ou toutes les 2 h si la chauffe est longue)
+    var every = (x1 - x0) > 6 * 3600 ? 7200 : 3600, hh = new Date(x0 * 1000); hh.setMinutes(0, 0, 0);
+    for (var tt = hh.getTime() / 1000 + 3600; tt < x1; tt += every) { var xx = X(tt); if (xx < L + 8 || xx > W - R - 8) continue; s += '<text x="' + xx.toFixed(1) + '" y="' + (H - 6) + '" class="g-xl" text-anchor="middle">' + String(new Date(tt * 1000).getHours()).padStart(2, '0') + 'h</text>'; }
+    s += '</svg>';
+    // rythme de montée pendant la chauffe
+    var inn = rows.filter(function (r) { return r[0] >= t0 - 900 && r[0] <= t1 + 900; }), txt = '';
+    if (inn.length >= 2) {
+      var f = inn[0], l = inn[inn.length - 1], dh = (l[0] - f[0]) / 3600, gain = l[1] - f[1], best = null;
+      for (var k = 1; k < inn.length; k++) { var g = (inn[k][1] - inn[k - 1][1]) / Math.max(0.25, (inn[k][0] - inn[k - 1][0]) / 3600); if (!best || g > best.g) best = { g: g, a: inn[k - 1][0], b: inn[k][0] }; }
+      txt = '<div class="hl-rate"><div><b>' + (gain >= 0 ? '+' : '') + fmt(gain, 1) + '°</b><small>en ' + durTxt(l[0] - f[0]) + '</small></div>' +
+        '<div><b>' + (dh > 0 ? (gain >= 0 ? '+' : '') + fmt(gain / dh, 1) + '°' : '—') + '</b><small>par heure en moyenne</small></div>' +
+        (best && best.g > 0 ? '<div><b>+' + fmt(best.g, 1) + '°</b><small>par heure au plus vite (' + hlTime(best.a) + '–' + hlTime(best.b) + ')</small></div>' : '') + '</div>';
+      // température dehors pendant la chauffe (déjà gardée sur l'iPhone si le graphique a été ouvert)
+      var op2 = outGet(outRange(t0 - 3600, t1), function () { if (HL && HL.open === x.start) renderHeatLog(); }), od = (op2 || []).filter(function (p) { return p[0] >= t0 - 3600 && p[0] <= t1 + 1800; });
+      if (od.length) { var m = 0; od.forEach(function (p) { m += p[1]; }); txt += '<p class="hl-out">Dehors pendant la chauffe : ' + fmt(m / od.length, 1) + '° en moyenne</p>'; }
+    }
+    return '<div class="hl-g">' + s + '<div class="hl-leg"><span><i class="t"></i>Pièce</span><span><i class="sp"></i>Consigne</span><span><i class="z"></i>Chauffe</span></div>' + txt + '</div>';
+  }
   function renderHeatLog() {
     if (!HL) return;
     var rm = NT && (NT.rooms || []).filter(function (x) { return String(x.id) === HL.room; })[0];
@@ -926,10 +963,12 @@
       list.forEach(function (x) {
         var on = !x.end && live, avg = Math.round(x.sum / x.n);
         var tEnd = on && rm ? Math.max(rm.temp, x.tmax) : x.tmax, gain = x.t0 != null && tEnd != null && tEnd - x.t0 >= 0.1 ? ' · de ' + fmt(x.t0, 1) + '° à ' + fmt(tEnd, 1) + '°' : '';
-        h += '<div class="hl-row"><div class="hl-tl"><i class="on"></i><span></span><i class="' + (on ? 'live' : 'off') + '"></i></div><div class="hl-tx">' +
+        var op = HL.open === x.start;
+        h += '<div class="hl-row' + (op ? ' op' : '') + '" data-hls="' + x.start + '" role="button" tabindex="0" aria-expanded="' + op + '"><div class="hl-tl"><i class="on"></i><span></span><i class="' + (on ? 'live' : 'off') + '"></i></div><div class="hl-tx">' +
           '<div><b>' + hlTime(x.start) + '</b> <em>allumage</em></div>' +
           '<div class="hl-mid">' + icon('flame') + durTxt(x.dur) + ' · ' + avg + ' % en moyenne' + gain + '</div>' +
-          '<div>' + (on ? '<b class="lv">en cours</b>' : '<b>' + (x.end ? hlTime(x.end) : '—') + '</b> <em>arrêt</em>') + '</div></div></div>';
+          '<div>' + (on ? '<b class="lv">en cours</b>' : '<b>' + (x.end ? hlTime(x.end) : '—') + '</b> <em>arrêt</em>') + '</div></div>' +
+          '<span class="hl-chev">' + icon('down') + '</span></div>' + (op ? hlGraph(x, on, rm) : '');
       });
       h += '</div>';
     });
@@ -2510,6 +2549,8 @@
         .catch(function (err) { toast(/index_lower/.test(err.message) ? 'Ce chiffre est plus petit que le relevé précédent' : 'Chiffre non valable, vérifie-le', true); });
     }
     if (e.target.closest('[data-heatlog]')) return openHeatLog();
+    var hls = e.target.closest('[data-hls]');
+    if (hls && HL) { var st = Number(hls.dataset.hls); HL.open = HL.open === st ? null : st; return renderHeatLog(); }
     if (e.target.closest('[data-hlback]')) { HL = null; sheet.scrollTop = 0; return openSheet('graph'); }
     if ((b = e.target.closest('[data-grange]'))) { GR.range = b.dataset.grange; GR.end = null; return loadGraph(); }
     if ((b = e.target.closest('[data-groom]'))) { GR.room = b.dataset.groom; GR.end = null; return loadGraph(); }
