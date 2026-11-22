@@ -2187,6 +2187,7 @@
       var x = i * (bw + gap), h = v == null ? 0 : Math.max(v > 0 ? 3 : 1.5, (v / max) * (base - top));
       if (v == null) s += '<rect x="' + x.toFixed(1) + '" y="' + (base - 1.5) + '" width="' + bw.toFixed(1) + '" height="1.5" rx="0.75" class="b-empty"/>';
       else s += '<rect x="' + x.toFixed(1) + '" y="' + (base - h).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="' + Math.min(3, bw / 2).toFixed(1) + '" class="' + (i === hi ? 'b-hi' : 'b') + '"><title>' + kwh(v) + ' kWh</title></rect>';
+      s += '<rect x="' + (x - gap / 2).toFixed(1) + '" y="0" width="' + (bw + gap).toFixed(1) + '" height="' + H + '" fill="transparent" data-bi="' + i + '"/>'; // zone à toucher
       if (labels[i] !== undefined) { var anc = i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle', lx = i === 0 ? x : i === n - 1 ? x + bw : x + bw / 2; s += '<text x="' + lx.toFixed(1) + '" y="' + (H - 6) + '" text-anchor="' + anc + '" class="lbl">' + labels[i] + '</text>'; }
     });
     return s + '</svg>';
@@ -2579,13 +2580,25 @@
       if (WAT.off === 0) hi = vals.length - 1;
       if (WAT.tab === 'year') hi = WAT.off === 0 ? new Date().getMonth() : -1;
     }
+    // barre touchée : sa date (ou son heure) et sa consommation
+    var selTxt = '';
+    if (WAT.sel != null && WAT.sel < vals.length) {
+      var si = WAT.sel, sv = vals[si], sl;
+      if (WAT.tab === 'day') sl = String(si).padStart(2, '0') + 'h – ' + String((si + 1) % 24).padStart(2, '0') + 'h';
+      else {
+        var g0 = P.groups[si], d0 = g0.days[0], dd0 = new Date(+d0.slice(0, 4), +d0.slice(4, 6) - 1, +d0.slice(6, 8));
+        sl = WAT.tab === 'year' ? dd0.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }) : dd0.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+      }
+      hi = si;
+      selTxt = '<div class="w-sel"><span>' + esc(sl.charAt(0).toUpperCase() + sl.slice(1)) + '</span><b class="mono">' + (sv == null ? 'pas de mesure' : litres(sv) + ' · ' + eur(sv / 1000 * price, 2)) + '</b></div>';
+    }
     // moyenne par jour sur les journées complètes (aujourd'hui n'est pas fini) ; s'il n'y en a pas, on prend ce qu'on a
     var cd = P.days.filter(function (d) { return days[d] != null && d !== today; }), cl = 0; cd.forEach(function (d) { cl += days[d]; });
     var perDay = WAT.tab === 'day' ? total : cd.length ? cl / cd.length : total;
     h += '<div class="en-card wat"><div class="en-period"><button data-wstep="-1" aria-label="Période précédente">' + icon('down') + '</button><span>' + esc(P.title.charAt(0).toUpperCase() + P.title.slice(1)) + '</span>' +
       '<button data-wstep="1" aria-label="Période suivante"' + (WAT.off >= 0 ? ' disabled' : '') + '>' + icon('down') + '</button></div>' +
       '<div class="w-sum"><b class="mono">' + (any ? litres(total) : '—') + '</b><span class="mono">' + (any ? eur(total / 1000 * price, total / 1000 * price < 10 ? 2 : 0) : '') + '</span></div>' +
-      bars(vals, labels, hi).replace(/ kWh<\/title>/g, ' L</title>') + '</div>';
+      bars(vals, labels, hi).replace(/ kWh<\/title>/g, ' L</title>') + (selTxt || '<p class="w-hint">Touche une barre pour voir le détail</p>') + '</div>';
     h += '<div class="cost-k w3">' +
       '<div><i style="background:#38BDF8"></i><small>Volume</small><b class="mono">' + (any ? fmt(total / 1000, total < 10000 ? 2 : 1) : '—') + '</b><span>m³</span></div>' +
       '<div><i style="background:#38BDF8"></i><small>Coût</small><b class="mono">' + (any ? eur(total / 1000 * price, 2) : '—') + '</b><span>à ' + fmt(price, 2) + ' €/m³</span></div>' +
@@ -3003,8 +3016,9 @@
       return api({ action: 'cost.cfg', appl: pa }).then(function (j) { COST.data = j; try { localStorage.setItem('maison-cost', JSON.stringify(j)); } catch (e) {} if (sheet.dataset.view === 'costappl') renderCostAppl(); })
         .catch(function () { toast('Réglage non enregistré, réessaie', true); });
     }
-    if ((b = e.target.closest('[data-wtab]'))) { WAT.tab = b.dataset.wtab; WAT.off = 0; return renderWater(); }
-    if ((b = e.target.closest('[data-wstep]'))) { var wo = WAT.off + +b.dataset.wstep; if (wo > 0) return; WAT.off = wo; return renderWater(); }
+    if (WAT && sheet.dataset.view === 'water' && (b = e.target.closest('.en-card.wat [data-bi]'))) { var bi = +b.dataset.bi; WAT.sel = WAT.sel === bi ? null : bi; return renderWater(); }
+    if ((b = e.target.closest('[data-wtab]'))) { WAT.tab = b.dataset.wtab; WAT.off = 0; WAT.sel = null; return renderWater(); }
+    if ((b = e.target.closest('[data-wstep]'))) { var wo = WAT.off + +b.dataset.wstep; if (wo > 0) return; WAT.off = wo; WAT.sel = null; return renderWater(); }
     if ((b = e.target.closest('[data-costtab]'))) { COST.tab = b.dataset.costtab; COST.off = 0; return renderCost(); }
     if ((b = e.target.closest('[data-coststep]'))) { var nv2 = COST.off + +b.dataset.coststep; if (nv2 > 0) return; COST.off = nv2; return renderCost(); }
     if ((b = e.target.closest('[data-costset]'))) {

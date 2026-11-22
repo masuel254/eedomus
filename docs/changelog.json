@@ -1,7 +1,16 @@
 {
-  "version": "2.38.0",
+  "version": "2.39.0",
   "date": "2026-11-22",
   "releases": [
+    {
+      "version": "2.39.0",
+      "date": "2026-11-22",
+      "time": "22:31",
+      "title": "Eau : détail d'une barre",
+      "changes": [
+        "Eau : touche une barre du graphique pour voir sa date (ou son heure) et sa consommation en litres et en euros"
+      ]
+    },
     {
       "version": "2.38.0",
       "date": "2026-11-22",
@@ -1438,5 +1447,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "22:25"
+  "time": "22:31"
 }
