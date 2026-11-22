@@ -23,7 +23,7 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq && apt-get install -y -qq ffmpeg nodejs caddy cifs-utils curl ca-certificates >/dev/null \
   && ok "logiciels installés" || { bad "installation impossible (internet ?)"; exit 1; }
 timedatectl set-timezone Europe/Paris 2>/dev/null; ok "heure de Paris"
-curl -fsSL "$SRC/relais/relais.js" -o $OPT/relais.js && curl -fsSL "$SRC/relais/record.sh" -o $OPT/record.sh && chmod +x $OPT/record.sh \
+curl -fsSL "$SRC/relais/relais.js" -o $OPT/relais.js && curl -fsSL "$SRC/relais/record.sh" -o $OPT/record.sh && curl -fsSL "$SRC/relais/update.sh" -o $OPT/update.sh && chmod +x $OPT/record.sh $OPT/update.sh \
   && ok "programme du relais téléchargé" || { bad "téléchargement impossible"; exit 1; }
 API=$(curl -fsSL "$SRC/docs/config.json" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).api))')
 [ -n "$API" ] && setv API "$API"
@@ -135,14 +135,14 @@ if false; then :; else
       ENC=$(node -e 'console.log(encodeURIComponent(process.argv[1]))' "$SC")
       for IP in $IPS; do
         U="rtsp://admin:$ENC@$IP:554/cam/realmonitor?channel=1&subtype=1"
-        if timeout 15 ffprobe -v error -rtsp_transport tcp -timeout 8000000 -show_entries stream=codec_name -of csv=p=0 "$U" >/dev/null 2>&1; then FOUND="$U"; ok "trouvée à l'adresse $IP"; break; fi
+        if timeout 40 ffprobe -v error -rtsp_transport tcp -timeout 15000000 -show_entries stream=codec_name -of csv=p=0 "$U" >/dev/null 2>&1; then FOUND="$U"; ok "trouvée à l'adresse $IP"; break; fi
       done
       if [ -z "$FOUND" ]; then
         bad "aucune caméra trouvée avec ce code"
         IP=$(ask "Adresse de la caméra si tu la connais (Freebox OS > Périphériques réseau, ex. 192.168.1.50), sinon Entrée")
         if [ -n "$IP" ]; then
           U="rtsp://admin:$ENC@$IP:554/cam/realmonitor?channel=1&subtype=1"
-          if timeout 20 ffprobe -v error -rtsp_transport tcp -timeout 10000000 -show_entries stream=codec_name -of csv=p=0 "$U" >/dev/null 2>&1; then FOUND="$U"; ok "caméra jointe à l'adresse $IP"
+          if timeout 50 ffprobe -v error -rtsp_transport tcp -timeout 20000000 -show_entries stream=codec_name -of csv=p=0 "$U" >/dev/null 2>&1; then FOUND="$U"; ok "caméra jointe à l'adresse $IP"
           else bad "pas de réponse vidéo à cette adresse avec ce code (vérifie le code, ou active RTSP dans l'appli Imou)"; fi
         fi
       fi
@@ -156,7 +156,7 @@ say "Mesure du débit réel (30 s par caméra, en même temps)"
 TMP=$(mktemp -d)
 while IFS='|' read -r ID NAME URL; do
   [ -z "$ID" ] && continue
-  ( timeout 40 ffmpeg -nostdin -loglevel error -rtsp_transport tcp -i "$URL" -t 30 -map 0:v:0 -c copy -f mp4 "$TMP/$(echo "$ID" | tr -c 'A-Za-z0-9_\n-' _).mp4" ) &
+  ( timeout 70 ffmpeg -nostdin -loglevel error -rtsp_transport tcp -timeout 20000000 -analyzeduration 10000000 -probesize 5000000 -i "$URL" -t 30 -map 0:v:0 -c copy -f mp4 "$TMP/$(echo "$ID" | tr -c 'A-Za-z0-9_\n-' _).mp4" ) &
 done < $CONF
 wait
 TOTAL=0
@@ -202,12 +202,13 @@ WantedBy=multi-user.target
 EOF
 cat > /etc/systemd/system/relais-clean.service <<EOF
 [Unit]
-Description=Relais caméras : nettoyage et signal au serveur
+Description=Relais caméras : nettoyage, signal au serveur et mise à jour
 [Service]
 Type=oneshot
 Environment=TZ=Europe/Paris
 ExecStart=/usr/bin/node $OPT/relais.js clean
 ExecStart=-/usr/bin/node $OPT/relais.js hello
+ExecStart=-$OPT/update.sh
 EOF
 cat > /etc/systemd/system/relais-clean.timer <<EOF
 [Unit]
