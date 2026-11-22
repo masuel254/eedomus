@@ -1055,3 +1055,17 @@ svg.hl-svg { touch-action: none; }
 .hl-row.hl-live .hl-mid { color: var(--mu); line-height: 1.35; }
 /* Barre d'onglets : plus près du bas de l'écran (au-dessus de la barre d'accueil de l'iPhone, sans grand vide dessous) */
 .tabs { padding-bottom: max(6px, calc(var(--bottom) - 16px)); padding-top: 8px; }
+/* Cloche : glisser vers la gauche pour supprimer */
+.nf-sw { position: relative; overflow: hidden; border-bottom: 1px solid #1F2329; max-height: 400px; transition: max-height .22s ease, opacity .22s; }
+.nf-sw:last-child { border-bottom: 0; }
+.nf-sw .lg.nf { position: relative; z-index: 1; background: var(--s1); border-bottom: 0; touch-action: pan-y; transition: transform .2s ease; }
+.nf-sw .lg.nf.new { background: linear-gradient(rgba(124,178,255,.09), rgba(124,178,255,.09)), var(--s1); }
+.nf-del { position: absolute; top: 0; right: 0; bottom: 0; width: 100%; display: flex; align-items: center; justify-content: flex-end; padding-right: 18px; background: var(--warn); color: #fff; font: 700 14px var(--f-ui); border: 0; cursor: pointer; }
+.nf-sw.far .nf-del { background: #E5484D; }
+.nf-sw.gone { max-height: 0; opacity: 0; }
+.nf-all { display: flex; justify-content: flex-end; margin: -2px 2px 4px; }
+.nf-all .act { padding: 6px 12px; font-size: 13px; }
+.nf-sw .nf-del { visibility: hidden; }
+.nf-sw.drag .nf-del, .nf-sw.open .nf-del { visibility: visible; }
+.nf-sw .lg.nf { border-radius: 0; box-shadow: none; }
+.nf-sw .lg.nf.new { box-shadow: inset 3px 0 0 var(--cool); }

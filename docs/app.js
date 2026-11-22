@@ -706,9 +706,47 @@
     if (/^water/.test(tag)) { TAB = 'more'; loadWater(true); app.scrollTop = 0; return render(); }
     TAB = 'home'; render();
   }
+  // Suppression d'une notification (ou de toutes) : on réécrit la liste gardée sur l'iPhone
+  function notifsWrite(list) {
+    NOTIFS = list; renderNotifs(); if (CFG && !busy()) render();
+    if (!window.caches) return;
+    caches.open('maison-notifs').then(function (c) { return c.put('./__notifs', new Response(JSON.stringify(list), { headers: { 'Content-Type': 'application/json' } })); }).catch(function () {});
+  }
+  function notifDelete(at) {
+    var row = sheet.querySelector('.nf-sw[data-nfat="' + at + '"]');
+    var go = function () { notifsWrite(NOTIFS.filter(function (n) { return String(n.at) !== String(at); })); };
+    if (row) { row.classList.add('gone'); setTimeout(go, 220); } else go();
+  }
+  // Glisser une notification vers la gauche : un peu = bouton « Supprimer », loin = supprimée
+  var nfDrag = null;
+  sheet.addEventListener('pointerdown', function (e) {
+    var row = e.target.closest('.nf-sw'); if (!row || e.target.closest('.nf-del')) return;
+    sheet.querySelectorAll('.nf-sw.open').forEach(function (r) { if (r !== row) { r.classList.remove('open'); r.querySelector('.lg').style.transform = ''; } });
+    nfDrag = { row: row, x0: e.clientX, y0: e.clientY, dx: 0, on: false, base: row.classList.contains('open') ? -96 : 0 };
+  });
+  sheet.addEventListener('pointermove', function (e) {
+    if (!nfDrag) return;
+    var dx = e.clientX - nfDrag.x0, dy = e.clientY - nfDrag.y0;
+    if (!nfDrag.on) { if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.3) nfDrag.on = true; else if (Math.abs(dy) > 12) { nfDrag = null; return; } else return; }
+    nfDrag.dx = Math.min(0, Math.max(-nfDrag.row.offsetWidth, nfDrag.base + dx));
+    nfDrag.row.classList.add('drag'); var lg = nfDrag.row.querySelector('.lg'); lg.style.transition = 'none'; lg.style.transform = 'translateX(' + nfDrag.dx + 'px)';
+    nfDrag.row.classList.toggle('far', nfDrag.dx < -nfDrag.row.offsetWidth * 0.55);
+  });
+  function nfDragEnd() {
+    if (!nfDrag) return; var d = nfDrag; nfDrag = null;
+    if (!d.on) return;
+    sheet._nfSwiped = Date.now(); setTimeout(function () { if (!d.row.classList.contains('open')) d.row.classList.remove('drag'); }, 220);
+    var lg = d.row.querySelector('.lg'); lg.style.transition = '';
+    if (d.dx < -d.row.offsetWidth * 0.55) { lg.style.transform = 'translateX(-100%)'; return notifDelete(d.row.dataset.nfat); }
+    if (d.dx < -48) { lg.style.transform = 'translateX(-96px)'; d.row.classList.add('open'); }
+    else { lg.style.transform = ''; d.row.classList.remove('open'); }
+  }
+  sheet.addEventListener('pointerup', nfDragEnd);
+  sheet.addEventListener('pointercancel', nfDragEnd);
   function renderNotifs() {
     var h = '<div class="sh-hd"><h2>Notifications</h2><button class="close" data-close aria-label="Fermer">×</button></div>' +
-      '<p class="muted" style="margin:0 4px 6px">Les 30 dernières reçues sur cet iPhone. Touche une alerte pour voir le détail.</p>';
+      '<p class="muted" style="margin:0 4px 6px">Les 30 dernières reçues sur cet iPhone. Touche une alerte pour voir le détail, glisse-la vers la gauche pour la supprimer.</p>' +
+      (NOTIFS.length ? '<div class="nf-all"><button class="act" data-nfclear data-confirm><span>Tout effacer</span></button></div>' : '');
     if (!NOTIFS.length) h += '<p class="muted" style="margin:14px 4px">Aucune notification enregistrée pour l’instant. Les prochaines s’afficheront ici.</p>';
     var ICN = { garage: 'garage', water: 'drop', wateroff: 'drop', meteo: 'wind', smoke: 'flame', boiler: 'flame' }, cur = '';
     var nNew = NOTIFS.filter(function (n) { return n.at > NF_PREV; }).length;
@@ -719,8 +757,9 @@
       var dl = dayLabel(ds); if (dl !== cur) { if (cur) h += '</div>'; h += '<div class="lday">' + esc(dl) + '</div><div class="card2 flat logs">'; cur = dl; }
       var bad = /ouverte|fuite|fumée|hors ligne|rafales|gel|pluie|pleut|chaudière/i.test(n.title) && !/fermée|terminée|fin d/i.test(n.title);
       var nw = n.at > NF_PREV;
-      h += '<button class="lg nf' + (bad ? ' bad' : ' ok') + (nw ? ' new' : '') + '" data-notif="' + esc(n.tag || '') + '"><span class="lt">' + esc(ds.slice(11)) + '</span><span class="li">' + icon(ICN[n.tag] || 'bell') + '</span>' +
-        '<span><b>' + esc(n.title) + (nw ? ' <em class="nf-new">Nouveau</em>' : '') + '</b><small>' + esc(n.body || '') + '</small></span></button>';
+      h += '<div class="nf-sw" data-nfat="' + n.at + '"><button class="nf-del" data-nfdel="' + n.at + '">Supprimer</button>' +
+        '<button class="lg nf' + (bad ? ' bad' : ' ok') + (nw ? ' new' : '') + '" data-notif="' + esc(n.tag || '') + '"><span class="lt">' + esc(ds.slice(11)) + '</span><span class="li">' + icon(ICN[n.tag] || 'bell') + '</span>' +
+        '<span><b>' + esc(n.title) + (nw ? ' <em class="nf-new">Nouveau</em>' : '') + '</b><small>' + esc(n.body || '') + '</small></span></button></div>';
     });
     if (cur) h += '</div>';
     var keep = sheet.scrollTop; sheet.innerHTML = '<div class="sh-in">' + h + '</div>'; sheet.scrollTop = keep;
@@ -2539,7 +2578,13 @@
     var b;
     if ((b = e.target.closest('[data-settings]'))) return openSheet('settings');
     if (e.target.closest('[data-notifs]')) return openNotifs();
-    if ((b = e.target.closest('[data-notif]'))) return goNotif(b.dataset.notif);
+    if ((b = e.target.closest('[data-nfdel]'))) return notifDelete(b.dataset.nfdel);
+    if ((b = e.target.closest('[data-nfclear]'))) { if (!confirmed(b)) { var cl = b.querySelector('span'); if (cl) cl.textContent = 'Effacer les ' + NOTIFS.length + ' ?'; return; } return notifsWrite([]); }
+    if ((b = e.target.closest('[data-notif]'))) {
+      if (sheet._nfSwiped && Date.now() - sheet._nfSwiped < 400) return; // fin d'un glisser : pas d'ouverture
+      var op = b.closest('.nf-sw.open'); if (op) { op.classList.remove('open'); b.style.transform = ''; return; }
+      return goNotif(b.dataset.notif);
+    }
     if (e.target.closest('[data-cost]')) return openCost();
     if ((b = e.target.closest('[data-opencams]'))) { if (!sheet.hidden) closeSheet(); liveCam = b.dataset.opencams; liveHd = true; TAB = 'cams'; store.set('maison.tab', TAB); loadCams(false); loadImou(false); render();
       var cc = document.getElementById('cc-' + liveCam); if (cc) cc.scrollIntoView({ block: 'center' }); return; }
