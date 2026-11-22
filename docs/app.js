@@ -2717,6 +2717,7 @@
       (PUSH.on ? '<button class="row" data-push-test><span class="ic">' + icon('play') + '</span><span><b>Envoyer une notification de test</b><small>Pour vérifier que tout marche</small></span><span class="val">›</span></button>' : '') +
       '<div class="row"><span class="ic">' + icon('drop') + '</span><span><b>Fuite d’eau</b><small>Alerte immédiate, rappel toutes les 15 min, puis « fuite terminée ». Alerte aussi si le compteur ne répond plus depuis 3 h.</small></span><span class="ok">Toujours</span></div>' +
       '<div class="row"><span class="ic">' + icon('flame') + '</span><span><b>Chaudière</b><small>Alerte si la chaudière chauffe depuis 45 min sans que le séjour ne se réchauffe : « vérifier la chaudière ».</small></span><span class="ok">Toujours</span></div>' +
+      '<div class="row"><span class="ic">' + icon('drop') + '</span><span><b>Gel et neige le matin</b><small>Du lundi au vendredi vers 7h30 : alerte s’il fait 2° ou moins dehors (maintenant ou avant 9h) ou si de la neige est prévue dans la journée.</small></span><span class="ok">Semaine</span></div>' +
       '</div><p class="note-q">Le délai est le même pour toute la famille. Chacun active les alertes sur son propre iPhone.</p>';
     return h;
   }

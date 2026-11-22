@@ -579,12 +579,33 @@ async function outHist(from, to) {
   return data;
 }
 // Minuterie : prévisions rafraîchies toutes les 15 min ; notification une fois par épisode de rafales (≥ 50 km/h)
+// Alerte du matin (jours de semaine, entre 7h30 et 8h) : gel (2° ou moins dehors, maintenant ou avant 9h) et neige prévue dans la journée.
+// Une seule notification par jour, envoyée dès que la météo est disponible dans ce créneau.
+const SNOW = [71, 73, 75, 77, 85, 86];
+async function morningCheck(d) {
+  const M = SD.meteo, P = parisParts(), today = P.year + '-' + P.month + '-' + P.day;
+  const wd = new Date(Date.UTC(+P.year, +P.month - 1, +P.day)).getUTCDay(), hm = P.hour + ':' + P.minute;
+  if (wd === 0 || wd === 6 || hm < '07:30' || hm >= '08:00' || M.morningDay === today || !d || !d.now) return;
+  M.morningDay = today;
+  const fr = (v) => String(v).replace('.', ',');
+  const soon = (d.hours || []).filter((x) => x.t.slice(0, 10) === today && x.t.slice(11, 13) <= '09');
+  const tmin = Math.min.apply(null, [d.now.t].concat(soon.map((x) => x.temp)).filter((v) => v != null));
+  const snow = (d.hours || []).filter((x) => x.t.slice(0, 10) === today && SNOW.indexOf(Number(x.code)) >= 0);
+  const parts = [];
+  if (tmin <= 2) parts.push(tmin <= 0 ? 'Gel : ' + fr(tmin) + '° dehors' : 'Risque de gel : ' + fr(tmin) + '° dehors');
+  if (snow.length) parts.push('Neige prévue ' + (snow[0].t.slice(11, 13) <= P.hour ? 'ce matin' : 'dès ' + Number(snow[0].t.slice(11, 13)) + 'h'));
+  if (!parts.length) return;
+  await pushNotify({ tag: 'morning', title: (snow.length ? '🌨️ ' : '❄️ ') + parts.join(' · '),
+    body: 'Prévoir du temps pour dégivrer la voiture' + (snow.length ? ' et prudence sur la route' : '') + ' (il fait ' + fr(d.now.t) + '° maintenant)' });
+}
 async function meteoWatch() {
   const M = SD.meteo = SD.meteo || {};
+  try { if (M.data && M.at > Date.now() - 1200000) await morningCheck(M.data); } catch (e) {}
   if (M.at && M.at > Date.now() - 900000) return;
   if (M.tryAt && M.tryAt > Date.now() - 300000) return;
   M.tryAt = Date.now();
   const d = await meteo(true);
+  try { await morningCheck(d); } catch (e) {}
   const w = (d.alerts || []).find((x) => x.type === 'wind');
   const soon = w && (new Date(w.first + ':00Z') - new Date(d.now.time + ':00Z')) < 36 * 3600000; // on prévient au plus 36 h avant
   if (w && soon && M.windKey !== w.key) {
