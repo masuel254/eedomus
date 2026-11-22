@@ -825,25 +825,33 @@ async function pushNotify(item, onlyKey) {
   return sent;
 }
 // Alerte « porte de garage ouverte depuis plus de N minutes » (vérifiée toutes les 30 s), rappel toutes les 30 min, puis « refermée »
+// Message Telegram d'eedomus (module InfluBot, périphérique « Notifications Telegram ») : la valeur 18 envoie
+// « Porte de garage ouverte depuis plus de 10 minutes ! Dois-je la fermer ? » avec un bouton OUI.
+const TG_PERIPH = '1887810', TG_GARAGE = '18';
+async function garageTelegram() { try { await eedomus('set', 'action=periph.value&periph_id=' + TG_PERIPH + '&value=' + TG_GARAGE); } catch (e) { /* Telegram indisponible : la notification iPhone part quand même */ } }
 async function garageAlert() {
-  if (!CFG.push || !SD.push || !Object.keys(SD.push.subs || {}).length || !SD.garage) return;
+  if (!SD.garage) return;
+  // notification iPhone seulement si un iPhone est inscrit ; le message Telegram part dans tous les cas
+  const hasPush = !!(CFG.push && SD.push && Object.keys(SD.push.subs || {}).length);
+  const notify = async (m) => { if (hasPush) await pushNotify(m); };
   const g = SD.garage, A = SD.garageAlert || {};
   const ms = (s) => Date.parse(String(s).replace(' ', 'T') + 'Z');
   const hm = (s) => String(s).slice(11, 16).replace(':', 'h');
   const dur = (m) => (m < 60 ? m + ' min' : Math.floor(m / 60) + ' h ' + String(m % 60).padStart(2, '0'));
   if (g.state === 'open') {
-    const mins = Math.floor((ms(localNow()) - ms(g.date)) / 60000), delay = SD.push.delay || 2;
+    const mins = Math.floor((ms(localNow()) - ms(g.date)) / 60000), delay = (SD.push && SD.push.delay) || 2;
     if (mins < delay) return;
     if (A.for !== g.date) {
       SD.garageAlert = { for: g.date, at: Date.now() };
-      await pushNotify({ tag: 'garage', title: 'Porte de garage ouverte', body: 'Ouverte depuis ' + dur(mins) + ' (à ' + hm(g.date) + ')', badge: 1 });
+      await garageTelegram();
+      await notify({ tag: 'garage', title: 'Porte de garage ouverte', body: 'Ouverte depuis ' + dur(mins) + ' (à ' + hm(g.date) + ')', badge: 1 });
     } else if (Date.now() - A.at > 30 * 60000) {
       A.at = Date.now(); SD.garageAlert = A;
-      await pushNotify({ tag: 'garage', title: 'Porte de garage toujours ouverte', body: 'Ouverte depuis ' + dur(mins) + ' (à ' + hm(g.date) + ')', badge: 1 });
+      await notify({ tag: 'garage', title: 'Porte de garage toujours ouverte', body: 'Ouverte depuis ' + dur(mins) + ' (à ' + hm(g.date) + ')', badge: 1 });
     }
   } else if (g.state === 'closed' && A.for) {
     SD.garageAlert = {};
-    await pushNotify({ tag: 'garage', title: 'Porte de garage fermée', body: 'Refermée à ' + hm(g.date), badge: 0 });
+    await notify({ tag: 'garage', title: 'Porte de garage fermée', body: 'Refermée à ' + hm(g.date), badge: 0 });
   }
 }
 async function tuReq(method, path, token, body) {
