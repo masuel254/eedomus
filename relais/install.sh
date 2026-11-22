@@ -7,7 +7,7 @@ SRC="https://raw.githubusercontent.com/masuel254/eedomus/main"
 ETC=/etc/relais
 OPT=/opt/relais
 ENVF=$ETC/relais.env
-B=$'\e[1m'; G=$'\e[32m'; R=$'\e[31m'; N=$'\e[0m'
+B=''; G=''; R=''; N=''   # pas de couleurs : la console de Freebox OS les affiche mal
 say()  { echo; echo "${B}== $* ==${N}"; }
 ok()   { echo "${G}✔ $*${N}"; }
 bad()  { echo "${R}✘ $*${N}"; }
