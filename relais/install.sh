@@ -124,8 +124,14 @@ if false; then :; else
     echo "Code de sécurité : 8 caractères sur l'étiquette de la caméra (« SC »), ou le mot de passe de l'appareil si tu l'as changé."
     FOUND=""
     while [ -z "$FOUND" ]; do
-      SC=$(ask "Code de sécurité (vide pour ignorer cette caméra)")
-      [ -z "$SC" ] && break
+      if [ -n "${LASTSC:-}" ]; then
+        SC=$(ask "Code de sécurité (Entrée = le même que la caméra précédente, « - » pour ignorer cette caméra)" "$LASTSC")
+        [ "$SC" = "-" ] && break
+      else
+        SC=$(ask "Code de sécurité (vide pour ignorer cette caméra)")
+        [ -z "$SC" ] && break
+      fi
+      LASTSC="$SC"
       ENC=$(node -e 'console.log(encodeURIComponent(process.argv[1]))' "$SC")
       for IP in $IPS; do
         U="rtsp://admin:$ENC@$IP:554/cam/realmonitor?channel=1&subtype=1"

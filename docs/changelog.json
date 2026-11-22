@@ -1,7 +1,16 @@
 {
-  "version": "2.34.3",
+  "version": "2.34.4",
   "date": "2026-11-22",
   "releases": [
+    {
+      "version": "2.34.4",
+      "date": "2026-11-22",
+      "time": "20:16",
+      "title": "Relais caméras : même mot de passe",
+      "changes": [
+        "Installation du relais : le mot de passe de la caméra précédente est proposé (touche Entrée)"
+      ]
+    },
     {
       "version": "2.34.3",
       "date": "2026-11-22",
@@ -1343,5 +1352,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "20:14"
+  "time": "20:16"
 }
