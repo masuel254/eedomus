@@ -29,7 +29,11 @@ API=$(curl -fsSL "$SRC/docs/config.json" | node -e 'let s="";process.stdin.on("d
 [ -n "$API" ] && setv API "$API"
 
 say "2/7 Disque de la Freebox"
-MNT=/mnt/freebox; mkdir -p $MNT
+# disque déjà branché par la Freebox (case « Accès aux disques Freebox ») : on le réutilise tel quel
+MNT=$(findmnt -rn -t cifs,9p,virtiofs -o TARGET 2>/dev/null | head -n1)
+[ -z "$MNT" ] && [ -d /mnt/Freebox ] && mountpoint -q /mnt/Freebox && MNT=/mnt/Freebox
+[ -z "$MNT" ] && MNT=/mnt/freebox
+mkdir -p "$MNT"
 if ! mountpoint -q $MNT; then
   for f in /sys/bus/virtio/drivers/9pnet_virtio/*/mount_tag; do
     [ -f "$f" ] || continue; TAG=$(tr -d '\0' < "$f")

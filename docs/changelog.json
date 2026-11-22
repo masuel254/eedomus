@@ -1,7 +1,16 @@
 {
-  "version": "2.34.0",
+  "version": "2.34.1",
   "date": "2026-11-22",
   "releases": [
+    {
+      "version": "2.34.1",
+      "date": "2026-11-22",
+      "time": "19:49",
+      "title": "Relais caméras : installation",
+      "changes": [
+        "Installation du relais : utilise directement le disque de la Freebox déjà branché dans la machine virtuelle"
+      ]
+    },
     {
       "version": "2.34.0",
       "date": "2026-11-22",
@@ -1315,5 +1324,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "19:39"
+  "time": "19:49"
 }
