@@ -1313,6 +1313,7 @@
     var cams = allCams(), h = '';
     camsSig = cams.map(function (c) { return c.id; }).join(',');
     h += '<button class="autolive' + (autoLive ? ' on' : '') + '" data-autolive><span><b>Tout en direct</b><small>' + (autoLive ? 'Les caméras démarrent seules (Imou en SD pour économiser le forfait)' : 'Touche une caméra pour la voir en direct') + '</small></span><span class="sw"></span></button>';
+    if (RELAY && RELAY.url) h += '<button class="autolive sumbtn" data-summary><span><b>Résumé de la journée</b><small>Tous les passages de personnes, toutes caméras, en accéléré</small></span><span class="val">›</span></button>';
     h += cams.map(camCardHTML).join('');
     if (!CAMS || !IM) h += '<p class="muted">Chargement des caméras…</p>';
     if (IM && IM.error) h += '<p class="muted">Caméras Imou indisponibles pour le moment.</p>';
@@ -1671,6 +1672,7 @@
     sheet.dataset.view = view; sheet.hidden = false; document.body.classList.add('noscroll');
     if (view === 'cams') { loadCams(true); loadImou(false); renderCams(); }
     else if (view === 'rec') renderRec();
+    else if (view === 'summary') renderSummary();
     else if (view === 'energy') renderEnergy();
     else if (view === 'cost') renderCost();
     else if (view === 'water') renderWater();
@@ -2214,6 +2216,51 @@
       renderRec(); var v3 = document.getElementById('recv'); if (v3) { var pr = v3.play(); if (pr && pr.catch) pr.catch(function () {}); }
     });
   }
+  // ---------- Résumé de la journée : passages de personnes, toutes caméras, accélérés (fabriqué par le relais de la Freebox) ----------
+  var SUM = null; // { date, st, loading, timer }
+  function openSummary() { SUM = { date: ymd(new Date()), st: null }; relayGet(); sheet.scrollTop = 0; openSheet('summary'); loadSummary(false); }
+  function loadSummary(build) {
+    if (!SUM) return; var want = SUM.date;
+    var c = (pcGet('sum') || {}).v || {}; if (!SUM.st && c[want]) SUM.st = c[want];
+    clearTimeout(SUM.timer);
+    relayJson('/api/summary' + (build ? '/build' : '') + '?date=' + want).then(function (j) {
+      if (!SUM || SUM.date !== want) return;
+      SUM.st = j; SUM.err = false;
+      if (j.state === 'ready') { var a = (pcGet('sum') || {}).v || {}; a[want] = j; Object.keys(a).sort().reverse().slice(10).forEach(function (k) { delete a[k]; }); pcSet('sum', a); }
+      if (j.state === 'building') SUM.timer = setTimeout(function () { if (sheet.dataset.view === 'summary' && !sheet.hidden) loadSummary(false); }, 8000);
+      // pas encore de résumé pour un jour passé : on le prépare tout de suite
+      else if (j.state === 'none' && !build && want < ymd(new Date())) return loadSummary(true);
+      renderSummary();
+    }).catch(function () { if (SUM) { SUM.err = true; renderSummary(); } });
+    renderSummary();
+  }
+  function renderSummary() {
+    if (!SUM) return;
+    var st = SUM.st, h = '<div class="sh-hd"><button class="back2" data-recback>' + icon('down') + 'Caméras</button><button class="close" data-close aria-label="Fermer">×</button></div>' +
+      '<h2 class="rec-title">Résumé de la journée</h2>';
+    var days = '';
+    for (var i = 0; i < 7; i++) { var d = new Date(); d.setDate(d.getDate() - i); days += '<button class="' + (ymd(d) === SUM.date ? 'on' : '') + '" data-sumday="' + ymd(d) + '">' + esc(i === 0 ? "Aujourd'hui" : i === 1 ? 'Hier' : d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' })) + '</button>'; }
+    var ready = st && st.state === 'ready' && st.url && RELAY && RELAY.url;
+    h += ready ? '<div class="camcard player"><video id="sumv" src="' + esc(relayUrl(st.url)) + '" playsinline controls></video>' +
+      '<div class="rates">' + [1, 2, 4].map(function (x) { return '<button class="' + ((SUM.rate || 1) === x ? 'on' : '') + '" data-sumrate="' + x + '">×' + x + '</button>'; }).join('') + '</div>' +
+      '<div class="cammeta"><b>' + st.parts.length + ' passage' + (st.parts.length > 1 ? 's' : '') + ' · ' + Math.floor(st.duration / 60) + ' min ' + String(st.duration % 60).padStart(2, '0') + '</b><span class="src-tag fb">Freebox</span></div></div>'
+      : '<div class="camcard player empty"><span>' + icon('play') + (st && st.state === 'building' ? 'Montage en cours…' : 'Pas encore de résumé') + '</span></div>';
+    h += '<div class="days">' + days + '</div>';
+    if (SUM.err && !st) h += '<p class="muted">La Freebox ne répond pas pour le moment.</p>';
+    else if (!st) h += '<p class="muted">Lecture de la Freebox…</p>';
+    else if (st.state === 'building') { var p = st.progress || {}; h += '<p class="muted">Montage du film sur la Freebox' + (p.total ? ' : ' + p.done + ' / ' + p.total + ' passages' : '') + '… (environ 1 à 3 minutes)</p>'; }
+    else if (st.state === 'error') h += '<p class="muted">Le montage n’a pas abouti (' + esc(st.error || '?') + ').</p>';
+    else if (st.state === 'ready' && !st.parts.length) h += '<p class="muted">Personne n’a été détecté ce jour-là.</p>';
+    if (st && st.state !== 'building' && SUM.date === ymd(new Date())) h += '<button class="act wide" data-sumbuild>' + (st.state === 'ready' ? 'Mettre à jour avec les derniers passages' : 'Préparer le résumé d’aujourd’hui') + '</button>';
+    if (ready && st.parts.length) h += '<h3>Passages</h3><div class="evlist">' + st.parts.map(function (p) {
+      return '<button class="ev rec" data-sumat="' + p.at + '"><span class="evic">' + icon('walk') + '</span><span><b>' + esc(p.name) + '</b><small>Personne</small></span><span class="evt">' + hhmm(p.time) + '</span></button>';
+    }).join('') + '</div>';
+    h += '<p class="note-q">Les moments où une personne a été détectée (Imou et Netatmo), extraits des enregistrements gardés sur la Freebox et accélérés ×4. Le résumé de la veille est préparé chaque nuit ; celui d’aujourd’hui à la demande.</p>';
+    var keep = sheet.scrollTop; sheet.innerHTML = '<div class="sh-in">' + h + '</div>'; sheet.scrollTop = keep;
+    var v = document.getElementById('sumv');
+    if (v) { var sp = function () { try { v.defaultPlaybackRate = SUM.rate || 1; v.playbackRate = SUM.rate || 1; } catch (e) {} }; sp(); v.addEventListener('loadedmetadata', sp); }
+  }
+
   // ---------- Consommation électrique (électrolyseur, pompe à chaleur, sauna) ----------
   var ENG = null; // { key, name, tab: 'day'|'month'|'year', day: 'AAAAMMJJ', month: 'AAAAMM', year: 'AAAA', data, loading }
   function ymdK(d) { return ymd(d).replace(/-/g, ''); }
@@ -2977,6 +3024,7 @@
     if ((b = e.target.closest('[data-live]'))) { liveCam = b.dataset.live; liveHd = true; return render(); }
     if ((b = e.target.closest('[data-hd]'))) { var hid = b.dataset.hd; camHd[hid] = !(camHd[hid] !== undefined ? camHd[hid] : (!autoLive && liveCam === hid)); return render(); }
     if (e.target.closest('[data-autolive]')) { autoLive = !autoLive; store.set('maison.autolive', autoLive ? '1' : '0'); liveCam = null; return render(); }
+    if (e.target.closest('[data-summary]')) return openSummary();
     if ((b = e.target.closest('[data-rec]'))) return openRec(b.dataset.rec);
     if ((b = e.target.closest('[data-evplay]'))) return playEvent(b.dataset.evplay);
     if ((b = e.target.closest('[data-ntroom]'))) { ntRoom = b.dataset.ntroom; store.set('maison.ntRoom', ntRoom); ntPend = null; loadRoomHist(ntRoom); return render(); }
@@ -3210,6 +3258,12 @@
       return saveTimer(st, en);
     }
     if ((b = e.target.closest('[data-enstep]'))) return stepEnergy(+b.dataset.enstep);
+    if (sheet.dataset.view === 'summary') {
+      if ((b = e.target.closest('[data-sumday]'))) { SUM.date = b.dataset.sumday; SUM.st = null; return loadSummary(false); }
+      if (e.target.closest('[data-sumbuild]')) { SUM.st = Object.assign({}, SUM.st, { state: 'building' }); renderSummary(); return loadSummary(true); }
+      if ((b = e.target.closest('[data-sumrate]'))) { SUM.rate = +b.dataset.sumrate; var sv = document.getElementById('sumv'); if (sv) { sv.defaultPlaybackRate = SUM.rate; sv.playbackRate = SUM.rate; } Array.prototype.forEach.call(sheet.querySelectorAll('[data-sumrate]'), function (x) { x.classList.toggle('on', +x.dataset.sumrate === SUM.rate); }); return; }
+      if ((b = e.target.closest('[data-sumat]'))) { var sv2 = document.getElementById('sumv'); if (sv2) { sheet.scrollTop = 0; try { sv2.currentTime = +b.dataset.sumat; } catch (er) {} var pp = sv2.play(); if (pp && pp.catch) pp.catch(function () {}); } return; }
+    }
     if (e.target.closest('[data-recback]')) return closeSheet(); // retour à l'onglet Caméras
     if ((b = e.target.closest('[data-recday]'))) { REC.date = b.dataset.recday; REC.list = null; REC.segs = null; return loadRec(); }
     // fiche des enregistrements

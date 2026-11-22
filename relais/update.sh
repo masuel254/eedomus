@@ -6,6 +6,8 @@ OPT=/opt/relais
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 for f in relais.js record.sh update.sh; do curl -fsSL --max-time 30 "$SRC/$f" -o "$T/$f" && [ -s "$T/$f" ] || exit 0; done
 node --check "$T/relais.js" && bash -n "$T/record.sh" && bash -n "$T/update.sh" || { echo "Mise à jour ignorée : fichier invalide"; exit 0; }
+# police pour légender le résumé vidéo (caméra, heure)
+[ -f /usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf ] || DEBIAN_FRONTEND=noninteractive apt-get install -y -qq fonts-dejavu-core >/dev/null 2>&1
 WEB=0; CAM=0
 cmp -s "$T/relais.js" $OPT/relais.js || { install -m 644 "$T/relais.js" $OPT/relais.js; WEB=1; }
 cmp -s "$T/record.sh" $OPT/record.sh || { install -m 755 "$T/record.sh" $OPT/record.sh; CAM=1; }

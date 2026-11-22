@@ -203,6 +203,14 @@ function serve() {
         const all = presList();
         return json(res, 200, { ok: true, date, clips: /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(date) ? all.filter((c) => c.begin.slice(0, 10) === date) : all.slice(0, 200) });
       }
+      if (u.pathname === '/api/summary' || u.pathname === '/api/summary/build') {
+        const date = u.searchParams.get('date') || '';
+        if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(date)) return json(res, 403, { ok: false, error: 'not_allowed' });
+        if (u.pathname === '/api/summary/build') startSummary(date);
+        return json(res, 200, sumState(date));
+      }
+      const rs = /^\/v\/resume\/([0-9]{4}-[0-9]{2}-[0-9]{2}\.mp4)$/.exec(u.pathname);
+      if (rs) return sendFile(req, res, SUMDIR(), rs[1]);
       let m = /^\/v\/imou\/([A-Za-z0-9_-]+)\/([0-9]{8}-[0-9]{6}\.mp4)$/.exec(u.pathname);
       if (m) return sendFile(req, res, REC(), m[1] + '/' + m[2]);
       if (u.pathname.indexOf('/v/presence/') === 0) {
@@ -236,6 +244,8 @@ function clean() {
   for (const f of files) { if (free() >= minFree) break; if (f.gone) continue; try { fs.unlinkSync(f.p); gone++; } catch (e) {} }
   console.log('Nettoyage : ' + gone + ' fichier(s) supprimé(s)');
   cleanPresence();
+  cleanSummaries();
+  nightlySummary();
 }
 // Vidéos de la Présence : rangées par Netatmo dans PRESENCE_DIR/AAAA/MM/JJ/. On ne supprime que les vidéos
 // de ces dossiers datés, au-delà de PRESENCE_RETENTION_DAYS (0 ou absent : on ne supprime rien).
@@ -296,10 +306,149 @@ async function pair(code) {
   console.log('Jumelage réussi : ' + (j.cams || []).length + ' caméra(s) Imou connue(s) du serveur');
 }
 
+// ---------- Résumé vidéo de la journée : les passages de personnes, toutes caméras, accélérés ×4 ----------
+// Les moments viennent du serveur (détections « personne » d'Imou et de Netatmo), les images des enregistrements gardés ici.
+// Chaque passage est recadré en 640×360, accéléré et légendé (caméra, heure), puis tout est mis bout à bout.
+const { spawn, spawnSync } = require('child_process');
+const SUMDIR = () => path.join(REC(), '_resumes');
+const SPEED = 4;
+function sumPaths(date) { const d = SUMDIR(); return { mp4: path.join(d, date + '.mp4'), json: path.join(d, date + '.json'), lock: path.join(d, date + '.building') }; }
+function sumState(date) {
+  const P = sumPaths(date);
+  let info = null; try { info = JSON.parse(fs.readFileSync(P.json, 'utf8')); } catch (e) {}
+  let building = false;
+  try { const st = fs.statSync(P.lock); building = Date.now() - st.mtimeMs < 40 * 60000; } catch (e) {}
+  const ready = !!info && fs.existsSync(P.mp4);
+  return { ok: true, date, state: building ? 'building' : ready ? 'ready' : info && info.error ? 'error' : 'none', building,
+    url: ready ? '/v/resume/' + date + '.mp4?v=' + (info.builtAt || 0) : null, parts: ready ? info.parts : [], duration: ready ? info.duration : 0,
+    builtAt: info ? info.builtAt || null : null, error: info && info.error ? info.error : null, progress: building ? readProgress(P.lock) : null };
+}
+function readProgress(lock) { try { return JSON.parse(fs.readFileSync(lock, 'utf8')); } catch (e) { return null; } }
+function startSummary(date) {
+  const P = sumPaths(date);
+  fs.mkdirSync(SUMDIR(), { recursive: true });
+  try { const st = fs.statSync(P.lock); if (Date.now() - st.mtimeMs < 40 * 60000) return false; } catch (e) {}
+  fs.writeFileSync(P.lock, JSON.stringify({ step: 'démarrage', done: 0, total: 0 }));
+  // lancé à part (systemd-run) : le montage continue même si le relais redémarre ou si le nettoyage se termine
+  const r = spawnSync('systemd-run', ['--quiet', '--collect', '--unit', 'relais-resume-' + date + '-' + Date.now(), '--setenv=TZ=Europe/Paris',
+    '--setenv=RELAIS_ENV=' + ENVF, '-p', 'Nice=10', process.execPath, __filename, 'summary', date], { timeout: 20000 });
+  if (r.status !== 0) spawn(process.execPath, [__filename, 'summary', date], { detached: true, stdio: 'ignore', env: process.env }).unref();
+  return true;
+}
+function probeDur(file) {
+  const r = spawnSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', file], { encoding: 'utf8', timeout: 30000 });
+  return Number(String(r.stdout || '').trim()) || 0;
+}
+function windows(times, before, after) { // fenêtres autour des détections, fusionnées quand elles se touchent
+  const w = [];
+  times.slice().sort((a, b) => a - b).forEach((t) => {
+    const a = t - before, b = t + after, last = w[w.length - 1];
+    if (last && a <= last[1] + 3) last[1] = Math.max(last[1], b); else w.push([a, b]);
+  });
+  return w;
+}
+async function buildSummary(date) {
+  const P = sumPaths(date), progress = (o) => { try { fs.writeFileSync(P.lock, JSON.stringify(o)); } catch (e) {} };
+  const ts = Math.floor(Date.now() / 1000);
+  const ev = await post({ action: 'relay.events', date, ts, sig: crypto.createHmac('sha256', E.SECRET).update('events|' + date + '|' + ts).digest('hex') });
+  const jobs = []; // { t0, cam, name, file, off, dur }
+  // caméras Imou : tranches de 10 min gardées ici
+  cams().forEach((c) => {
+    const times = (ev.imou && ev.imou[c.id]) || [];
+    if (!times.length) return;
+    const dir = path.join(REC(), c.dir), day = date.replace(/-/g, '');
+    let segs = [];
+    try {
+      segs = fs.readdirSync(dir).filter((n) => /^[0-9]{8}-[0-9]{6}\.mp4$/.test(n) && n.slice(0, 8) === day).map((n) => {
+        const st = fs.statSync(path.join(dir, n));
+        const b = new Date(+n.slice(0, 4), +n.slice(4, 6) - 1, +n.slice(6, 8), +n.slice(9, 11), +n.slice(11, 13), +n.slice(13, 15)).getTime() / 1000;
+        return { file: path.join(dir, n), b, e: Math.min(st.mtimeMs / 1000, b + 3600), ok: complete(path.join(dir, n), st) };
+      }).filter((g) => g.ok).sort((x, y) => x.b - y.b);
+      segs.forEach((g, i) => { if (segs[i + 1]) g.e = Math.min(g.e, segs[i + 1].b); }); // une tranche s'arrête où commence la suivante
+    } catch (e) {}
+    windows(times, 4, 16).forEach(([a, b]) => {
+      const g = segs.find((x) => a + 4 >= x.b && a + 4 < x.e); if (!g) return;
+      const off = Math.max(0, a - g.b), dur = Math.min(b, g.e) - (g.b + off);
+      if (dur >= 2) jobs.push({ t0: g.b + off, cam: c.id, name: c.name, file: g.file, off, dur });
+    });
+  });
+  // Présence : clips déposés par Netatmo sur la Freebox
+  if (PRES() && ev.presence && ev.presence.length) {
+    const clips = presList().filter((c) => c.begin.slice(0, 10) === date);
+    const durs = {};
+    windows(ev.presence, 3, 12).forEach(([a, b]) => {
+      const t = a + 3;
+      const cl = clips.find((c) => {
+        const f = path.join(PRES(), decodeURIComponent(c.url.slice('/v/presence/'.length)));
+        const end = new Date(c.end.replace(' ', 'T')).getTime() / 1000;
+        if (t > end + 5 || t < c.time - 90) return false;
+        if (durs[f] === undefined) durs[f] = probeDur(f);
+        c._f = f; c._s = end - durs[f];
+        return t >= c._s - 5 && t <= end + 5;
+      });
+      if (!cl) return;
+      const off = Math.max(0, a - cl._s), dur = Math.min(b - a, durs[cl._f] - off);
+      if (dur >= 2) jobs.push({ t0: cl._s + off, cam: 'presence', name: 'Présence', file: cl._f, off, dur });
+    });
+  }
+  jobs.sort((x, y) => x.t0 - y.t0);
+  const tmp = fs.mkdtempSync('/var/tmp/resume-'), font = ['/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'].find((f) => fs.existsSync(f));
+  const parts = []; let at = 0;
+  try {
+    for (let i = 0; i < jobs.length; i++) {
+      const j = jobs[i], out = path.join(tmp, 'p' + String(i).padStart(4, '0') + '.mp4');
+      progress({ step: 'montage', done: i, total: jobs.length });
+      const d = new Date(j.t0 * 1000), hm = pad(d.getHours()) + 'h' + pad(d.getMinutes());
+      let vf = 'scale=640:360:force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2,setsar=1,setpts=PTS/' + SPEED + ',fps=15';
+      if (font) vf += ",drawtext=fontfile=" + font + ":text='" + (j.name + ' · ' + hm).replace(/[':\\]/g, ' ') + "':x=12:y=12:fontsize=22:fontcolor=white:box=1:boxcolor=black@0.55:boxborderw=6";
+      const r = spawnSync('ffmpeg', ['-v', 'error', '-y', '-ss', String(j.off), '-t', String(j.dur), '-i', j.file, '-an', '-vf', vf,
+        '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '28', '-pix_fmt', 'yuv420p', '-r', '15', '-movflags', '+faststart', out], { timeout: 300000 });
+      if (r.status !== 0 || !fs.existsSync(out)) continue;
+      const pd = probeDur(out); if (!pd) continue;
+      parts.push({ at: Math.round(at * 10) / 10, cam: j.cam, name: j.name, time: Math.floor(j.t0), file: out });
+      at += pd;
+    }
+    fs.mkdirSync(SUMDIR(), { recursive: true });
+    if (!parts.length) {
+      fs.writeFileSync(P.json, JSON.stringify({ date, builtAt: Date.now(), parts: [], duration: 0, empty: true }));
+      try { fs.unlinkSync(P.mp4); } catch (e) {}
+      return;
+    }
+    progress({ step: 'assemblage', done: jobs.length, total: jobs.length });
+    const list = path.join(tmp, 'liste.txt');
+    fs.writeFileSync(list, parts.map((p) => "file '" + p.file + "'").join('\n') + '\n');
+    const full = path.join(tmp, 'resume.mp4');
+    const r = spawnSync('ffmpeg', ['-v', 'error', '-y', '-f', 'concat', '-safe', '0', '-i', list, '-c', 'copy', '-movflags', '+faststart', full], { timeout: 600000 });
+    if (r.status !== 0) throw new Error('assemblage impossible');
+    fs.copyFileSync(full, P.mp4 + '.tmp'); fs.renameSync(P.mp4 + '.tmp', P.mp4);
+    fs.writeFileSync(P.json, JSON.stringify({ date, builtAt: Date.now(), speed: SPEED, duration: Math.round(at), parts: parts.map((p) => ({ at: p.at, cam: p.cam, name: p.name, time: p.time })) }));
+  } finally {
+    spawnSync('rm', ['-rf', tmp]);
+  }
+}
+// chaque nuit (après 1h), le résumé de la veille est préparé tout seul
+function nightlySummary() {
+  const now = new Date(); if (now.getHours() < 1 || !E.SECRET) return;
+  const y = new Date(now.getTime() - 86400000), date = y.getFullYear() + '-' + pad(y.getMonth() + 1) + '-' + pad(y.getDate());
+  const st = sumState(date);
+  if (st.state === 'none') startSummary(date);
+}
+function cleanSummaries() {
+  const days = Number(E.RETENTION_DAYS) || 14, lim = Date.now() - days * 86400000;
+  let ns = []; try { ns = fs.readdirSync(SUMDIR()); } catch (e) { return; }
+  ns.forEach((n) => { const m = /^([0-9]{4})-([0-9]{2})-([0-9]{2})\./.exec(n); if (m && new Date(+m[1], +m[2] - 1, +m[3]).getTime() < lim) { try { fs.unlinkSync(path.join(SUMDIR(), n)); } catch (e) {} } });
+}
+
 const cmd = process.argv[2] || 'serve';
 if (cmd === 'serve') serve();
 else if (cmd === 'clean') clean();
 else if (cmd === 'hello') hello().catch((e) => { console.error('Serveur injoignable : ' + e.message); process.exit(1); });
 else if (cmd === 'pair') pair(process.argv[3] || '').catch((e) => { console.error('Jumelage impossible : ' + e.message); process.exit(1); });
 else if (cmd === 'status') console.log(JSON.stringify(status(), null, 1));
+else if (cmd === 'summary') {
+  const date = process.argv[3] || '';
+  buildSummary(date).catch((e) => {
+    try { fs.writeFileSync(sumPaths(date).json, JSON.stringify({ date, builtAt: Date.now(), error: String(e.message || e) })); } catch (x) {}
+  }).finally(() => { try { fs.unlinkSync(sumPaths(date).lock); } catch (e) {} });
+}
 else { console.error('Usage : node relais.js [serve|clean|hello|pair CODE|status]'); process.exit(2); }

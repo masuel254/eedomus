@@ -144,7 +144,7 @@ const reply = (status, data) => [{ json: { status, data } }].concat(OUT_PUSH);
 // Déclenchement par la minuterie (relevés d'énergie) : pas de requête HTTP, donc ni corps ni en-têtes.
 const isCron = req.body === undefined && req.headers === undefined;
 // relay.hello : appel du relais caméras de la Freebox, authentifié par sa propre signature (voir relayHello)
-if (!isCron && body.action !== 'push.pending' && body.action !== 'relay.hello' && (!body.token || !CFG.tokens.includes(body.token))) return reply(401, { ok: false, error: 'unauthorized' });
+if (!isCron && body.action !== 'push.pending' && body.action !== 'relay.hello' && body.action !== 'relay.events' && (!body.token || !CFG.tokens.includes(body.token))) return reply(401, { ok: false, error: 'unauthorized' });
 
 const auth = 'api_user=' + encodeURIComponent(CFG.user) + '&api_secret=' + encodeURIComponent(CFG.secret);
 async function eedomus(kind, query, attempt) {
@@ -864,6 +864,24 @@ async function relay(b) {
     return { ok: true, url: R.url, t: exp + '.' + hmac256hex(CFG.relay.secret, 'relais|' + exp), exp, seen: R.seen || null, status: R.status || null };
   }
   throw fail(400, 'unknown_action');
+}
+// Détections « personne » d'une journée, pour le résumé vidéo fabriqué par le relais (authentifié par sa signature)
+async function relayEvents(b) {
+  const ts = Number(b.ts) || 0, day = String(b.date || '');
+  if (Math.abs(Date.now() / 1000 - ts) > 300 || String(b.sig || '') !== hmac256hex(CFG.relay.secret, 'events|' + day + '|' + ts)) return reply(401, { ok: false, error: 'unauthorized' });
+  if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(day)) return reply(400, { ok: false });
+  const out = { ok: true, date: day, imou: {}, presence: [] };
+  if (CFG.im) for (const d of await imDevices()) {
+    try { const r = await imou({ action: 'im.alarms', cam: d.id, date: day }); out.imou[d.id] = r.alarms.filter((a) => /human|person/i.test(a.kind)).map((a) => a.time); } catch (e) { out.imou[d.id] = []; }
+  }
+  if (CFG.nt) {
+    try {
+      const H = await ntHomes(), outdoor = H.cams.filter((c) => c.type === 'NOC').map((c) => c.id);
+      const r = await netatmo({ action: 'nt.dayevents', date: day });
+      out.presence = r.events.filter((e) => outdoor.includes(e.cam) && (e.types || []).includes('human')).map((e) => e.time);
+    } catch (e) {}
+  }
+  return reply(200, out);
 }
 async function relayHello(b) {
   const R = SD.relay = SD.relay || {};
@@ -1841,6 +1859,7 @@ try {
     return reply(200, await netatmo(body));
   }
   if (body.action === 'relay.hello') return await relayHello(body);
+  if (body.action === 'relay.events') return await relayEvents(body);
   if (String(body.action || '').startsWith('relay.')) return reply(200, await relay(body));
   if (String(body.action || '').startsWith('im.')) return reply(200, await imou(body));
   if (String(body.action || '').startsWith('tu.')) return reply(200, await tuya(body));

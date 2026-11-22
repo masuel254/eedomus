@@ -1099,3 +1099,7 @@ svg.hl-svg { touch-action: none; }
 .player .rates { display: flex; gap: 6px; padding: 10px 14px 0; }
 .player .rates button { flex: 1; padding: 7px 0; border-radius: 10px; font-size: 13px; font-weight: 700; background: var(--s2); border: 1px solid var(--ln); color: var(--mu); }
 .player .rates button.on { background: rgba(56,189,248,.16); color: #38BDF8; border-color: rgba(56,189,248,.45); }
+
+/* Résumé de la journée */
+.sumbtn .val { color: var(--mu); font-size: 22px; }
+.act.wide { display: block; width: 100%; margin: 4px 0 12px; padding: 12px; }
