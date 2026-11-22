@@ -1,7 +1,16 @@
 {
-  "version": "2.36.0",
+  "version": "2.36.1",
   "date": "2026-11-22",
   "releases": [
+    {
+      "version": "2.36.1",
+      "date": "2026-11-22",
+      "time": "21:41",
+      "title": "Origine de la vidéo",
+      "changes": [
+        "Lecteur des enregistrements : une étiquette indique si la vidéo vient de la Freebox ou de la carte SD"
+      ]
+    },
     {
       "version": "2.36.0",
       "date": "2026-11-22",
@@ -1401,5 +1410,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "21:35"
+  "time": "21:41"
 }

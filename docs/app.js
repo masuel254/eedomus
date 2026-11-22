@@ -2104,7 +2104,7 @@
     var h = '<div class="sh-hd"><button class="back2" data-recback>' + icon('down') + 'Caméras</button><button class="close" data-close aria-label="Fermer">×</button></div>' +
       '<h2 class="rec-title">' + esc(c ? c.name : 'Caméra') + ' · enregistrements</h2>';
     h += REC.play ? '<div class="camcard player"><video id="recv" src="' + esc(REC.play.url) + '" autoplay playsinline controls></video>' +
-      '<div class="cammeta"><b>' + esc(REC.play.label) + '</b>' + (REC.play.hdOk ? '<button class="hdbtn' + (REC.play.hd ? ' on' : '') + '" data-rechd>' + (REC.play.hd ? 'HD' : 'Passer en HD') + '</button>' : '') + '</div></div>'
+      '<div class="cammeta"><b>' + esc(REC.play.label) + ' <span class="src-tag' + (REC.play.relay ? ' fb' : '') + '">' + (REC.play.relay ? 'Freebox' : c && c.src === 'imou' ? 'Carte SD' : 'Caméra') + '</span></b>' + (REC.play.hdOk ? '<button class="hdbtn' + (REC.play.hd ? ' on' : '') + '" data-rechd>' + (REC.play.hd ? 'HD' : 'Passer en HD') + '</button>' : '') + '</div></div>'
       : '<div class="camcard player empty"><span>' + icon('play') + 'Choisis un enregistrement ci-dessous</span></div>';
     if (c && c.src === 'imou') {
       var days = '';

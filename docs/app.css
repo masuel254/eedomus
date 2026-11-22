@@ -1071,3 +1071,7 @@ svg.hl-svg { touch-action: none; }
 .nf-sw .lg.nf.new { box-shadow: inset 3px 0 0 var(--cool); }
 .cammeta .hdbtn { margin-left: auto; background: var(--s3); color: var(--cool); border: 0; border-radius: 999px; padding: 5px 11px; font: 700 12px var(--f-ui); cursor: pointer; }
 .cammeta .hdbtn.on { background: var(--cool); color: #0C0E11; cursor: default; }
+
+/* origine de la vidéo lue : Freebox (relais) ou carte SD de la caméra */
+.src-tag { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 8px; font-size: 11px; font-weight: 700; vertical-align: 1px; background: var(--s2); color: var(--mu); border: 1px solid var(--ln); }
+.src-tag.fb { color: #34c759; border-color: rgba(52,199,89,.4); }
