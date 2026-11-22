@@ -52,7 +52,7 @@
     if (s < 10) return "à l'instant"; if (s < 60) return 'il y a ' + s + ' s';
     return 'il y a ' + Math.round(s / 60) + ' min';
   }
-  function busy() { return document.querySelector('.confirming, .armed-confirm, .slide.dragging') || (TAB === 'cams' && document.querySelector('#app video') && allCams().map(function (c) { return c.id; }).join(',') === camsSig); }
+  function busy() { var ae = document.activeElement; if (ae && ae.type === 'time') return true; return document.querySelector('.confirming, .armed-confirm, .slide.dragging') || (TAB === 'cams' && document.querySelector('#app video') && allCams().map(function (c) { return c.id; }).join(',') === camsSig); }
 
   // ---------- API (n8n) ----------
   function api(body) {
@@ -2733,13 +2733,17 @@
     if (t.id === 'pe-name') { var nv = t.value.trim().slice(0, 30); if (nv && nv !== PE.data.name) { PE.data.name = nv; peChanged(); } return; }
     if (t.hasAttribute('data-pe-zname')) { var zn = zoneById(+t.dataset.peZname); if (zn && t.value.trim()) { zn.name = t.value.trim().slice(0, 30); peChanged(); } return; }
     if (t.hasAttribute('data-pe-zone')) { peTT()[+t.dataset.peZone].z = +t.value; return peChanged(); }
-    if (t.hasAttribute('data-pe-time')) {
-      var m = /^([0-9][0-9]):([0-9][0-9])$/.exec(t.value || ''); if (!m) return renderPlan();
-      var o = PE.day * 1440 + (+m[1]) * 60 + (+m[2]), i = +t.dataset.peTime;
-      if (o === 0 || peTT().some(function (x, j) { return j !== i && x.o === o; })) { toast('Une plage existe déjà à cette heure', true); return renderPlan(); }
-      peTT()[i].o = o; peSort(); return peChanged();
-    }
+    // heure d'une plage : l'iPhone envoie un « change » à chaque cran des roues ; on n'applique qu'à la fermeture (bouton ✓)
   });
+  function peTimeCommit(t) {
+    if (!PE || !t.isConnected) return;
+    var m = /^([0-9][0-9]):([0-9][0-9])$/.exec(t.value || ''); if (!m) return renderPlan();
+    var o = PE.day * 1440 + (+m[1]) * 60 + (+m[2]), i = +t.dataset.peTime;
+    if (!peTT()[i] || peTT()[i].o === o) return;
+    if (o === 0 || peTT().some(function (x, j) { return j !== i && x.o === o; })) { toast('Une plage existe déjà à cette heure', true); return renderPlan(); }
+    peTT()[i].o = o; peSort(); peChanged();
+  }
+  sheet.addEventListener('focusout', function (e) { var t = e.target; if (t && t.hasAttribute && t.hasAttribute('data-pe-time')) setTimeout(function () { peTimeCommit(t); }, 0); });
   // ---------- Barre d'onglets ----------
   tabsEl.addEventListener('click', function (e) {
     var b = e.target.closest('[data-tab]'); if (!b || !CFG) return;
