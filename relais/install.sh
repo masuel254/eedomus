@@ -97,18 +97,29 @@ ok "relais jumelé"
 
 say "6/7 Caméras Imou"
 CONF=$ETC/cameras.conf
-if [ -s $CONF ] && [ "$(ask "Garder les caméras déjà réglées ? (o/n)" "o")" = "o" ]; then :; else
+KEEP=n
+[ -s $CONF ] && KEEP=$(ask "Garder les caméras déjà réglées et compléter les autres ? (o/n)" "o")
+if false; then :; else
   NET=$(ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p' | cut -d. -f1-3)
   echo "Recherche des caméras sur le réseau $NET.x …"
   IPS=""
-  for i in $(seq 2 254); do ( timeout 0.4 bash -c "exec 3<>/dev/tcp/$NET.$i/554" 2>/dev/null && echo "$NET.$i" ) & done > /tmp/relais-ips; wait
-  IPS=$(sort -t. -k4 -n /tmp/relais-ips | tr '\n' ' ')
+  # deux passages (les caméras en Wi-Fi répondent parfois lentement), par groupes de 32 pour ménager la mémoire
+  : > /tmp/relais-ips
+  for T in 1.5 3; do
+    for i in $(seq 2 254); do
+      ( timeout $T bash -c "exec 3<>/dev/tcp/$NET.$i/554" 2>/dev/null && echo "$NET.$i" ) &
+      [ $((i % 32)) = 0 ] && wait
+    done >> /tmp/relais-ips; wait
+  done
+  IPS=$(sort -u -t. -k4 -n /tmp/relais-ips | grep -v "^$NET.254$" | tr '\n' ' ')
   echo "Appareils vidéo trouvés : ${IPS:-aucun}"
   : > $CONF.new
+  [ "$KEEP" = "o" ] && cp $CONF $CONF.new
   N=$(node -e 'console.log(require("/etc/relais/imou.json").length)')
   for k in $(seq 0 $((N - 1))); do
     ID=$(node -e "console.log(require('/etc/relais/imou.json')[$k].id)"); NAME=$(node -e "console.log(require('/etc/relais/imou.json')[$k].name)")
     MODEL=$(node -e "console.log(require('/etc/relais/imou.json')[$k].model||'')")
+    grep -q "^$ID|" $CONF.new && { ok "$NAME : déjà réglée"; continue; }
     echo; echo "${B}$NAME${N} ($MODEL)"
     echo "Code de sécurité : 8 caractères sur l'étiquette de la caméra (« SC »), ou le mot de passe de l'appareil si tu l'as changé."
     FOUND=""
@@ -120,7 +131,15 @@ if [ -s $CONF ] && [ "$(ask "Garder les caméras déjà réglées ? (o/n)" "o")"
         U="rtsp://admin:$ENC@$IP:554/cam/realmonitor?channel=1&subtype=1"
         if timeout 15 ffprobe -v error -rtsp_transport tcp -timeout 8000000 -show_entries stream=codec_name -of csv=p=0 "$U" >/dev/null 2>&1; then FOUND="$U"; ok "trouvée à l'adresse $IP"; break; fi
       done
-      [ -z "$FOUND" ] && bad "aucune caméra n'accepte ce code (vérifie-le, ou active RTSP/ONVIF dans l'appli Imou)"
+      if [ -z "$FOUND" ]; then
+        bad "aucune caméra trouvée avec ce code"
+        IP=$(ask "Adresse de la caméra si tu la connais (Freebox OS > Périphériques réseau, ex. 192.168.1.50), sinon Entrée")
+        if [ -n "$IP" ]; then
+          U="rtsp://admin:$ENC@$IP:554/cam/realmonitor?channel=1&subtype=1"
+          if timeout 20 ffprobe -v error -rtsp_transport tcp -timeout 10000000 -show_entries stream=codec_name -of csv=p=0 "$U" >/dev/null 2>&1; then FOUND="$U"; ok "caméra jointe à l'adresse $IP"
+          else bad "pas de réponse vidéo à cette adresse avec ce code (vérifie le code, ou active RTSP dans l'appli Imou)"; fi
+        fi
+      fi
     done
     [ -n "$FOUND" ] && echo "$ID|$NAME|$FOUND" >> $CONF.new
   done
@@ -201,7 +220,7 @@ $DOM {
 EOF
 systemctl daemon-reload
 for u in $(systemctl list-units --all --plain --no-legend 'relais-cam@*' | awk '{print $1}'); do systemctl disable --now "$u" >/dev/null 2>&1; done
-systemctl enable --now relais-web.service relais-clean.timer >/dev/null 2>&1
+systemctl enable relais-web.service relais-clean.timer >/dev/null 2>&1; systemctl restart relais-web.service; systemctl start relais-clean.timer
 while IFS='|' read -r ID NAME URL; do
   [ -z "$ID" ] && continue
   systemctl enable --now "relais-cam@$(echo "$ID" | tr -c 'A-Za-z0-9_\n-' _).service" >/dev/null 2>&1

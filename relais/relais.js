@@ -75,7 +75,9 @@ function imouDay(cam, date) {
 }
 
 // ---------- Clips de la Présence (dossier FTP sur la Freebox) ----------
+// Plus de 20 000 vidéos sur le disque réseau : on garde un index en mémoire, et on ne relit que les dossiers modifiés.
 let presCache = { at: 0, list: [] };
+const presDirs = {}; // dossier -> { mtime, clips: [...], subs: [...] }
 function clipTime(rel, st) {
   // date dans le nom (2026-11-22_18-05-03, 20261122_180503…) ou nombre de secondes ; sinon date du fichier
   const b = path.basename(rel);
@@ -85,26 +87,37 @@ function clipTime(rel, st) {
   if (m) return new Date(+m[1] * 1000);
   return new Date(st.mtimeMs);
 }
-function presList() {
-  if (Date.now() - presCache.at < 20000) return presCache.list;
-  const root = PRES(), list = [];
-  const walk = (d, depth) => {
+function presScanDir(root, d, depth, out) {
+  let dst; try { dst = fs.statSync(d); } catch (e) { return; }
+  let c = presDirs[d];
+  if (!c || c.mtime !== dst.mtimeMs) {
+    c = { mtime: dst.mtimeMs, clips: [], subs: [] };
     let ents = []; try { ents = fs.readdirSync(d, { withFileTypes: true }); } catch (e) { return; }
     ents.forEach((en) => {
       const p = path.join(d, en.name);
-      if (en.isDirectory()) { if (depth < 6) walk(p, depth + 1); return; }
+      if (en.isDirectory()) { if (depth < 6) c.subs.push(p); return; }
       if (!/\.(mp4|m4v|mov)$/i.test(en.name)) return;
       let st; try { st = fs.statSync(p); } catch (e) { return; }
-      if (st.size < 20000 || Date.now() - st.mtimeMs < 10000) return; // encore en cours d'envoi
+      if (st.size < 20000 || Date.now() - st.mtimeMs < 10000) { c.mtime = -1; return; } // encore en cours d'envoi : dossier relu la prochaine fois
       const rel = path.relative(root, p), t = clipTime(rel, st);
-      list.push({ time: Math.floor(t.getTime() / 1000), begin: local(t), end: local(new Date(Math.max(st.mtimeMs, t.getTime()))), size: st.size,
+      c.clips.push({ time: Math.floor(t.getTime() / 1000), begin: local(t), end: local(new Date(Math.max(st.mtimeMs, t.getTime()))), size: st.size,
         url: '/v/presence/' + rel.split(path.sep).map(encodeURIComponent).join('/') });
     });
-  };
-  if (root) walk(root, 0);
+    presDirs[d] = c;
+  }
+  c.clips.forEach((x) => out.push(x));
+  c.subs.forEach((sd) => presScanDir(root, sd, depth + 1, out));
+}
+function presRefresh() {
+  const root = PRES(), list = [];
+  if (root) presScanDir(root, root, 0, list);
   list.sort((a, b) => b.time - a.time);
   presCache = { at: Date.now(), list };
-  return list;
+}
+function presList() {
+  if (!presCache.at) presRefresh();
+  else if (Date.now() - presCache.at > 30000 && !presCache.busy) { presCache.busy = true; setImmediate(presRefresh); } // mise à jour derrière, on répond tout de suite
+  return presCache.list;
 }
 
 // ---------- État (pour Réglages dans l'appli et pour le serveur) ----------
@@ -185,7 +198,7 @@ function serve() {
       }
     } catch (e) { return json(res, 500, { ok: false, error: String(e.message || e) }); }
     json(res, 404, { ok: false, error: 'not_found' });
-  }).listen(port, '127.0.0.1', () => console.log('Relais caméras à l’écoute sur 127.0.0.1:' + port));
+  }).listen(port, '127.0.0.1', () => { console.log('Relais caméras à l’écoute sur 127.0.0.1:' + port); setTimeout(presRefresh, 1000); });
   setInterval(() => { E = loadEnv(); }, 60000); // réglages relus sans redémarrer
 }
 

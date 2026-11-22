@@ -1,7 +1,17 @@
 {
-  "version": "2.34.2",
+  "version": "2.34.3",
   "date": "2026-11-22",
   "releases": [
+    {
+      "version": "2.34.3",
+      "date": "2026-11-22",
+      "time": "20:14",
+      "title": "Relais caméras : recherche des caméras",
+      "changes": [
+        "Installation du relais : recherche des caméras plus patiente, adresse tapée à la main si besoin, caméras déjà réglées gardées",
+        "Relais : les milliers de vidéos de la Présence sont indexées une fois, puis seuls les nouveaux dossiers sont relus"
+      ]
+    },
     {
       "version": "2.34.2",
       "date": "2026-11-22",
@@ -1333,5 +1343,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "19:52"
+  "time": "20:14"
 }
