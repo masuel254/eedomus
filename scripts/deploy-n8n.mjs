@@ -458,7 +458,16 @@ async function meteo(force) {
     '&minutely_15=precipitation&forecast_minutely_15=16' +
     '&hourly=temperature_2m,precipitation_probability,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,is_day&forecast_hours=96' +
     '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,sunrise,sunset';
-  const j = await helpers.httpRequest({ method: 'GET', url, json: true, timeout: 15000 });
+  // Modèle Météo-France (AROME + ARPEGE) pour tout ; il ne calcule pas de probabilité de pluie : on la prend dans le mélange par défaut d'Open-Meteo
+  const pr = await Promise.all([
+    helpers.httpRequest({ method: 'GET', url: url + '&models=meteofrance_seamless', json: true, timeout: 15000 }),
+    helpers.httpRequest({ method: 'GET', url: 'https://api.open-meteo.com/v1/forecast?latitude=' + c[1] + '&longitude=' + c[0] + '&timezone=Europe%2FParis&forecast_days=5&hourly=precipitation_probability&forecast_hours=96&daily=precipitation_probability_max', json: true, timeout: 15000 }).catch(() => ({}))
+  ]);
+  const j = pr[0], jp = pr[1] || {}, probH = {}, probD = {};
+  ((jp.hourly || {}).time || []).forEach((t, i) => { probH[t] = jp.hourly.precipitation_probability[i]; });
+  ((jp.daily || {}).time || []).forEach((t, i) => { probD[t] = jp.daily.precipitation_probability_max[i]; });
+  if (j.hourly) j.hourly.precipitation_probability = (j.hourly.time || []).map((t) => (probH[t] == null ? null : probH[t]));
+  if (j.daily) j.daily.precipitation_probability_max = (j.daily.time || []).map((t) => (probD[t] == null ? null : probD[t]));
   const P = parisParts(), nowIso = P.year + '-' + P.month + '-' + P.day + 'T' + P.hour + ':' + P.minute, today = nowIso.slice(0, 10);
   const r1 = (v) => (v == null ? null : Math.round(v * 10) / 10), r0 = (v) => (v == null ? null : Math.round(v));
   const cu = j.current || {}, hh = j.hourly || {}, dd = j.daily || {}, mm = j.minutely_15 || {};
@@ -489,12 +498,12 @@ async function meteo(force) {
     const mn = fh.reduce((m, x) => (x.temp < m.temp ? x : m), fh[0]);
     alerts.push({ type: 'frost', title: 'Gel possible ' + meteoWhen(mn.t, today) + ' (' + String(mn.temp).replace('.', ',') + '°)', text: 'Vérifier la protection hors-gel de la piscine' });
   }
-  M.data = { ok: true, at: Date.now(), now: now, hours: hours.slice(0, 24), days: days, alerts: alerts, src: 'Météo-France / Open-Meteo', place: CFG.meteoPos ? CFG.meteoPos.name : null };
+  M.data = { ok: true, at: Date.now(), now: now, hours: hours.filter((x) => x.temp != null).slice(0, 24), days: days.filter((x) => x.max != null && x.min != null), alerts: alerts, src: 'Météo-France (AROME/ARPEGE) via Open-Meteo', place: CFG.meteoPos ? CFG.meteoPos.name : null };
   M.at = Date.now();
   return M.data;
 }
 // Historique de la température extérieure sur une période (heure de Paris, « AAAA-MM-JJ HH:MM ») :
-// sonde de la pergola (eedomus) jusqu'au 22/11/2026 11:30, puis la météo locale (Météo-France via Open-Meteo).
+// sonde de la pergola (eedomus) jusqu'au 22/11/2026 11:30, puis la météo locale (modèle Météo-France, via Open-Meteo).
 // Au-delà de 40 jours : une moyenne par jour, pour garder une courbe lisible.
 const OUT_SENSOR = '3227865', OUT_CUT = '2026-11-22 11:30';
 async function outHist(from, to) {
@@ -518,7 +527,7 @@ async function outHist(from, to) {
       // moins de 80 jours : prévisions récentes ; plus ancien : archive des prévisions
       const recent = (Date.now() - new Date(a + 'T12:00:00Z').getTime()) < 80 * 86400000;
       const host = recent ? 'https://api.open-meteo.com' : 'https://historical-forecast-api.open-meteo.com';
-      const j = await helpers.httpRequest({ method: 'GET', url: host + '/v1/forecast?latitude=' + co[1] + '&longitude=' + co[0] + '&timezone=Europe%2FParis&start_date=' + a + '&end_date=' + b + '&hourly=temperature_2m', json: true, timeout: 20000 });
+      const j = await helpers.httpRequest({ method: 'GET', url: host + '/v1/forecast?latitude=' + co[1] + '&longitude=' + co[0] + '&timezone=Europe%2FParis&start_date=' + a + '&end_date=' + b + '&hourly=temperature_2m&models=meteofrance_seamless', json: true, timeout: 20000 });
       const hh = j.hourly || {};
       (hh.time || []).forEach((t, i) => { const d = t.slice(0, 10) + ' ' + t.slice(11, 16), v = hh.temperature_2m[i]; if (v != null && d >= OUT_CUT && d >= from && d <= to && d <= nowS) pts.push([d, Math.round(v * 10) / 10]); });
     }

@@ -1208,7 +1208,7 @@
         '<span class="rain mono">' + (d.prob != null ? d.prob + ' %' : '') + (d.mm ? ' · ' + fmt(d.mm, 1) + ' mm' : '') + '</span>' +
         '<span class="mono' + (d.gust >= 50 ? ' gst' : ' mu2') + '">' + fmt(d.gust, 0) + ' km/h</span></div>';
     }).join('') + '</div>';
-    h += '<p class="note-q">Prévisions Météo-France (modèles AROME et ARPEGE) via Open-Meteo, pour un carré d’environ 1 km autour de la commune. Une notification te prévient quand des rafales d’au moins 50 km/h sont prévues dans les 36 h.</p>';
+    h += '<p class="note-q">Prévisions Météo-France (modèles AROME et ARPEGE) via Open-Meteo, pour un carré d’environ 1 km autour de la commune, sur 4 jours. Seul le % de chance de pluie vient d’un autre modèle, car Météo-France ne le calcule pas. Une notification te prévient quand des rafales d’au moins 50 km/h sont prévues dans les 36 h.</p>';
     var keep = sheet.scrollTop; sheet.innerHTML = '<div class="sh-in">' + h + '</div>'; sheet.scrollTop = keep;
   }
   // ---------- Température extérieure (historique) ----------
