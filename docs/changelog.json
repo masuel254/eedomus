@@ -1,7 +1,17 @@
 {
-  "version": "2.29.6",
+  "version": "2.30.0",
   "date": "2026-11-22",
   "releases": [
+    {
+      "version": "2.30.0",
+      "date": "2026-11-22",
+      "time": "15:32",
+      "title": "Alerte chaudière",
+      "changes": [
+        "Nouvelle alerte « Vérifier la chaudière » : la chaudière chauffe depuis 45 min mais le séjour ne se réchauffe pas",
+        "Pas de fausse alerte quand le séjour est déjà à sa consigne et que la chaudière chauffe d’autres pièces"
+      ]
+    },
     {
       "version": "2.29.6",
       "date": "2026-11-22",
@@ -1242,5 +1252,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "15:25"
+  "time": "15:32"
 }

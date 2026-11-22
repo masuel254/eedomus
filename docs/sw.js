@@ -1,6 +1,6 @@
 // Service worker : réseau d'abord (toujours la dernière version), cache en secours hors ligne.
 // Les appels à la maison (n8n) ne passent jamais par le cache.
-var V = 'maison-2.29.6';
+var V = 'maison-2.30.0';
 // Les notifications reçues sont gardées à part (30 dernières) : une mise à jour de l'appli ne les efface pas
 var NOTIFS = 'maison-notifs';
 var SHELL = ['./', './index.html', './app.css', './app.js', './config.json', './changelog.json', './manifest.webmanifest', './icons/icon-192-v2.png'];
@@ -35,7 +35,7 @@ function setBadge(n) {
 }
 // Titre clair dès l'écran verrouillé : un symbole selon le type d'alerte
 function clearTitle(it) {
-  var t = String(it.title || 'Maison'), ic = { garage: '🚗', water: '💧', wateroff: '💧', meteo: '🌬️', test: '🔔' }[it.tag];
+  var t = String(it.title || 'Maison'), ic = { garage: '🚗', water: '💧', wateroff: '💧', meteo: '🌬️', boiler: '🔥', test: '🔔' }[it.tag];
   if (/^Maison$/.test(t) && it.tag !== 'test') t = 'Alerte de la maison';
   return ic && t.indexOf(ic) !== 0 ? ic + ' ' + t : t;
 }

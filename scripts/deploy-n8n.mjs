@@ -406,6 +406,34 @@ async function ntHeating(fresh) {
 // ---------------- Chauffage « Sur présence » ----------------
 // Plus personne à la maison (présences eedomus) → Netatmo en mode Absent ; quelqu'un revient → planning « Défaut ».
 // L'absence doit être vue 2 fois de suite (≈ 1 min) pour éviter un aller-retour si un téléphone perd le Wi-Fi un instant.
+// Alerte chaudière : chauffe depuis au moins 45 min sans que la pièce du thermostat principal (le séjour) ne se réchauffe.
+// La chaudière s'allume et s'éteint par cycles : une « période de chauffe » ne se termine qu'après 15 min d'arrêt complet.
+async function boilerWatch() {
+  const W = SD.boilerW = SD.boilerW || {};
+  if (W.checkAt && W.checkAt > Date.now() - 120000) return; // toutes les 2 min (Netatmo limite les appels)
+  W.checkAt = Date.now();
+  const D = await ntHeating(false);
+  if (!D || !D.boilerKnown) return;
+  const H = await ntHomes(), tid = String(((H.heat && H.heat.thermRooms) || [])[0] || '');
+  const room = (D.rooms || []).find((r) => String(r.id) === tid) || (D.rooms || [])[0];
+  if (!room || room.temp == null) return;
+  const now = Date.now(), t = Number(room.temp);
+  // séjour déjà (presque) à sa consigne : la chaudière peut tourner pour d'autres pièces, ce n'est pas une panne
+  if (room.setpoint == null || t >= Number(room.setpoint) - 0.2) { W.since = null; return; }
+  if (D.boiler) {
+    if (!W.since || now - (W.lastOn || 0) > 15 * 60000) { W.since = now; W.t0 = t; W.tmax = t; W.alerted = false; }
+    W.lastOn = now;
+  }
+  if (!W.since) return;
+  if (now - (W.lastOn || 0) > 15 * 60000) { W.since = null; return; } // période de chauffe terminée
+  W.tmax = Math.max(W.tmax, t);
+  const mins = Math.round((now - W.since) / 60000);
+  if (!W.alerted && mins >= 45 && W.tmax - W.t0 < 0.1) {
+    W.alerted = true;
+    const hm = (ms) => { const p = parisParts(new Date(ms)); return p.hour + 'h' + p.minute; };
+    await pushNotify({ tag: 'boiler', title: 'Vérifier la chaudière', body: mins + ' min de chauffe sans augmentation de température (' + room.name + ' : ' + String(W.t0).replace('.', ',') + '° à ' + hm(W.since) + ', ' + String(t).replace('.', ',') + '° maintenant)', badge: 1 });
+  }
+}
 async function presenceCheck(force) {
   const P = SD.presence = SD.presence || { on: false, state: null, at: null, log: [] };
   if (!P.on || !CFG.nt) return P;
@@ -1472,6 +1500,7 @@ try {
     try { await garageAlert(); } catch (e) {}
     try { await waterWatch(false); } catch (e) {}
     try { await presenceCheck(false); } catch (e) {}
+    try { await boilerWatch(); } catch (e) {}
     try { await meteoWatch(); } catch (e) {}
     try { await smokeWatch(); } catch (e) {}
     let gu = null; try { gu = await garageCamDue(); } catch (e) {}
@@ -1576,7 +1605,7 @@ try {
     if (body.action === 'push.testall') {
       if (!body.token || !CFG.tokens.includes(body.token)) return reply(401, { ok: false, error: 'unauthorized' });
       if (body.fmt === 'decl' || body.fmt === 'plain') SD.push.fmt = body.fmt === 'decl' ? 'decl' : null;
-      const tg = /^(test|garage|water|meteo|smoke)$/.test(String(body.tag || '')) ? body.tag : 'test';
+      const tg = /^(test|garage|water|meteo|smoke|boiler)$/.test(String(body.tag || '')) ? body.tag : 'test';
       const n = await pushNotify({ tag: tg, title: String(body.title || 'Maison').slice(0, 60), body: String(body.text || 'Test des notifications').slice(0, 120), badge: null });
       return reply(200, { ok: true, sent: n });
     }

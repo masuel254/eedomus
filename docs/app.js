@@ -710,14 +710,14 @@
     var h = '<div class="sh-hd"><h2>Notifications</h2><button class="close" data-close aria-label="Fermer">×</button></div>' +
       '<p class="muted" style="margin:0 4px 6px">Les 30 dernières reçues sur cet iPhone. Touche une alerte pour voir le détail.</p>';
     if (!NOTIFS.length) h += '<p class="muted" style="margin:14px 4px">Aucune notification enregistrée pour l’instant. Les prochaines s’afficheront ici.</p>';
-    var ICN = { garage: 'garage', water: 'drop', wateroff: 'drop', meteo: 'wind', smoke: 'flame' }, cur = '';
+    var ICN = { garage: 'garage', water: 'drop', wateroff: 'drop', meteo: 'wind', smoke: 'flame', boiler: 'flame' }, cur = '';
     var nNew = NOTIFS.filter(function (n) { return n.at > NF_PREV; }).length;
     if (nNew && NOTIFS.length > nNew) h += '<p class="nf-cnt"><i></i>' + nNew + ' nouvelle' + (nNew > 1 ? 's' : '') + ' depuis ta dernière visite</p>';
     NOTIFS.slice().reverse().forEach(function (n) {
       var dt = new Date(n.at), p2 = function (x) { return (x < 10 ? '0' : '') + x; };
       var ds = dt.getFullYear() + '-' + p2(dt.getMonth() + 1) + '-' + p2(dt.getDate()) + ' ' + p2(dt.getHours()) + ':' + p2(dt.getMinutes());
       var dl = dayLabel(ds); if (dl !== cur) { if (cur) h += '</div>'; h += '<div class="lday">' + esc(dl) + '</div><div class="card2 flat logs">'; cur = dl; }
-      var bad = /ouverte|fuite|fumée|hors ligne|rafales|gel|pluie|pleut/i.test(n.title) && !/fermée|terminée|fin d/i.test(n.title);
+      var bad = /ouverte|fuite|fumée|hors ligne|rafales|gel|pluie|pleut|chaudière/i.test(n.title) && !/fermée|terminée|fin d/i.test(n.title);
       var nw = n.at > NF_PREV;
       h += '<button class="lg nf' + (bad ? ' bad' : ' ok') + (nw ? ' new' : '') + '" data-notif="' + esc(n.tag || '') + '"><span class="lt">' + esc(ds.slice(11)) + '</span><span class="li">' + icon(ICN[n.tag] || 'bell') + '</span>' +
         '<span><b>' + esc(n.title) + (nw ? ' <em class="nf-new">Nouveau</em>' : '') + '</b><small>' + esc(n.body || '') + '</small></span></button>';
@@ -2478,6 +2478,7 @@
       '<span class="stp2"><button data-push-delay="' + (PUSH_DELAYS[i - 1] || d) + '" aria-label="Moins">−</button><button data-push-delay="' + (PUSH_DELAYS[i + 1] || d) + '" aria-label="Plus">+</button></span></div>' +
       (PUSH.on ? '<button class="row" data-push-test><span class="ic">' + icon('play') + '</span><span><b>Envoyer une notification de test</b><small>Pour vérifier que tout marche</small></span><span class="val">›</span></button>' : '') +
       '<div class="row"><span class="ic">' + icon('drop') + '</span><span><b>Fuite d’eau</b><small>Alerte immédiate, rappel toutes les 15 min, puis « fuite terminée ». Alerte aussi si le compteur ne répond plus depuis 3 h.</small></span><span class="ok">Toujours</span></div>' +
+      '<div class="row"><span class="ic">' + icon('flame') + '</span><span><b>Chaudière</b><small>Alerte si la chaudière chauffe depuis 45 min sans que le séjour ne se réchauffe : « vérifier la chaudière ».</small></span><span class="ok">Toujours</span></div>' +
       '</div><p class="note-q">Le délai est le même pour toute la famille. Chacun active les alertes sur son propre iPhone.</p>';
     return h;
   }
