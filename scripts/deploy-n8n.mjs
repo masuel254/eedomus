@@ -1540,6 +1540,11 @@ try {
     SD.push = SD.push || { subs: {}, delay: 2 };
     const ep = String(body.endpoint || ''), k = ep ? pushKey(ep) : null;
     if (ep && !/^https:[/][/][a-z0-9.-]+[/]/i.test(ep)) return reply(400, { ok: false, error: 'bad_endpoint' });
+    // Diagnostic (avec jeton) : état de chaque inscription, sans adresse ni clé
+    if (body.action === 'push.diag') {
+      if (!body.token || !CFG.tokens.includes(body.token)) return reply(401, { ok: false, error: 'unauthorized' });
+      return reply(200, { ok: true, subs: Object.keys(SD.push.subs).map((x) => { const v = SD.push.subs[x]; return { host: String(v.endpoint || '').split('/')[2], name: v.name, at: v.at, keys: !!v.keys, app: !!v.app, lastOk: v.lastOk || null, lastErr: v.lastErr || null, q: (v.q || []).length }; }) });
+    }
     if (body.action === 'push.pending') {
       const s = k && SD.push.subs[k];
       if (!s) return reply(404, { ok: false, error: 'unknown' });
