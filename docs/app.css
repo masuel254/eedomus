@@ -938,6 +938,12 @@ button.gtile { border: 0; color: inherit; font: inherit; cursor: pointer; }
 .hl-g { padding: 2px 0 12px; border-bottom: 1px solid #23272E; }
 .hl-g:last-child { border-bottom: 0; }
 .hl-zone { fill: #FFB37A; opacity: .1; }
+svg.hl-svg { touch-action: none; }
+.hl-cur { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; min-height: 22px; margin: 4px 2px 4px; font-size: 13px; }
+.hl-cur b { font-family: var(--f-mono); font-size: 15px; }
+.hl-cur .t { font-family: var(--f-mono); font-size: 15px; font-weight: 700; color: #7CA4FF; }
+.hl-cur .sp { color: #FF9A9A; } .hl-cur .h { color: #FFB37A; } .hl-cur .g { color: var(--mu); }
+.hl-cur.hint { color: var(--mu); font-size: 12px; }
 .hl-leg { display: flex; gap: 14px; font-size: 11.5px; color: var(--mu); margin: 2px 2px 8px; }
 .hl-leg i { display: inline-block; width: 12px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 5px; }
 .hl-leg i.t { background: #5B8CFF; } .hl-leg i.sp { background: #FF7A7A; } .hl-leg i.z { background: rgba(255, 179, 122, .35); height: 9px; }
