@@ -1,7 +1,17 @@
 {
-  "version": "2.26.1",
+  "version": "2.26.2",
   "date": "2026-11-22",
   "releases": [
+    {
+      "version": "2.26.2",
+      "date": "2026-11-22",
+      "time": "11:33",
+      "title": "Météo la plus juste",
+      "changes": [
+        "Retour au choix automatique d’Open-Meteo : comparé à la station officielle de l’aéroport voisin sur 7 jours, il est aussi précis que Météo-France seul et se trompe moins souvent de beaucoup",
+        "Les prévisions repassent à 5 jours, avec le % de chance de pluie"
+      ]
+    },
     {
       "version": "2.26.1",
       "date": "2026-11-22",
@@ -1063,5 +1073,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "11:32"
+  "time": "11:33"
 }
