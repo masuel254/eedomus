@@ -2242,8 +2242,8 @@
     for (var i = 0; i < 7; i++) { var d = new Date(); d.setDate(d.getDate() - i); days += '<button class="' + (ymd(d) === SUM.date ? 'on' : '') + '" data-sumday="' + ymd(d) + '">' + esc(i === 0 ? "Aujourd'hui" : i === 1 ? 'Hier' : d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' })) + '</button>'; }
     var ready = st && st.state === 'ready' && st.url && RELAY && RELAY.url;
     h += ready ? '<div class="camcard player"><video id="sumv" src="' + esc(relayUrl(st.url)) + '" playsinline controls></video>' +
-      '<div class="rates">' + [1, 2, 4].map(function (x) { return '<button class="' + ((SUM.rate || 1) === x ? 'on' : '') + '" data-sumrate="' + x + '">×' + x + '</button>'; }).join('') + '</div>' +
-      '<div class="cammeta"><b>' + st.parts.length + ' passage' + (st.parts.length > 1 ? 's' : '') + ' · ' + Math.floor(st.duration / 60) + ' min ' + String(st.duration % 60).padStart(2, '0') + '</b><span class="src-tag fb">Freebox</span></div></div>'
+      '<div class="rates">' + [1, 2, 4, 8].map(function (x) { return '<button class="' + ((SUM.rate || 4) === x ? 'on' : '') + '" data-sumrate="' + x + '">×' + x + '</button>'; }).join('') + '</div>' +
+      '<div class="cammeta"><b>' + st.parts.length + ' passage' + (st.parts.length > 1 ? 's' : '') + ' · ' + Math.floor(st.duration / 60) + ' min ' + String(st.duration % 60).padStart(2, '0') + ' en temps réel</b><span class="src-tag fb">Freebox</span></div></div>'
       : '<div class="camcard player empty"><span>' + icon('play') + (st && st.state === 'building' ? 'Montage en cours…' : 'Pas encore de résumé') + '</span></div>';
     h += '<div class="days">' + days + '</div>';
     if (SUM.err && !st) h += '<p class="muted">La Freebox ne répond pas pour le moment.</p>';
@@ -2255,10 +2255,10 @@
     if (ready && st.parts.length) h += '<h3>Passages</h3><div class="evlist">' + st.parts.map(function (p) {
       return '<button class="ev rec" data-sumat="' + p.at + '"><span class="evic">' + icon('walk') + '</span><span><b>' + esc(p.name) + '</b><small>Personne</small></span><span class="evt">' + hhmm(p.time) + '</span></button>';
     }).join('') + '</div>';
-    h += '<p class="note-q">Les moments où une personne a été détectée (Imou et Netatmo), extraits des enregistrements gardés sur la Freebox et accélérés ×4. Le résumé de la veille est préparé chaque nuit ; celui d’aujourd’hui à la demande.</p>';
+    h += '<p class="note-q">Les moments où une personne a été détectée (Imou et Netatmo), extraits des enregistrements gardés sur la Freebox. Lu en accéléré ×4 par défaut : ×1 pour le temps réel. Le résumé de la veille est préparé chaque nuit ; celui d’aujourd’hui à la demande.</p>';
     var keep = sheet.scrollTop; sheet.innerHTML = '<div class="sh-in">' + h + '</div>'; sheet.scrollTop = keep;
     var v = document.getElementById('sumv');
-    if (v) { var sp = function () { try { v.defaultPlaybackRate = SUM.rate || 1; v.playbackRate = SUM.rate || 1; } catch (e) {} }; sp(); v.addEventListener('loadedmetadata', sp); }
+    if (v) { var sp = function () { try { v.defaultPlaybackRate = SUM.rate || 4; v.playbackRate = SUM.rate || 4; } catch (e) {} }; sp(); v.addEventListener('loadedmetadata', sp); v.addEventListener('playing', sp, { once: true }); }
   }
 
   // ---------- Consommation électrique (électrolyseur, pompe à chaleur, sauna) ----------

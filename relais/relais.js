@@ -306,20 +306,20 @@ async function pair(code) {
   console.log('Jumelage réussi : ' + (j.cams || []).length + ' caméra(s) Imou connue(s) du serveur');
 }
 
-// ---------- Résumé vidéo de la journée : les passages de personnes, toutes caméras, accélérés ×4 ----------
+// ---------- Résumé vidéo de la journée : les passages de personnes, toutes caméras, mis bout à bout ----------
 // Les moments viennent du serveur (détections « personne » d'Imou et de Netatmo), les images des enregistrements gardés ici.
-// Chaque passage est recadré en 640×360, accéléré et légendé (caméra, heure), puis tout est mis bout à bout.
+// Chaque passage est recadré en 640×360 et légendé (caméra, heure), puis tout est mis bout à bout.
 const { spawn, spawnSync } = require('child_process');
 const SUMDIR = () => path.join(REC(), '_resumes');
-const SPEED = 4;
+const SPEED = 1; // film à vitesse réelle : l'appli le lit en accéléré (×4 par défaut)
 function sumPaths(date) { const d = SUMDIR(); return { mp4: path.join(d, date + '.mp4'), json: path.join(d, date + '.json'), lock: path.join(d, date + '.building') }; }
 function sumState(date) {
   const P = sumPaths(date);
   let info = null; try { info = JSON.parse(fs.readFileSync(P.json, 'utf8')); } catch (e) {}
   let building = false;
   try { const st = fs.statSync(P.lock); building = Date.now() - st.mtimeMs < 40 * 60000; } catch (e) {}
-  const ready = !!info && fs.existsSync(P.mp4);
-  return { ok: true, date, state: building ? 'building' : ready ? 'ready' : info && info.error ? 'error' : 'none', building,
+  const ready = !!info && fs.existsSync(P.mp4) && (info.speed || 1) === SPEED; // ancien film accéléré : refait
+  return { ok: true, date, state: building ? 'building' : ready || (info && info.empty) ? 'ready' : info && info.error ? 'error' : 'none', building,
     url: ready ? '/v/resume/' + date + '.mp4?v=' + (info.builtAt || 0) : null, parts: ready ? info.parts : [], duration: ready ? info.duration : 0,
     builtAt: info ? info.builtAt || null : null, error: info && info.error ? info.error : null, progress: building ? readProgress(P.lock) : null };
 }
