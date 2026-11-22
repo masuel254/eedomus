@@ -395,13 +395,15 @@
       when = (s.zone ? s.zone + ' · ' : '') + "jusqu'à " + dayTxt + s.until;
     }
     else if (s.zone) when = s.zone;
-    var h = '<button class="sched' + (schedOpen ? ' open' : '') + '" data-sched-toggle aria-expanded="' + schedOpen + '">' +
+    // « Modifier » ouvre directement l'éditeur du planning en cours ; toucher le nom change de planning
+    var h = '<div class="schedrow"><button class="sched' + (schedOpen ? ' open' : '') + '" data-sched-toggle aria-expanded="' + schedOpen + '">' +
       '<span class="sched-ic">' + icon('cal') + '</span><span class="sched-t"><b>' + esc(NT.schedule) + '</b><small>' + esc(when) + '</small></span>' +
-      '<span class="sched-ch">Changer' + icon('down') + '</span></button>';
+      '<span class="sched-ch" aria-label="Changer de planning">' + icon('down') + '</span></button>' +
+      '<button class="sched-edit" data-plan-cur aria-label="Modifier le planning ' + esc(NT.schedule) + '">' + icon('pen') + '<span>Modifier</span></button></div>';
     if (schedOpen) {
       h += '<div class="schedlist">' + (NT.schedules || []).map(function (x) {
         return '<button class="' + (String(x.id) === String(NT.scheduleId) ? 'on' : '') + '" data-sched="' + esc(x.id) + '">' + esc(x.name) + '</button>';
-      }).join('') + '<button class="manage" data-plans>' + icon('gear') + 'Gérer les plannings</button></div>';
+      }).join('') + '<button class="manage" data-plans>' + icon('gear') + 'Tous les plannings (créer, copier, supprimer)</button></div>';
     }
     return h;
   }
@@ -2603,6 +2605,12 @@
         .catch(function () { toast('Netatmo ne répond pas, réessaie', true); });
     }
     if (e.target.closest('[data-plans]')) { schedOpen = false; render(); return openPlans(); }
+    if (e.target.closest('[data-plan-cur]')) {
+      schedOpen = false; render(); var cur = NT && NT.scheduleId;
+      var go = function () { if (PLANS && PLANS.schedules && PLANS.schedules.some(function (x) { return String(x.id) === String(cur); })) openPlan(cur); else openPlans(); };
+      if (PLANS && PLANS.schedules) { go(); loadPlans(true); return; }
+      PE = null; sheet.scrollTop = 0; openSheet('plans'); return loadPlans(true).then(go);
+    }
     if (e.target.closest('[data-sched-toggle]')) { schedOpen = !schedOpen; return render(); }
     if ((b = e.target.closest('[data-sched]'))) {
       var sid = b.dataset.sched, sname = b.textContent;

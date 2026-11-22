@@ -1034,3 +1034,10 @@ svg.hl-svg { touch-action: none; }
 .sheet[data-view="graph"] .rchips.gch { flex-wrap: nowrap; overflow-x: auto; margin: 8px calc(-1 * max(16px, env(safe-area-inset-right, 0px))) 0; padding: 0 max(16px, env(safe-area-inset-right, 0px)) 2px; scrollbar-width: none; }
 .sheet[data-view="graph"] .rchips.gch::-webkit-scrollbar { display: none; }
 .sheet[data-view="graph"] .rchips.gch .rchip { flex: none; }
+.schedrow { display: flex; gap: 8px; align-items: stretch; }
+.schedrow .sched { flex: 1; min-width: 0; }
+.sched-edit { flex: none; width: 76px; display: grid; place-items: center; align-content: center; gap: 3px; border-radius: 16px; background: rgba(124,178,255,.14); border: 1px solid rgba(124,178,255,.28); color: var(--cool); font: 700 12.5px var(--f-ui); cursor: pointer; }
+.sched-edit svg.i { width: 19px; height: 19px; }
+.sched-edit:active { transform: scale(.96); }
+.schedrow .sched { grid-template-columns: 36px 1fr auto; gap: 10px; padding-right: 10px; }
+.schedrow .sched-ch svg.i { width: 18px; height: 18px; }
