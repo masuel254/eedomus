@@ -1094,3 +1094,8 @@ svg.hl-svg { touch-action: none; }
 .w-sel b { color: #38BDF8; white-space: nowrap; }
 .w-hint { margin: 8px 0 0; text-align: center; font-size: 12px; color: var(--mu); }
 .en-card.wat svg.bars rect[data-bi] { cursor: pointer; }
+
+/* Lecteur des enregistrements : vitesse (avance rapide) */
+.player .rates { display: flex; gap: 6px; padding: 10px 14px 0; }
+.player .rates button { flex: 1; padding: 7px 0; border-radius: 10px; font-size: 13px; font-weight: 700; background: var(--s2); border: 1px solid var(--ln); color: var(--mu); }
+.player .rates button.on { background: rgba(56,189,248,.16); color: #38BDF8; border-color: rgba(56,189,248,.45); }

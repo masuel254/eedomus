@@ -1,7 +1,17 @@
 {
-  "version": "2.41.0",
+  "version": "2.42.0",
   "date": "2026-11-22",
   "releases": [
+    {
+      "version": "2.42.0",
+      "date": "2026-11-22",
+      "time": "22:44",
+      "title": "Avance rapide",
+      "changes": [
+        "Lecteur des enregistrements : boutons ×1, ×2, ×4, ×8 pour regarder en accéléré (la vitesse est gardée)",
+        "Toute la journée : à la fin d’une tranche de 10 minutes, la suivante démarre toute seule"
+      ]
+    },
     {
       "version": "2.41.0",
       "date": "2026-11-22",
@@ -1466,5 +1476,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "22:38"
+  "time": "22:44"
 }

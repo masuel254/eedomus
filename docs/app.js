@@ -2006,7 +2006,7 @@
   function ymd(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
   function camById(id) { return allCams().filter(function (c) { return c.id === id; })[0] || null; }
   function openRec(camId, play) {
-    REC = { cam: camId, date: ymd(new Date()), list: null, loading: false, error: false, play: play || null };
+    REC = { cam: camId, date: ymd(new Date()), list: null, loading: false, error: false, play: play || null, rate: +(store.get('maison.recrate') || 1) || 1 };
     liveCam = null; sheet.scrollTop = 0; relayGet(); openSheet('rec'); loadRec();
   }
   // Listes d'enregistrements gardées sur l'iPhone : un jour passé ne change plus (affiché sans rien redemander) ;
@@ -2143,6 +2143,7 @@
     var h = '<div class="sh-hd"><button class="back2" data-recback>' + icon('down') + 'Caméras</button><button class="close" data-close aria-label="Fermer">×</button></div>' +
       '<h2 class="rec-title">' + esc(c ? c.name : 'Caméra') + ' · enregistrements</h2>';
     h += REC.play ? '<div class="camcard player"><video id="recv" src="' + esc(REC.play.url) + '" autoplay playsinline controls></video>' +
+      '<div class="rates">' + [1, 2, 4, 8].map(function (x) { return '<button class="' + (REC.rate === x ? 'on' : '') + '" data-rate="' + x + '">×' + x + '</button>'; }).join('') + '</div>' +
       '<div class="cammeta"><b>' + esc(REC.play.label) + ' <span class="src-tag' + (REC.play.relay ? ' fb' : '') + '">' + (REC.play.relay ? 'Freebox' : c && c.src === 'imou' ? 'Carte SD' : 'Caméra') + '</span></b>' + (REC.play.hdOk ? '<button class="hdbtn' + (REC.play.hd ? ' on' : '') + '" data-rechd>' + (REC.play.hd ? 'HD' : 'Passer en HD') + '</button>' : '') + '</div></div>'
       : '<div class="camcard player empty"><span>' + icon('play') + 'Choisis un enregistrement ci-dessous</span></div>';
     if (c && c.src === 'imou') {
@@ -2201,6 +2202,17 @@
     var rv = document.getElementById('recv'), P = REC.play;
     if (rv && P && P.relay) rv.addEventListener('error', function () { relayFail(P); });
     if (rv && P && P.relay && P.seek) rv.addEventListener('loadedmetadata', function () { try { if (rv.currentTime < P.seek - 2) rv.currentTime = P.seek; } catch (er) {} }, { once: true });
+    if (rv) { // vitesse choisie (avance rapide), gardée d'une vidéo à l'autre
+      var sp = function () { try { rv.defaultPlaybackRate = REC.rate || 1; rv.playbackRate = REC.rate || 1; } catch (er) {} };
+      sp(); rv.addEventListener('loadedmetadata', sp); rv.addEventListener('playing', sp, { once: true });
+    }
+    // tranche de la Freebox terminée : on enchaîne toute seule sur la suivante
+    if (rv && P && P.relay && P.seg && REC.segs) rv.addEventListener('ended', function () {
+      var nx = REC.segs.filter(function (g) { return g.begin > P.seg; }).sort(function (x, y) { return x.begin < y.begin ? -1 : 1; })[0];
+      if (!nx || !REC || REC.play !== P) return;
+      REC.play = { url: relayUrl(nx.url), relay: true, seg: nx.begin, label: nx.begin.slice(11, 16) + ' → ' + nx.end.slice(11, 16) + ' · suite', key: nx.begin, hd: false, hdOk: true, imou: { begin: nx.begin, end: nx.end } };
+      renderRec(); var v3 = document.getElementById('recv'); if (v3) { var pr = v3.play(); if (pr && pr.catch) pr.catch(function () {}); }
+    });
   }
   // ---------- Consommation électrique (électrolyseur, pompe à chaleur, sauna) ----------
   var ENG = null; // { key, name, tab: 'day'|'month'|'year', day: 'AAAAMMJJ', month: 'AAAAMM', year: 'AAAA', data, loading }
@@ -3220,7 +3232,7 @@
       var g = r.url ? r : segAt(r.begin);
       if (g && RELAY && RELAY.url) {
         var off = g === r ? 0 : Math.max(0, secs(g.begin, r.begin) - 3);
-        REC.play = { url: relayUrl(g.url) + (off ? '#t=' + off : ''), seek: off, relay: true, label: label, key: r.begin, hd: false, hdOk: true, imou: { begin: r.begin, end: r.end } };
+        REC.play = { url: relayUrl(g.url) + (off ? '#t=' + off : ''), seek: off, relay: true, seg: g.begin, label: label, key: r.begin, hd: false, hdOk: true, imou: { begin: r.begin, end: r.end } };
         sheet.scrollTop = 0; return renderRec();
       }
       b.classList.add('busy');
@@ -3228,6 +3240,12 @@
       return api({ action: 'im.playback', cam: REC.cam, begin: r.begin, end: r.end, sd: true }).then(function (j) {
         REC.play = { url: j.url, label: label, key: r.begin, hd: false, hdOk: true, imou: { begin: r.begin, end: r.end } }; sheet.scrollTop = 0; renderRec();
       }).catch(function () { b.classList.remove('busy'); toast('Lecture impossible pour le moment, réessaie', true); });
+    }
+    if ((b = e.target.closest('[data-rate]'))) {
+      REC.rate = +b.dataset.rate; store.set('maison.recrate', String(REC.rate));
+      var vr = document.getElementById('recv'); if (vr) { try { vr.defaultPlaybackRate = REC.rate; vr.playbackRate = REC.rate; } catch (er) {} }
+      Array.prototype.forEach.call(sheet.querySelectorAll('[data-rate]'), function (x) { x.classList.toggle('on', +x.dataset.rate === REC.rate); });
+      return;
     }
     if ((b = e.target.closest('[data-rechd]'))) {
       var P = REC && REC.play; if (!P || P.hd) return;
