@@ -1510,6 +1510,9 @@
     return s + '</svg>';
   }
   // ---------- Onglet Plus (piscine, énergie, météo, réglages) ----------
+  // volets Piscine dépliés (gardés d'une ouverture à l'autre)
+  var PACC = {}; try { PACC = JSON.parse(store.get('maison.pacc') || '{}') || {}; } catch (e) {}
+  document.addEventListener('toggle', function (e) { var t = e.target; if (t && t.dataset && t.dataset.pacc) { PACC[t.dataset.pacc] = t.open; store.set('maison.pacc', JSON.stringify(PACC)); } }, true);
   function moreHTML() {
     var pis = findRoom('piscine'), sdb = findRoom('sdb'), h = '';
     var ph = HISTE['3557564|168'];
@@ -1519,11 +1522,27 @@
       '<button class="row" data-cost><span class="ic" style="color:#FF8A5B">' + icon('flame') + '</span><span><b>Coût total</b><small>Gaz, électricité et eau · en €</small></span><span class="val">›</span></button>' +
       pis.items.filter(function (it) { return it.type === 'tuya-meter'; }).map(rowHTML).join('') +
       sdb.items.filter(function (it) { return it.type === 'tuya-meter'; }).map(rowHTML).join('') + '</div>';
+    // Piscine : trois volets repliables (électrolyseur et qualité de l'eau, pompe à chaleur, températures)
     h += '<div class="lbl">Piscine</div>';
-    h += pis.items.filter(function (it) { return /^iaqua-/.test(it.type); }).map(rowHTML).join('');
-    h += '<div class="card2"><div class="row-hd"><b>pH · sonde Ondilo · 7 jours</b><span class="mono">' + fmt(num(3557564), 2) + '</span></div>' +
+    var byId = function (id) { return pis.items.filter(function (it) { return String(it.id) === String(id); }); };
+    var exo = pis.items.filter(function (it) { return it.type === 'iaqua-exo'; })[0], hp = pis.items.filter(function (it) { return it.type === 'iaqua-hp'; })[0];
+    var X = IQ && IQ.exo, Hp = IQ && IQ.hp;
+    var acc = function (k, ic, title, sum, pill, body) {
+      return '<details class="acc2 pacc" data-pacc="' + k + '"' + (PACC[k] ? ' open' : '') + '><summary><span class="ic">' + icon(ic) + '</span><span class="alr-t"><b>' + esc(title) + '</b><small>' + esc(sum) + '</small></span>' +
+        (pill ? '<span class="pill2 ' + pill[0] + '">' + esc(pill[1]) + '</span>' : '') + icon('down') + '</summary><div class="pacc-b">' + body + '</div></details>';
+    };
+    if (exo) h += acc('exo', 'drop', 'Électrolyseur et qualité de l’eau',
+      ['pH ' + fmt(num(3557564), 2), 'Redox ' + fmt(num(3557563), 0) + ' mV', 'Sel ' + fmt(num(3557566), 1) + ' g/L', X && X.swc != null ? 'Chlore ' + X.swc + ' %' : null].filter(Boolean).join(' · '),
+      X ? (X.online ? ['ok', X.pump ? 'Filtration' : 'Connecté'] : ['bad', 'Hors ligne']) : null,
+      rowHTML(exo) + '<div class="card2"><div class="row-hd"><b>pH · sonde Ondilo · 7 jours</b><span class="mono">' + fmt(num(3557564), 2) + '</span></div>' +
       spark(ph && ph.points ? ph.points.map(function (p) { return [new Date(String(p[0]).replace(' ', 'T')).getTime(), p[1]]; }) : null, { w: 320, h: 70, ref: 7.2, color: '#7CB2FF', labels: ['−7 j', '−5 j', '−3 j', '−1 j', 'auj.'] }) +
-      '<div class="acc2b">' + pis.items.filter(function (it) { return it.type === 'sensor' || it.type === 'light'; }).map(rowHTML).join('') + '</div></div>';
+      '<div class="acc2b">' + [3557564, 3557563, 3557566].map(byId).reduce(function (a, b) { return a.concat(b); }, []).map(rowHTML).join('') + '</div></div>');
+    if (hp) h += acc('hp', 'flame', 'Pompe à chaleur',
+      [Hp && Hp.setpoint != null ? 'Consigne ' + fmt(Hp.setpoint, 1) + '°' : null, Hp && Hp.water != null ? 'Eau ' + fmt(Hp.water, 1) + '°' : null].filter(Boolean).join(' · ') || '—',
+      Hp ? (!Hp.online ? ['bad', 'Hors ligne'] : Hp.on ? ['heat', Hp.heating ? 'Chauffe' : 'En marche'] : ['', 'Arrêtée']) : null,
+      rowHTML(hp));
+    h += acc('temp', 'thermo', 'Températures', 'Eau ' + fmt(num(3557562), 1) + '° · Dôme ' + fmt(num(2999498), 1) + '°', null,
+      '<div class="card2 flat">' + [3557562, 2999498].map(byId).reduce(function (a, b) { return a.concat(b); }, []).map(rowHTML).join('') + '</div>');
     return h;
   }
 

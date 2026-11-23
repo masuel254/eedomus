@@ -1138,3 +1138,12 @@ svg.hl-svg { touch-action: none; }
 .camcard.player.fs .rates { padding: 12px 14px; }
 .camcard.player.fs .cammeta { padding: 0 14px 10px; }
 body.pfs { overflow: hidden; }
+
+/* Plus › Piscine : volets repliables */
+.acc2.pacc > summary { font-weight: 400; }
+.acc2.pacc .ic { width: 38px; height: 38px; border-radius: 12px; background: var(--s2); display: grid; place-items: center; color: var(--mu); flex: none; }
+.acc2.pacc > summary .pill2 { margin-left: auto; flex: none; }
+.acc2.pacc > summary > svg.i { margin-left: 6px; }
+.pacc-b { border-top: 1px solid var(--ln); padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+.pacc-b .pool-hd { display: none; }
+.pacc-b .pool, .pacc-b .card2 { margin: 0; }
