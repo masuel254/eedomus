@@ -2059,7 +2059,7 @@
         fetch(relayUrl(path)).then(function (r) {
           if (r.status === 401 && RELAY) RELAY.exp = 0; // jeton refusé : on en redemandera un
           return r.json().then(function (j) { if (!r.ok || !j.ok) throw new Error('HTTP ' + r.status); return j; });
-        }).then(function (j) { if (!done) { done = true; clearTimeout(t); ok(j); } }, function (e) { if (!done) { done = true; clearTimeout(t); ko(e); } });
+        }).then(function (j) { if (!done) { done = true; clearTimeout(t); ok(j); } }, function (e) { if (RELAY) RELAY.exp = 0; /* adresse ou jeton périmés : on les redemande au prochain essai */ if (!done) { done = true; clearTimeout(t); ko(e); } });
       });
     });
   }
@@ -2249,17 +2249,21 @@
   function openSummary() { SUM = { date: ymd(new Date()), st: null }; relayGet(); sheet.scrollTop = 0; openSheet('summary'); loadSummary(false); }
   function loadSummary(build) {
     if (!SUM) return; var want = SUM.date;
-    var c = (pcGet('sum') || {}).v || {}; if (!SUM.st && c[want]) SUM.st = c[want];
+    var c = (pcGet('sum2') || {}).v || {}; if (!SUM.st && c[want]) SUM.st = c[want];
     clearTimeout(SUM.timer);
     relayJson('/api/summary' + (build ? '/build' : '') + '?date=' + want).then(function (j) {
       if (!SUM || SUM.date !== want) return;
-      SUM.st = j; SUM.err = false;
-      if (j.state === 'ready') { var a = (pcGet('sum') || {}).v || {}; a[want] = j; Object.keys(a).sort().reverse().slice(10).forEach(function (k) { delete a[k]; }); pcSet('sum', a); }
+      SUM.st = j; SUM.err = false; SUM.tries = 0;
+      if (j.state === 'ready' && j.parts && j.parts.length) { var a = (pcGet('sum2') || {}).v || {}; a[want] = j; Object.keys(a).sort().reverse().slice(10).forEach(function (k) { delete a[k]; }); pcSet('sum2', a); } // seuls les vrais films sont gardés sur l'iPhone
       if (j.state === 'building') SUM.timer = setTimeout(function () { if (sheet.dataset.view === 'summary' && !sheet.hidden) loadSummary(false); }, 3000);
       // pas encore de résumé pour un jour passé : on le prépare tout de suite
       else if (j.state === 'none' && !build && want < ymd(new Date())) return loadSummary(true);
       renderSummary();
-    }).catch(function () { if (SUM) { SUM.err = true; renderSummary(); } });
+    }).catch(function () {
+      if (!SUM || SUM.date !== want) return;
+      SUM.err = true; SUM.tries = (SUM.tries || 0) + 1; renderSummary();
+      if (SUM.tries < 4) SUM.timer = setTimeout(function () { if (sheet.dataset.view === 'summary' && !sheet.hidden) loadSummary(false); }, 4000); // la Freebox redémarrait peut-être : nouvel essai
+    });
     renderSummary();
   }
   function renderSummary() {
@@ -2274,7 +2278,7 @@
       '<div class="cammeta"><b>' + st.parts.length + ' passage' + (st.parts.length > 1 ? 's' : '') + ' · ' + Math.floor(st.duration / 60) + ' min ' + String(st.duration % 60).padStart(2, '0') + ' en temps réel</b><span class="src-tag fb">Freebox</span></div></div>'
       : '<div class="camcard player empty"><span>' + icon('play') + (st && st.state === 'building' ? 'Montage en cours… (voir ci-dessous)' : 'Pas encore de résumé') + '</span></div>';
     h += '<div class="days">' + days + '</div>';
-    if (SUM.err && !st) h += '<p class="muted">La Freebox ne répond pas pour le moment.</p>';
+    if (SUM.err) h += '<p class="muted">La Freebox ne répond pas pour le moment' + (SUM.tries < 4 ? ', nouvel essai…' : '.') + '</p>';
     else if (!st) h += '<p class="muted">Lecture de la Freebox…</p>';
     else if (st.state === 'building') {
       // avancement du montage : étape, barre, passages montés, temps restant estimé
@@ -2284,7 +2288,7 @@
       h += '<div class="sumprog"><div class="sp-t"><b>' + esc(lab) + '</b><span>' + (rest ? 'encore ≈ ' + (rest < 60 ? rest + ' s' : Math.round(rest / 60) + ' min') : '') + '</span></div><div class="sp-bar"><i style="width:' + pct + '%"></i></div></div>';
     }
     else if (st.state === 'error') h += '<p class="muted">Le montage n’a pas abouti (' + esc(st.error || '?') + ').</p>';
-    else if (st.state === 'ready' && !st.parts.length) h += '<p class="muted">Personne n’a été détecté ce jour-là.</p>';
+    else if (st.state === 'ready' && !st.parts.length && !SUM.err) h += '<p class="muted">Personne n’a été détecté ce jour-là.</p>';
     if (st && st.state !== 'building' && SUM.date === ymd(new Date())) h += '<button class="act wide" data-sumbuild>' + (st.state === 'ready' ? 'Mettre à jour avec les derniers passages' : 'Préparer le résumé d’aujourd’hui') + '</button>';
     if (ready && st.parts.length) h += '<h3>Passages</h3><div class="evlist">' + st.parts.map(function (p) {
       return '<button class="ev rec" data-sumat="' + p.at + '"><span class="evic">' + icon('walk') + '</span><span><b>' + esc(p.name) + '</b><small>Personne</small></span><span class="evt">' + hhmm(p.time) + '</span></button>';
@@ -3332,7 +3336,7 @@
     }
     if ((b = e.target.closest('[data-enstep]'))) return stepEnergy(+b.dataset.enstep);
     if (sheet.dataset.view === 'summary') {
-      if ((b = e.target.closest('[data-sumday]'))) { SUM.date = b.dataset.sumday; SUM.st = null; return loadSummary(false); }
+      if ((b = e.target.closest('[data-sumday]'))) { SUM.date = b.dataset.sumday; SUM.st = null; SUM.err = false; SUM.tries = 0; return loadSummary(false); }
       if (e.target.closest('[data-sumbuild]')) { SUM.st = Object.assign({}, SUM.st, { state: 'building' }); renderSummary(); return loadSummary(true); }
       if ((b = e.target.closest('[data-sumrate]'))) { SUM.rate = +b.dataset.sumrate; var sv = document.getElementById('sumv'); if (sv) { sv.defaultPlaybackRate = SUM.rate; sv.playbackRate = SUM.rate; } Array.prototype.forEach.call(sheet.querySelectorAll('[data-sumrate]'), function (x) { x.classList.toggle('on', +x.dataset.sumrate === SUM.rate); }); return; }
       if ((b = e.target.closest('[data-sumat]'))) { var sv2 = document.getElementById('sumv'); if (sv2) { sheet.scrollTop = 0; try { sv2.currentTime = +b.dataset.sumat; } catch (er) {} var pp = sv2.play(); if (pp && pp.catch) pp.catch(function () {}); } return; }

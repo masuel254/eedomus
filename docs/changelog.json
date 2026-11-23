@@ -1,7 +1,17 @@
 {
-  "version": "2.45.4",
+  "version": "2.45.5",
   "date": "2026-11-23",
   "releases": [
+    {
+      "version": "2.45.5",
+      "date": "2026-11-23",
+      "time": "14:19",
+      "title": "Résumé : affichage fiable",
+      "changes": [
+        "Résumé de la journée : un état vide passager n'est plus gardé sur l'iPhone ; si la Freebox ne répond pas, nouvel essai automatique",
+        "Relais : en cas d'échec, l'appli redemande l'adresse et l'autorisation à jour"
+      ]
+    },
     {
       "version": "2.45.4",
       "date": "2026-11-23",
@@ -1608,5 +1618,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "14:17"
+  "time": "14:19"
 }
