@@ -2922,8 +2922,8 @@
       'Gel : 2° ou moins dehors, maintenant ou d’ici 9h.',
       'Neige : prévue à n’importe quelle heure de la journée.',
       'Pas de notification si aucune des deux conditions n’est remplie.'] },
-    { k: 'route', ic: 'car', t: 'Trajet vers le travail', w: 'Lun · Mar · Jeu', s: 'Bouchons et travaux, à 7h15, 7h30 et 7h50', c: [
-      'Lundi, mardi et jeudi, contrôles à 7h15, 7h30 et 7h50 du trajet maison → travail (A16 puis N42).',
+    { k: 'route', ic: 'car', t: 'Trajet vers le travail', w: 'Lun · Mar · Jeu', s: 'Bouchons et travaux, matin et soir', c: [
+      'Lundi, mardi et jeudi : aller (maison → travail) contrôlé à 7h15, 7h30 et 7h50, retour (travail → maison) à 17h45, 18h et 18h10. Par l’A16 et la N42.',
       'Bouchon : 10 min de retard ou plus par rapport au temps habituel, avec le trafic du moment.',
       'Accident, véhicule en panne, voie ou route fermée, travaux sur le trajet : alerte avec la route et l’endroit.',
       'Nouvelle alerte seulement si ça s’aggrave (5 min de plus ou un nouvel incident), puis « trajet dégagé » quand c’est fini.',
@@ -2950,10 +2950,15 @@
         '<input id="rt-key" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Colle la clé ici">' +
         '<button class="act" data-route-save>Enregistrer</button></div>';
     }
-    var L = R.last, t = L ? new Date(L.at) : null;
-    h += '<div class="alr-set"><span>' + (!R.from || !R.to ? 'Adresses à renseigner' : L ? 'Dernier contrôle ' + (t.getDate() === new Date().getDate() ? 'à ' : 'le ' + t.getDate() + '/' + (t.getMonth() + 1) + ' à ') + t.getHours() + 'h' + ('0' + t.getMinutes()).slice(-2) + ' : <b>' + L.travel + ' min</b>' + (L.bad ? ' (+' + L.delay + ' min)' : ', normal') : 'Pas encore de contrôle') + (R.err ? ' · erreur ' + esc(R.err) : '') + '</span>' +
-      '<button class="lnk" data-route-test>Tester</button></div>';
-    if (L && L.items && L.items.length) h += '<ul class="rt-items">' + L.items.map(function (i) { return '<li>' + esc(i.txt) + '</li>'; }).join('') + '</ul>';
+    var line = function (nm, L) {
+      if (!L) return '<div class="alr-set"><span>' + nm + ' : pas encore de contrôle</span></div>';
+      var t = new Date(L.at);
+      return '<div class="alr-set"><span>' + nm + ' ' + (t.toDateString() === new Date().toDateString() ? 'à ' : 'le ' + t.getDate() + '/' + (t.getMonth() + 1) + ' à ') + t.getHours() + 'h' + ('0' + t.getMinutes()).slice(-2) + ' : <b>' + L.travel + ' min</b>' + (L.bad ? ' (+' + L.delay + ' min)' : ', normal') + '</span></div>' +
+        (L.items && L.items.length ? '<ul class="rt-items">' + L.items.map(function (i) { return '<li>' + esc(i.txt) + '</li>'; }).join('') + '</ul>' : '');
+    };
+    if (!R.from || !R.to) h += '<div class="alr-set"><span>Adresses à renseigner</span></div>';
+    else h += line('Aller', R.last) + line('Retour', R.lastBack);
+    h += '<div class="alr-set"><span class="mu">' + (R.err ? 'Erreur : ' + esc(R.err) : 'Calculer maintenant, avec le trafic') + '</span><button class="lnk" data-route-test>Tester</button></div>';
     h += '<div class="alr-set"><span>Recevoir sur cet iPhone</span><button class="sw-b' + (PUSH.route ? ' is-on' : '') + '" data-route-me aria-label="Recevoir sur cet iPhone"><span class="sw"></span></button></div>' +
       '<div class="alr-set"><span class="mu">Clé TomTom enregistrée</span><button class="lnk" data-route-edit>Changer</button></div>';
     return h;
@@ -3496,7 +3501,7 @@
     }
     if (e.target.closest('[data-route-test]')) {
       toast('Calcul du trajet avec le trafic…');
-      return api({ action: 'route.test' }).then(function (j) { ROUTE = j; renderSettings(); toast(j.err ? 'TomTom ne répond pas (' + j.err + ')' : j.last ? j.last.travel + ' min de trajet maintenant' + (j.last.bad ? ', problème détecté' : ', rien à signaler') : 'Adresses à renseigner', !!j.err); })
+      return api({ action: 'route.test' }).then(function (j) { ROUTE = j; renderSettings(); toast(j.err ? 'TomTom ne répond pas (' + j.err + ')' : j.last ? 'Aller ' + j.last.travel + ' min, retour ' + (j.lastBack ? j.lastBack.travel : '?') + ' min maintenant' + (j.last.bad || (j.lastBack && j.lastBack.bad) ? ', problème détecté' : ', rien à signaler') : 'Adresses à renseigner', !!j.err); })
         .catch(function () { toast('Essai impossible, réessaie', true); });
     }
     if (e.target.closest('[data-route-me]')) {
