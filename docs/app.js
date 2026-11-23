@@ -527,7 +527,8 @@
     if (!pts || !pts.length) return pts;
     var ms = pts[pts.length - 1][0] > 1e11, lim = (ms ? Date.now() : Date.now() / 1000) - h * (ms ? 3600000 : 3600);
     var keep = pts.filter(function (p) { return p[0] >= lim; });
-    return keep.length >= 2 ? keep : pts.slice(-2);
+    // historique gardé sur l'iPhone trop ancien (appli rouverte le matin) : pas de fausse ligne droite, on attend le vrai
+    return keep.length >= 3 ? keep : null;
   }
   function livePts(hp, r) {
     var pts = hp && hp.points ? hp.points.slice() : null;
