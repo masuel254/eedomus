@@ -377,6 +377,12 @@ async function ntHeating(fresh) {
   if (!H.heat) throw fail(404, 'no_heating');
   const st = await nt('GET', 'homestatus', { home_id: H.heat.id });
   const home = (st.body && st.body.home) || {};
+  // Netatmo répond parfois sans les pièces (incident chez eux) : on garde le dernier état connu plutôt que des « — »
+  if (!(home.rooms || []).length) {
+    SD.ntStatusErr = { at: Date.now(), detail: JSON.stringify({ home: Object.keys(home), errors: (st.body && st.body.errors) || null }).slice(0, 300) };
+    if (SD.ntHeat && SD.ntHeat.data && SD.ntHeat.data.rooms.some((r) => r.temp != null)) return Object.assign({}, SD.ntHeat.data, { stale: true });
+    throw fail(502, 'netatmo_status', SD.ntStatusErr.detail);
+  }
   const byId = {}; (home.rooms || []).forEach((r) => { byId[r.id] = r; });
   // Chaudière : le thermostat (NATherm1) indique si la chaudière est en marche (boiler_status)
   const mods = home.modules || [];

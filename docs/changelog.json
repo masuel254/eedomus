@@ -1,7 +1,16 @@
 {
-  "version": "2.45.1",
+  "version": "2.45.2",
   "date": "2026-11-23",
   "releases": [
+    {
+      "version": "2.45.2",
+      "date": "2026-11-23",
+      "time": "13:39",
+      "title": "Panne Netatmo : dernier état gardé",
+      "changes": [
+        "Chauffage : si Netatmo répond sans les pièces (incident chez eux), l'appli garde le dernier état connu au lieu d'afficher « — »"
+      ]
+    },
     {
       "version": "2.45.1",
       "date": "2026-11-23",
@@ -1581,5 +1590,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "12:17"
+  "time": "13:39"
 }
