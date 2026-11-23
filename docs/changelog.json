@@ -1,7 +1,16 @@
 {
-  "version": "2.52.2",
+  "version": "2.52.3",
   "date": "2026-11-24",
   "releases": [
+    {
+      "version": "2.52.3",
+      "date": "2026-11-24",
+      "time": "00:19",
+      "title": "Case Linky lisible",
+      "changes": [
+        "La case pour coller la clé du compteur Linky s’affiche en pleine largeur"
+      ]
+    },
     {
       "version": "2.52.2",
       "date": "2026-11-24",
@@ -1749,5 +1758,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "00:17"
+  "time": "00:19"
 }
