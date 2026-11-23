@@ -1,7 +1,16 @@
 {
-  "version": "2.48.2",
+  "version": "2.48.3",
   "date": "2026-11-23",
   "releases": [
+    {
+      "version": "2.48.3",
+      "date": "2026-11-23",
+      "time": "19:21",
+      "title": "Résumé : vérification plus sûre",
+      "changes": [
+        "Résumé de la journée : la vérification des personnes lit les images plus sûrement et regarde un peu plus large ; en cas de doute, le passage est gardé"
+      ]
+    },
     {
       "version": "2.48.2",
       "date": "2026-11-23",
@@ -1666,5 +1675,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "18:33"
+  "time": "19:21"
 }
