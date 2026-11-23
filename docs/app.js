@@ -1303,6 +1303,8 @@
     return h;
   }
 
+  // Netatmo met 1 à 2 min à remonter le nouvel état (vannes, chaudière) : on relit l'état ensuite
+  function boostRecheck() { [70000, 150000].forEach(function (ms) { setTimeout(function () { api({ action: 'nt.heating', fresh: true }).then(function (j) { NT = j; pcSet('nt', j); if (!busy()) render(); }).catch(function () {}); }, ms); }); }
   // Confort+ en cours : donné par le serveur, ou reconnu sur les pièces (toutes en manuel avec la même heure de fin)
   function boostNow() {
     if (!NT) return null; var now = Date.now() / 1000;
@@ -3092,12 +3094,12 @@
     if (e.target.closest('[data-plans]')) { schedOpen = false; render(); return openPlans(); }
     if ((b = e.target.closest('[data-boost]'))) {
       var bh = +b.dataset.boost; b.classList.add('busy'); toast('Confort+ pendant ' + bh + ' h…');
-      return api({ action: 'nt.boost', hours: bh }).then(function (j) { NT = j; pcSet('nt', j); render(); toast('Confort+ jusqu’à ' + new Date(j.boost ? j.boost.until * 1000 : Date.now() + bh * 3600e3).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) + ', puis retour au planning'); })
+      return api({ action: 'nt.boost', hours: bh }).then(function (j) { NT = j; pcSet('nt', j); render(); boostRecheck(); toast('Confort+ jusqu’à ' + new Date(j.boost ? j.boost.until * 1000 : Date.now() + bh * 3600e3).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) + ', puis retour au planning'); })
         .catch(function () { b.classList.remove('busy'); toast('Netatmo ne répond pas, réessaie', true); });
     }
     if (e.target.closest('[data-boost-cancel]')) {
       toast('Retour au planning…');
-      return api({ action: 'nt.boost', cancel: true }).then(function (j) { NT = j; pcSet('nt', j); render(); toast('Retour au planning'); })
+      return api({ action: 'nt.boost', cancel: true }).then(function (j) { NT = j; pcSet('nt', j); render(); boostRecheck(); toast('Retour au planning'); })
         .catch(function () { toast('Netatmo ne répond pas, réessaie', true); });
     }
     if (e.target.closest('[data-plan-cur]')) {

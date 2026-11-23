@@ -1,7 +1,17 @@
 {
-  "version": "2.45.0",
+  "version": "2.45.1",
   "date": "2026-11-23",
   "releases": [
+    {
+      "version": "2.45.1",
+      "date": "2026-11-23",
+      "time": "12:17",
+      "title": "Pièces qui chauffent : vrai état",
+      "changes": [
+        "Climat : une pièce n'est comptée « qui chauffe » que si la chaudière tourne (le thermostat du séjour la commande)",
+        "Après Confort+ ou « Revenir au planning », l'appli relit l'état 1 puis 2 minutes plus tard (délai de Netatmo)"
+      ]
+    },
     {
       "version": "2.45.0",
       "date": "2026-11-23",
@@ -1571,5 +1581,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "12:08"
+  "time": "12:17"
 }
