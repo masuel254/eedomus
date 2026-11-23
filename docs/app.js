@@ -523,6 +523,14 @@
     var ms = hp.points[0][0] > 1e11;
     return rows.filter(function (x) { return x[2] != null; }).map(function (x) { return [ms ? x[0] * 1000 : x[0], x[2]]; });
   }
+  // Mesures de la pièce pour la courbe de l'accueil : la source la plus récente entre l'historique de l'accueil
+  // et celui déjà chargé pour l'écran détaillé (préchargé en arrière-plan) : la courbe s'affiche tout de suite.
+  function freshHist(id) {
+    var a = HISTN[id], c = GRC && GRC[String(id) + '|1d'], rows = c && c.data && c.data.rows;
+    var b = rows && rows.length ? { points: rows.filter(function (x) { return x[1] != null; }).map(function (x) { return [x[0], x[1]]; }) } : null;
+    var last = function (o) { return o && o.points && o.points.length ? o.points[o.points.length - 1][0] : 0; };
+    return last(b) > last(a) ? b : a;
+  }
   function lastHours(pts, h) {
     if (!pts || !pts.length) return pts;
     var ms = pts[pts.length - 1][0] > 1e11, lim = (ms ? Date.now() : Date.now() / 1000) - h * (ms ? 3600000 : 3600);
@@ -817,7 +825,7 @@
     var r = ntCurrentRoom();
     if (r) {
       loadRoomHist(r.id);
-      var sp = ntPend && String(ntPend.room) === String(r.id) ? ntPend.temp : r.setpoint, hp = HISTN[r.id];
+      var sp = ntPend && String(ntPend.room) === String(r.id) ? ntPend.temp : r.setpoint, hp = freshHist(r.id);
       h += '<div class="hcard"><button class="hc-top" data-graph="' + esc(r.id) + '"><span>Chauffage · ' + esc(r.name) + '</span><span class="' + (roomHeat(r) ? 'heat' : 'mu') + '">' + icon('flame') + (roomHeat(r) ? 'Chauffe' : NT.boiler ? 'Chaudière en marche' : 'Au repos') + '</span></button>' +
         '<button class="hc-mid" data-graph="' + esc(r.id) + '"><div class="big">' + fmt(r.temp, 1) + '°<em id="ntsp">Consigne ' + fmt(sp, 1) + '°</em>' + hcOut() + '</div>' +
         '<div class="hc-sp">' + spark(lastHours(livePts(hp, r), 6), { w: 180, h: 66, ref: sp, spLine: spHist(hp, r), hours: 2, axis: true, zoom: true }) + '</div></button>' + manualHTML(r) + presenceHTML() +
