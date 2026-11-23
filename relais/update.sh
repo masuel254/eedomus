@@ -4,10 +4,17 @@
 SRC=https://raw.githubusercontent.com/masuel254/eedomus/main/relais
 OPT=/opt/relais
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
-for f in relais.js record.sh update.sh; do curl -fsSL --max-time 30 "$SRC/$f" -o "$T/$f" && [ -s "$T/$f" ] || exit 0; done
+for f in relais.js record.sh update.sh detect.py; do curl -fsSL --max-time 30 "$SRC/$f" -o "$T/$f" && [ -s "$T/$f" ] || exit 0; done
 node --check "$T/relais.js" && bash -n "$T/record.sh" && bash -n "$T/update.sh" || { echo "Mise à jour ignorée : fichier invalide"; exit 0; }
 # police pour légender le résumé vidéo (caméra, heure)
 [ -f /usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf ] || DEBIAN_FRONTEND=noninteractive apt-get install -y -qq fonts-dejavu-core >/dev/null 2>&1
+# reconnaissance des personnes pour le résumé (OpenCV de Debian + petit modèle MobileNet-SSD, 23 Mo)
+python3 -c 'import cv2' 2>/dev/null || DEBIAN_FRONTEND=noninteractive apt-get install -y -qq python3-opencv >/dev/null 2>&1
+M=$OPT/models; mkdir -p $M
+for f in deploy.prototxt mobilenet_iter_73000.caffemodel; do
+  [ -s $M/$f ] || curl -fsSL --max-time 300 "https://raw.githubusercontent.com/chuanqi305/MobileNet-SSD/master/$f" -o $M/$f.tmp && mv -f $M/$f.tmp $M/$f 2>/dev/null
+done
+cmp -s "$T/detect.py" $OPT/detect.py || install -m 755 "$T/detect.py" $OPT/detect.py
 WEB=0; CAM=0
 cmp -s "$T/relais.js" $OPT/relais.js || { install -m 644 "$T/relais.js" $OPT/relais.js; WEB=1; }
 cmp -s "$T/record.sh" $OPT/record.sh || { install -m 755 "$T/record.sh" $OPT/record.sh; CAM=1; }

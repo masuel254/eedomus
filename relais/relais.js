@@ -322,7 +322,7 @@ function sumState(date) {
   let info = null; try { info = JSON.parse(fs.readFileSync(P.json, 'utf8')); } catch (e) {}
   let building = false;
   try { const st = fs.statSync(P.lock); building = Date.now() - st.mtimeMs < 40 * 60000; } catch (e) {}
-  const ready = !!info && fs.existsSync(P.mp4) && (info.speed || 1) === SPEED && info.v === 2; // ancien montage : refait
+  const ready = !!info && fs.existsSync(P.mp4) && (info.speed || 1) === SPEED && info.v === 3; // ancien montage : refait
   return { ok: true, date, state: building ? 'building' : ready || (info && info.empty) ? 'ready' : info && info.error ? 'error' : 'none', building,
     url: ready ? '/v/resume/' + date + '.mp4?v=' + (info.builtAt || 0) : null, parts: ready ? info.parts : [], duration: ready ? info.duration : 0,
     builtAt: info ? info.builtAt || null : null, error: info && info.error ? info.error : null, progress: building ? readProgress(P.lock) : null };
@@ -399,6 +399,17 @@ async function buildSummary(date) {
     });
   }
   jobs.sort((x, y) => x.t0 - y.t0);
+  // Caméras Imou : elles voient parfois une « personne » qui n'existe pas (ombre, feuillage, reflets).
+  // On vérifie l'extrait avec un petit modèle de reconnaissance, ici sur la Freebox ; sans personne visible, on l'écarte.
+  const DETECT = '/opt/relais/detect.py', canCheck = fs.existsSync(DETECT) && fs.existsSync('/opt/relais/models/mobilenet_iter_73000.caffemodel');
+  let checked = 0, dropped = 0;
+  for (let i = jobs.length - 1; i >= 0; i--) {
+    const j = jobs[i]; if (j.cam === 'presence' || !canCheck) continue;
+    progress({ step: 'vérification', done: ++checked, total: jobs.filter((x) => x.cam !== 'presence').length });
+    const r = spawnSync('python3', [DETECT, j.file, String(j.off), String(j.dur)], { encoding: 'utf8', timeout: 120000 });
+    let sc = null; try { sc = JSON.parse(String(r.stdout || '').trim()).score; } catch (e) {}
+    if (sc !== null && sc < 0.5) { jobs.splice(i, 1); dropped++; } // personne invisible : faux passage
+  }
   const tmp = fs.mkdtempSync('/var/tmp/resume-'), font = ['/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'].find((f) => fs.existsSync(f));
   const parts = []; let at = 0;
   try {
@@ -408,7 +419,9 @@ async function buildSummary(date) {
       const d = new Date(j.t0 * 1000), hm = pad(d.getHours()) + 'h' + pad(d.getMinutes());
       // caméras Imou : flux 16:9 livré écrasé en 640×480, remis en 640×360 ; Présence : déjà en 16:9
       let vf = (j.cam === 'presence' ? 'scale=640:360:force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2' : 'scale=640:360') + ',setsar=1,setpts=PTS/' + SPEED + ',fps=15';
-      if (font) vf += ",drawtext=fontfile=" + font + ":text='" + (j.name + ' · ' + hm).replace(/[':\\]/g, ' ') + "':x=12:y=12:fontsize=22:fontcolor=white:box=1:boxcolor=black@0.55:boxborderw=6";
+      // une couleur par caméra pour les repérer d'un coup d'œil
+      const col = { presence: '0xF97316', piscine: '0x0EA5E9', jardin: '0x22C55E' }[j.cam === 'presence' ? 'presence' : String(j.name).toLowerCase()] || '0x8B5CF6';
+      if (font) vf += ",drawbox=x=0:y=0:w=iw:h=6:color=" + col + "@1:t=fill,drawtext=fontfile=" + font + ":text='" + (j.name + ' · ' + hm).replace(/[':\\]/g, ' ') + "':x=12:y=16:fontsize=22:fontcolor=white:box=1:boxcolor=" + col + "@0.85:boxborderw=6";
       const r = spawnSync('ffmpeg', ['-v', 'error', '-y', '-ss', String(j.off), '-t', String(j.dur), '-i', j.file, '-an', '-vf', vf,
         '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '28', '-pix_fmt', 'yuv420p', '-r', '15', '-movflags', '+faststart', out], { timeout: 300000 });
       if (r.status !== 0 || !fs.existsSync(out)) continue;
@@ -432,7 +445,7 @@ async function buildSummary(date) {
     const r = spawnSync('ffmpeg', ['-v', 'error', '-y', '-f', 'concat', '-safe', '0', '-i', list, '-c', 'copy', '-movflags', '+faststart', full], { timeout: 600000 });
     if (r.status !== 0) throw new Error('assemblage impossible');
     fs.copyFileSync(full, P.mp4 + '.tmp'); fs.renameSync(P.mp4 + '.tmp', P.mp4);
-    fs.writeFileSync(P.json, JSON.stringify({ date, v: 2, builtAt: Date.now(), speed: SPEED, duration: Math.round(at), parts: parts.map((p) => ({ at: p.at, cam: p.cam, name: p.name, time: p.time })) }));
+    fs.writeFileSync(P.json, JSON.stringify({ date, v: 3, builtAt: Date.now(), speed: SPEED, duration: Math.round(at), parts: parts.map((p) => ({ at: p.at, cam: p.cam, name: p.name, time: p.time })) }));
   } finally {
     spawnSync('rm', ['-rf', tmp]);
   }

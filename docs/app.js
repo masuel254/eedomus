@@ -2297,14 +2297,15 @@
       // avancement du montage : étape, barre, passages montés, temps restant estimé
       var p = st.progress || {}, pct = p.step === 'assemblage' ? 97 : p.total ? Math.round(5 + 90 * p.done / p.total) : 3;
       var el = p.t0 ? (Date.now() - p.t0) / 1000 : 0, rest = p.total && p.done ? Math.max(5, Math.round(el / p.done * (p.total - p.done))) : null;
-      var lab = p.step === 'montage' ? 'Montage : ' + p.done + ' / ' + p.total + ' passages' : p.step === 'assemblage' ? 'Assemblage du film…' : 'Recherche des passages de la journée…';
+      var lab = p.step === 'vérification' ? 'Vérification des personnes : ' + p.done + ' / ' + p.total : p.step === 'montage' ? 'Montage : ' + p.done + ' / ' + p.total + ' passages' : p.step === 'assemblage' ? 'Assemblage du film…' : 'Recherche des passages de la journée…';
       h += '<div class="sumprog"><div class="sp-t"><b>' + esc(lab) + '</b><span>' + (rest ? 'encore ≈ ' + (rest < 60 ? rest + ' s' : Math.round(rest / 60) + ' min') : '') + '</span></div><div class="sp-bar"><i style="width:' + pct + '%"></i></div></div>';
     }
     else if (st.state === 'error') h += '<p class="muted">Le montage n’a pas abouti (' + esc(st.error || '?') + ').</p>';
     else if (st.state === 'ready' && !st.parts.length && !SUM.err) h += '<p class="muted">Personne n’a été détecté ce jour-là.</p>';
     if (st && st.state !== 'building' && SUM.date === ymd(new Date())) h += '<button class="act wide" data-sumbuild>' + (st.state === 'ready' ? 'Mettre à jour avec les derniers passages' : 'Préparer le résumé d’aujourd’hui') + '</button>';
     if (ready && st.parts.length) h += '<h3>Passages</h3><div class="evlist">' + st.parts.map(function (p) {
-      return '<button class="ev rec" data-sumat="' + p.at + '"><span class="evic">' + icon('walk') + '</span><span><b>' + esc(p.name) + '</b><small>Personne</small></span><span class="evt">' + hhmm(p.time) + '</span></button>';
+      var col = { presence: '#F97316', piscine: '#0EA5E9', jardin: '#22C55E' }[p.cam === 'presence' ? 'presence' : String(p.name).toLowerCase()] || '#8B5CF6';
+      return '<button class="ev rec" data-sumat="' + p.at + '"><span class="evic" style="color:' + col + ';background:' + col + '22">' + icon('walk') + '</span><span><b>' + esc(p.name) + '</b><small>Personne</small></span><span class="evt">' + hhmm(p.time) + '</span></button>';
     }).join('') + '</div>';
     h += '<p class="note-q">Les passages de personnes détectés par les caméras extérieures (Présence, Piscine, Jardin), extraits des enregistrements gardés sur la Freebox. Lu en accéléré ×4 par défaut : ×1 pour le temps réel. Le résumé d’aujourd’hui est refait tout seul chaque heure ; celui de la veille une dernière fois après minuit.</p>';
     var keep = sheet.scrollTop; sheet.innerHTML = '<div class="sh-in">' + h + '</div>'; sheet.scrollTop = keep;
