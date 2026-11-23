@@ -461,7 +461,7 @@ function nightlySummary() {
   const sy = sumState(y);
   if (!sy.building && now.getHours() >= 0 && (sy.state === 'none' || sy.state === 'error' || (sy.builtAt && sy.builtAt < midnight + 5 * 60000))) return startSummary(y);
   const st = sumState(today);
-  if (now.getHours() >= 6 && !st.building && (st.state !== 'ready' || !st.builtAt || Date.now() - st.builtAt > 55 * 60000)) startSummary(today);
+  if (now.getHours() >= 6 && !st.building && (st.state !== 'ready' || !st.builtAt || Date.now() - st.builtAt > 25 * 60000)) startSummary(today);
 }
 function cleanSummaries() {
   const days = Number(E.RETENTION_DAYS) || 14, lim = Date.now() - days * 86400000;

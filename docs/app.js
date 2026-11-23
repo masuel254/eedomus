@@ -2289,7 +2289,7 @@
     if (st && st.builtAt && st.state !== 'building') {
       var bt = new Date(st.builtAt), isToday = SUM.date === ymd(new Date());
       h += '<p class="sum-at">Montage du ' + esc(bt.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric' })) + ' à ' + esc(bt.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })) +
-        (isToday ? ' · mis à jour tout seul chaque heure' : '') + '</p>';
+        (isToday ? ' · mis à jour tout seul toutes les 30 min' : '') + '</p>';
     }
     if (SUM.err) h += '<p class="muted">La Freebox ne répond pas pour le moment' + (SUM.tries < 4 ? ', nouvel essai…' : '.') + '</p>';
     else if (!st) h += '<p class="muted">Lecture de la Freebox…</p>';
@@ -2307,7 +2307,7 @@
       var col = { presence: '#F97316', piscine: '#0EA5E9', jardin: '#22C55E' }[p.cam === 'presence' ? 'presence' : String(p.name).toLowerCase()] || '#8B5CF6';
       return '<button class="ev rec" data-sumat="' + p.at + '"><span class="evic" style="color:' + col + ';background:' + col + '22">' + icon('walk') + '</span><span><b>' + esc(p.name) + '</b><small>Personne</small></span><span class="evt">' + hhmm(p.time) + '</span></button>';
     }).join('') + '</div>';
-    h += '<p class="note-q">Les passages de personnes détectés par les caméras extérieures (Présence, Piscine, Jardin), extraits des enregistrements gardés sur la Freebox. Lu en accéléré ×4 par défaut : ×1 pour le temps réel. Le résumé d’aujourd’hui est refait tout seul chaque heure ; celui de la veille une dernière fois après minuit.</p>';
+    h += '<p class="note-q">Les passages de personnes détectés par les caméras extérieures (Présence, Piscine, Jardin), extraits des enregistrements gardés sur la Freebox. Lu en accéléré ×4 par défaut : ×1 pour le temps réel. Le résumé d’aujourd’hui est refait tout seul toutes les 30 minutes ; celui de la veille une dernière fois après minuit.</p>';
     var keep = sheet.scrollTop; sheet.innerHTML = '<div class="sh-in">' + h + '</div>'; sheet.scrollTop = keep;
     var v = document.getElementById('sumv');
     if (v) { var sp = function () { try { v.defaultPlaybackRate = SUM.rate || 4; v.playbackRate = SUM.rate || 4; } catch (e) {} }; sp(); v.addEventListener('loadedmetadata', sp); v.addEventListener('playing', sp, { once: true }); }
