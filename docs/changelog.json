@@ -1,7 +1,16 @@
 {
-  "version": "2.48.5",
+  "version": "2.49.0",
   "date": "2026-11-23",
   "releases": [
+    {
+      "version": "2.49.0",
+      "date": "2026-11-23",
+      "time": "20:24",
+      "title": "Plein écran avec avance rapide",
+      "changes": [
+        "Lecteur des enregistrements et du résumé : nouveau bouton plein écran ⛶ qui garde les vitesses ×1, ×2, ×4, ×8 (le plein écran de l'iPhone s'arrête à ×2)"
+      ]
+    },
     {
       "version": "2.48.5",
       "date": "2026-11-23",
@@ -1693,5 +1702,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "20:15"
+  "time": "20:24"
 }

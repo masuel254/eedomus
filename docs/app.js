@@ -1714,6 +1714,7 @@
     else renderSettings();
   }
   function closeSheet() {
+    if (PFS) { PFS = false; document.body.classList.remove('pfs'); }
     sheet.hidden = true; sheet.innerHTML = ''; liveCam = null; liveHd = true; REC = null; ENG = null; TED = null; PE = null; GR = null; roomSheet = null; logsView = null; HL = null; document.body.classList.remove('noscroll');
   }
 
@@ -2177,8 +2178,8 @@
     var c = camById(REC.cam);
     var h = '<div class="sh-hd"><button class="back2" data-recback>' + icon('down') + 'Caméras</button><button class="close" data-close aria-label="Fermer">×</button></div>' +
       '<h2 class="rec-title">' + esc(c ? c.name : 'Caméra') + ' · enregistrements</h2>';
-    h += REC.play ? '<div class="camcard player"><video id="recv" src="' + esc(REC.play.url) + '" autoplay playsinline controls></video>' +
-      '<div class="rates">' + [1, 2, 4, 8].map(function (x) { return '<button class="' + (REC.rate === x ? 'on' : '') + '" data-rate="' + x + '">×' + x + '</button>'; }).join('') + '</div>' +
+    h += REC.play ? '<div class="camcard player' + (PFS ? ' fs' : '') + '"><video id="recv" src="' + esc(REC.play.url) + '" autoplay playsinline controls></video>' +
+      '<div class="rates">' + [1, 2, 4, 8].map(function (x) { return '<button class="' + (REC.rate === x ? 'on' : '') + '" data-rate="' + x + '">×' + x + '</button>'; }).join('') + fsBtn() + '</div>' +
       '<div class="cammeta"><b>' + esc(REC.play.label) + ' <span class="src-tag' + (REC.play.relay ? ' fb' : '') + '">' + (REC.play.relay ? 'Freebox' : c && c.src === 'imou' ? 'Carte SD' : 'Caméra') + '</span></b>' + (REC.play.hdOk ? '<button class="hdbtn' + (REC.play.hd ? ' on' : '') + '" data-rechd>' + (REC.play.hd ? 'HD' : 'Passer en HD') + '</button>' : '') + '</div></div>'
       : '<div class="camcard player empty"><span>' + icon('play') + 'Choisis un enregistrement ci-dessous</span></div>';
     if (c && c.src === 'imou') {
@@ -2251,6 +2252,14 @@
       renderRec(); var v3 = document.getElementById('recv'); if (v3) { var pr = v3.play(); if (pr && pr.catch) pr.catch(function () {}); }
     });
   }
+  // Plein écran maison : le plein écran de l'iPhone ne permet que ×0,5 à ×2 ; celui-ci garde les boutons ×1 à ×8
+  var PFS = false;
+  function fsBtn() { return '<button class="fsb" data-pfs aria-label="' + (PFS ? 'Quitter le plein écran' : 'Plein écran') + '">' + (PFS ? '✕' : '⛶') + '</button>'; }
+  function setPfs(on) {
+    PFS = on; var card = sheet.querySelector('.camcard.player'); if (!card) return;
+    card.classList.toggle('fs', on); var b = card.querySelector('[data-pfs]'); if (b) b.outerHTML = fsBtn();
+    document.body.classList.toggle('pfs', on);
+  }
   // ---------- Résumé de la journée : passages de personnes, toutes caméras, accélérés (fabriqué par le relais de la Freebox) ----------
   var SUM = null; // { date, st, loading, timer }
   function openSummary() { SUM = { date: ymd(new Date()), st: null }; relayGet(); sheet.scrollTop = 0; openSheet('summary'); loadSummary(false); }
@@ -2280,8 +2289,8 @@
     var days = '';
     for (var i = 0; i < 7; i++) { var d = new Date(); d.setDate(d.getDate() - i); days += '<button class="' + (ymd(d) === SUM.date ? 'on' : '') + '" data-sumday="' + ymd(d) + '">' + esc(i === 0 ? "Aujourd'hui" : i === 1 ? 'Hier' : d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' })) + '</button>'; }
     var ready = st && st.state === 'ready' && st.url && RELAY && RELAY.url;
-    h += ready ? '<div class="camcard player"><video id="sumv" src="' + esc(relayUrl(st.url)) + '" playsinline controls></video>' +
-      '<div class="rates">' + [1, 2, 4, 8].map(function (x) { return '<button class="' + ((SUM.rate || 4) === x ? 'on' : '') + '" data-sumrate="' + x + '">×' + x + '</button>'; }).join('') + '</div>' +
+    h += ready ? '<div class="camcard player' + (PFS ? ' fs' : '') + '"><video id="sumv" src="' + esc(relayUrl(st.url)) + '" playsinline controls></video>' +
+      '<div class="rates">' + [1, 2, 4, 8].map(function (x) { return '<button class="' + ((SUM.rate || 4) === x ? 'on' : '') + '" data-sumrate="' + x + '">×' + x + '</button>'; }).join('') + fsBtn() + '</div>' +
       '<div class="cammeta"><b>' + st.parts.length + ' passage' + (st.parts.length > 1 ? 's' : '') + ' · ' + Math.floor(st.duration / 60) + ' min ' + String(st.duration % 60).padStart(2, '0') + ' en temps réel</b><span class="src-tag fb">Freebox</span></div></div>'
       : '<div class="camcard player empty"><span>' + icon('play') + (st && st.state === 'building' ? 'Montage en cours… (voir ci-dessous)' : 'Pas encore de résumé') + '</span></div>';
     h += '<div class="days">' + days + '</div>';
@@ -3355,6 +3364,7 @@
       if ((b = e.target.closest('[data-sumrate]'))) { SUM.rate = +b.dataset.sumrate; var sv = document.getElementById('sumv'); if (sv) { sv.defaultPlaybackRate = SUM.rate; sv.playbackRate = SUM.rate; } Array.prototype.forEach.call(sheet.querySelectorAll('[data-sumrate]'), function (x) { x.classList.toggle('on', +x.dataset.sumrate === SUM.rate); }); return; }
       if ((b = e.target.closest('[data-sumat]'))) { var sv2 = document.getElementById('sumv'); if (sv2) { sheet.scrollTop = 0; try { sv2.currentTime = +b.dataset.sumat; } catch (er) {} var pp = sv2.play(); if (pp && pp.catch) pp.catch(function () {}); } return; }
     }
+    if (e.target.closest('[data-pfs]')) return setPfs(!PFS);
     if (e.target.closest('[data-recback]')) return closeSheet(); // retour à l'onglet Caméras
     if ((b = e.target.closest('[data-recday]'))) { REC.date = b.dataset.recday; REC.list = null; REC.segs = null; return loadRec(); }
     // fiche des enregistrements
