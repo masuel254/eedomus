@@ -2869,7 +2869,7 @@
     PUSH.loaded = true;
     var sub = null;
     pushSub().then(function (s) { sub = s; return api({ action: 'push.get', endpoint: s ? s.endpoint : '' }); }).then(function (j) {
-      PUSH.on = j.on; PUSH.delay = j.delay; if (sheet.dataset.view === 'settings' && !sheet.hidden) renderSettings();
+      PUSH.on = j.on; PUSH.delay = j.delay; PUSH.route = !!j.route; if (sheet.dataset.view === 'settings' && !sheet.hidden) renderSettings();
       // inscription d'avant (sans clé) : on envoie la clé de l'iPhone pour que le texte voyage dans la notification
       if (j.on && sub && !j.keys) api(pushSubBody(sub)).catch(function () {});
     }).catch(function () { PUSH.loaded = false; });
@@ -2921,8 +2921,43 @@
       'Du lundi au vendredi, entre 7h30 et 8h, une seule fois par jour.',
       'Gel : 2° ou moins dehors, maintenant ou d’ici 9h.',
       'Neige : prévue à n’importe quelle heure de la journée.',
-      'Pas de notification si aucune des deux conditions n’est remplie.'] }
+      'Pas de notification si aucune des deux conditions n’est remplie.'] },
+    { k: 'route', ic: 'car', t: 'Trajet vers le travail', w: 'Lun · Mar · Jeu', s: 'Bouchons et travaux, à 7h15, 7h30 et 7h50', c: [
+      'Lundi, mardi et jeudi, contrôles à 7h15, 7h30 et 7h50 du trajet maison → travail (A16 puis N42).',
+      'Bouchon : 10 min de retard ou plus par rapport au temps habituel, avec le trafic du moment.',
+      'Accident, véhicule en panne, voie ou route fermée, travaux sur le trajet : alerte avec la route et l’endroit.',
+      'Nouvelle alerte seulement si ça s’aggrave (5 min de plus ou un nouvel incident), puis « trajet dégagé » quand c’est fini.',
+      'Pas de notification si tout va bien. Seulement sur les iPhone où elle est activée ci-dessous.'] }
   ];
+  // ---------- Trajet vers le travail (TomTom) : clé collée ici, gardée aussi sur l'iPhone et renvoyée si le serveur l'a perdue ----------
+  var ROUTE = null, routeAsk = 0, routeEdit = false;
+  function routeLoad() {
+    if (Date.now() - routeAsk < 60000) return;
+    routeAsk = Date.now();
+    api({ action: 'route.state' }).then(function (j) {
+      ROUTE = j;
+      var L = null; try { L = JSON.parse(store.get('maison.route') || 'null'); } catch (e) {}
+      if (j.configured && j.from && j.to) store.set('maison.route', JSON.stringify({ key: (L && L.key) || null, from: j.from, to: j.to }));
+      else if (L && L.key) api({ action: 'route.key', key: L.key }).then(function () { return L.from && L.to ? api({ action: 'route.set', from: L.from, to: L.to }) : null; }).catch(function () {});
+      if (!sheet.hidden && sheet.dataset.view === 'settings') renderSettings();
+    }).catch(function () {});
+  }
+  function routeHTML() {
+    routeLoad();
+    var R = ROUTE, h = '';
+    if (!R || !R.configured || routeEdit) {
+      return '<div class="lk-form rt-form"><b>Clé TomTom</b><small>Sur developer.tomtom.com, crée un compte gratuit puis copie la clé (« API key ») et colle-la ici.</small>' +
+        '<input id="rt-key" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Colle la clé ici">' +
+        '<button class="act" data-route-save>Enregistrer</button></div>';
+    }
+    var L = R.last, t = L ? new Date(L.at) : null;
+    h += '<div class="alr-set"><span>' + (!R.from || !R.to ? 'Adresses à renseigner' : L ? 'Dernier contrôle ' + (t.getDate() === new Date().getDate() ? 'à ' : 'le ' + t.getDate() + '/' + (t.getMonth() + 1) + ' à ') + t.getHours() + 'h' + ('0' + t.getMinutes()).slice(-2) + ' : <b>' + L.travel + ' min</b>' + (L.bad ? ' (+' + L.delay + ' min)' : ', normal') : 'Pas encore de contrôle') + (R.err ? ' · erreur ' + esc(R.err) : '') + '</span>' +
+      '<button class="lnk" data-route-test>Tester</button></div>';
+    if (L && L.items && L.items.length) h += '<ul class="rt-items">' + L.items.map(function (i) { return '<li>' + esc(i.txt) + '</li>'; }).join('') + '</ul>';
+    h += '<div class="alr-set"><span>Recevoir sur cet iPhone</span><button class="sw-b' + (PUSH.route ? ' is-on' : '') + '" data-route-me aria-label="Recevoir sur cet iPhone"><span class="sw"></span></button></div>' +
+      '<div class="alr-set"><span class="mu">Clé TomTom enregistrée</span><button class="lnk" data-route-edit>Changer</button></div>';
+    return h;
+  }
   function pushHTML() {
     if (!CFG.push) return '';
     if (!PUSH.loaded) pushLoad();
@@ -2938,6 +2973,7 @@
         return '<details class="acc2 alr" data-alr="' + a.k + '"' + (ALR_OPEN[a.k] ? ' open' : '') + '><summary><span class="ic">' + icon(a.ic) + '</span><span class="alr-t"><b>' + esc(a.t) + '</b><small>' + esc(typeof a.s === 'function' ? a.s(d) : a.s) + '</small></span>' +
           '<span class="ok">' + esc(a.w) + '</span>' + icon('down') + '</summary><div class="alr-b"><ul>' +
           a.c.map(function (x) { return '<li>' + esc(typeof x === 'function' ? x(d) : x) + '</li>'; }).join('') + '</ul>' +
+          (a.k === 'route' ? routeHTML() : '') +
           (a.k === 'garage' ? '<div class="alr-set"><span>Délai avant l’alerte : <b>' + d + ' min</b></span><span class="stp2"><button data-push-delay="' + (PUSH_DELAYS[i - 1] || d) + '" aria-label="Moins">−</button><button data-push-delay="' + (PUSH_DELAYS[i + 1] || d) + '" aria-label="Plus">+</button></span></div>' : '') +
           '</div></details>';
       }).join('') +
@@ -3446,6 +3482,29 @@
       var nd = +b.dataset.pushDelay; if (nd === PUSH.delay) return;
       var od = PUSH.delay; PUSH.delay = nd; renderSettings();
       return api({ action: 'push.cfg', delay: nd }).then(function (j) { PUSH.delay = j.delay; renderSettings(); }).catch(function () { PUSH.delay = od; renderSettings(); toast('Réglage non enregistré, réessaie', true); });
+    }
+    if (e.target.closest('[data-route-edit]')) { routeEdit = true; return renderSettings(); }
+    if (e.target.closest('[data-route-save]')) {
+      var rk = ((document.getElementById('rt-key') || {}).value || '').trim();
+      if (!/^[A-Za-z0-9]{20,64}$/.test(rk)) return toast('Colle la clé copiée sur le site de TomTom', true);
+      return api({ action: 'route.key', key: rk }).then(function (j) {
+        var L = null; try { L = JSON.parse(store.get('maison.route') || 'null'); } catch (er) {}
+        store.set('maison.route', JSON.stringify({ key: rk, from: (L && L.from) || j.from, to: (L && L.to) || j.to }));
+        if (L && L.from && !j.from) api({ action: 'route.set', from: L.from, to: L.to }).catch(function () {});
+        ROUTE = j; routeEdit = false; routeAsk = 0; toast('Clé enregistrée, merci !'); renderSettings();
+      }).catch(function () { toast('Clé refusée, vérifie-la', true); });
+    }
+    if (e.target.closest('[data-route-test]')) {
+      toast('Calcul du trajet avec le trafic…');
+      return api({ action: 'route.test' }).then(function (j) { ROUTE = j; renderSettings(); toast(j.err ? 'TomTom ne répond pas (' + j.err + ')' : j.last ? j.last.travel + ' min de trajet maintenant' + (j.last.bad ? ', problème détecté' : ', rien à signaler') : 'Adresses à renseigner', !!j.err); })
+        .catch(function () { toast('Essai impossible, réessaie', true); });
+    }
+    if (e.target.closest('[data-route-me]')) {
+      if (!PUSH.on) return toast('Active d’abord les alertes sur cet iPhone (en haut)', true);
+      var on = !PUSH.route; PUSH.route = on; renderSettings();
+      return pushSub().then(function (s) { return api({ action: 'push.route', endpoint: s ? s.endpoint : '', on: on }); })
+        .then(function (j) { PUSH.route = !!j.route; renderSettings(); toast(j.route ? 'Alerte trajet activée sur cet iPhone' : 'Alerte trajet désactivée sur cet iPhone'); })
+        .catch(function () { PUSH.route = !on; renderSettings(); toast('Réglage non enregistré, réessaie', true); });
     }
     if (e.target.closest('[data-push-test]')) {
       toast('Envoi de la notification…');

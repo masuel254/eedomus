@@ -1147,3 +1147,12 @@ body.pfs { overflow: hidden; }
 .pacc-b { border-top: 1px solid var(--ln); padding: 12px; display: flex; flex-direction: column; gap: 12px; }
 .pacc-b .pool-hd { display: none; }
 .pacc-b .pool, .pacc-b .card2 { margin: 0; }
+/* Alerte trajet vers le travail */
+.rt-form { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.rt-form small { color: var(--mu); font-size: 13px; }
+.rt-items { margin: 8px 0 0 !important; color: var(--tx, #fff) !important; }
+.alr-b .lnk { color: var(--cool); font-weight: 700; font-size: 14px; background: none; padding: 4px 0; }
+.alr-b .mu { color: var(--mu); }
+.sw-b { background: none; padding: 0; }
+.sw-b.is-on .sw { background: var(--ok); }
+.sw-b.is-on .sw::after { transform: translateX(20px); background: #fff; }

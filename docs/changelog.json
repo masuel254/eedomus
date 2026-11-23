@@ -1,7 +1,17 @@
 {
-  "version": "2.50.0",
-  "date": "2026-11-23",
+  "version": "2.51.0",
+  "date": "2026-11-24",
   "releases": [
+    {
+      "version": "2.51.0",
+      "date": "2026-11-24",
+      "time": "00:02",
+      "title": "Alerte trajet vers le travail",
+      "changes": [
+        "Nouvelle alerte : bouchons, accidents et travaux sur le trajet du matin (lundi, mardi, jeudi à 7h15, 7h30 et 7h50)",
+        "Réglages › Alertes › Trajet : coller la clé TomTom, tester, et choisir les iPhone qui la reçoivent"
+      ]
+    },
     {
       "version": "2.50.0",
       "date": "2026-11-23",
@@ -1712,5 +1722,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "23:23"
+  "time": "00:02"
 }

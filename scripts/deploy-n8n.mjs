@@ -124,6 +124,8 @@ const CODE_CFG = {
   relay: { secret: createHash('sha256').update('relais-cameras|' + env.MAISON_TOKEN).digest('hex'), retention: 30, presRetention: 30,
     // caméras Imou retenues dans le résumé de la journée (extérieures)
     sumCams: ['piscine', 'jardin', 'garage'] },
+  // trajet du matin vers le travail : jours (0 = dimanche), heures des contrôles, retard qui déclenche l'alerte (min), routes surveillées
+  route: { days: [1, 2, 4], checks: ['07:15', '07:30', '07:50'], delay: 10, roads: ['A16', 'N42'] },
   tu: env.TUYA_CLIENT_ID ? {
     id: env.TUYA_CLIENT_ID, secret: env.TUYA_CLIENT_SECRET, base: 'https://openapi.tuyaeu.com',
     devices: { sauna: env.TUYA_DEV_SAUNA, pac: env.TUYA_DEV_PAC, elec: env.TUYA_DEV_ELEC },
@@ -608,6 +610,85 @@ async function morningCheck(d) {
   if (!parts.length) return;
   await pushNotify({ tag: 'morning', title: (snow.length ? '🌨️ ' : '❄️ ') + parts.join(' · '),
     body: 'Prévoir du temps pour dégivrer la voiture' + (snow.length ? ' et prudence sur la route' : '') + ' (il fait ' + fr(d.now.t) + '° maintenant)' });
+}
+// ---- Trajet du matin vers le travail (TomTom : temps de trajet avec le trafic du moment, accidents, travaux, fermetures) ----
+// Clé TomTom et adresses gardées ici, jamais dans le dépôt ; l'iPhone en garde une copie et la renvoie si elle se perd.
+// Lundi, mardi et jeudi : contrôles à 7h15, 7h30 et 7h50. Alerte seulement s'il y a un problème (sur les iPhone qui l'ont demandée).
+const ROUTE_CAT = { 1: 'Accident', 2: 'Brouillard', 3: 'Danger', 4: 'Pluie', 5: 'Verglas', 6: 'Bouchon', 7: 'Voie fermée', 8: 'Route fermée', 9: 'Travaux', 10: 'Vent', 11: 'Inondation', 14: 'Véhicule en panne' };
+function routeDist(a, b) { const k = Math.cos(a[1] * Math.PI / 180); return Math.hypot((a[0] - b[0]) * 111320 * k, (a[1] - b[1]) * 110540); }
+async function routeStatus() {
+  const R = SD.route || {}, RC = CFG.route;
+  if (!R.key || !R.from || !R.to) return null;
+  const q = 'key=' + encodeURIComponent(R.key);
+  const j = await helpers.httpRequest({ method: 'GET', url: 'https://api.tomtom.com/routing/1/calculateRoute/' + R.from.lat + ',' + R.from.lon + ':' + R.to.lat + ',' + R.to.lon +
+    '/json?' + q + '&traffic=true&travelMode=car&routeType=fastest&sectionType=traffic&language=fr-FR', json: true, timeout: 20000 });
+  const r = (j.routes || [])[0]; if (!r) throw new Error('no_route');
+  const s = r.summary || {}, pts = [];
+  (r.legs || []).forEach((l) => (l.points || []).forEach((p) => pts.push([p.longitude, p.latitude])));
+  let x0 = 180, x1 = -180, y0 = 90, y1 = -90;
+  pts.forEach((p) => { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); });
+  // incidents dans la zone du trajet, gardés s'ils touchent le trajet dans notre sens (ou ferment une des routes surveillées)
+  const fields = '{incidents{type,geometry{type,coordinates},properties{id,iconCategory,magnitudeOfDelay,events{description},from,to,delay,roadNumbers}}}';
+  let inc = [];
+  try {
+    const k = await helpers.httpRequest({ method: 'GET', url: 'https://api.tomtom.com/traffic/services/5/incidentDetails?' + q + '&bbox=' + [x0 - 0.01, y0 - 0.01, x1 + 0.01, y1 + 0.01].map((v) => v.toFixed(5)).join(',') +
+      '&fields=' + encodeURIComponent(fields) + '&language=fr-FR&timeValidityFilter=present', json: true, timeout: 20000 });
+    inc = k.incidents || [];
+  } catch (e) {}
+  const near = (c) => { let b = 1e9, bi = -1; for (let i = 0; i < pts.length; i++) { const d = routeDist(c, pts[i]); if (d < b) { b = d; bi = i; } } return [b, bi]; };
+  const items = [];
+  inc.forEach((x) => {
+    const p = x.properties || {}, g = x.geometry || {}, cat = Number(p.iconCategory);
+    if (!ROUTE_CAT[cat] || [2, 4, 10].indexOf(cat) >= 0) return;
+    const cs = g.type === 'Point' ? [g.coordinates] : (g.coordinates || []);
+    if (!cs.length) return;
+    const a = near(cs[0]), b = near(cs[cs.length - 1]);
+    const roads = (p.roadNumbers || []).join('/'), watched = RC.roads.some((w) => (p.roadNumbers || []).indexOf(w) >= 0);
+    // dans notre sens : l'incident commence avant de finir le long du trajet (l'autre chaussée est parcourue à l'envers)
+    const onRoute = a[0] < 80 && b[0] < 80 && (cs.length < 2 || a[1] < b[1] || (a[1] === b[1] && routeDist(cs[0], cs[cs.length - 1]) < 200));
+    if (!onRoute && !(cat === 8 && watched)) return;
+    const ev = (p.events || [])[0] || {}, dl = Math.round((p.delay || 0) / 60);
+    items.push({ id: String(p.id || '').slice(0, 60), cat, on: onRoute, delay: dl,
+      txt: (roads ? roads + ' · ' : '') + (ev.description || ROUTE_CAT[cat]) + (p.from && p.to ? ' entre ' + p.from + ' et ' + p.to : '') + (dl >= 1 ? ' (+' + dl + ' min)' : '') + (onRoute ? '' : ' (sens à vérifier)') });
+  });
+  items.sort((u, v) => v.delay - u.delay);
+  const travel = Math.round((s.travelTimeInSeconds || 0) / 60), delay = Math.round((s.trafficDelayInSeconds || 0) / 60);
+  const bad = delay >= RC.delay || items.some((i) => [1, 7, 8, 9, 14].indexOf(i.cat) >= 0 || i.delay >= 5);
+  return { at: Date.now(), travel, usual: travel - delay, delay, km: Math.round((s.lengthInMeters || 0) / 100) / 10, items: items.slice(0, 6), bad };
+}
+async function routeNotify(item) {
+  let n = 0;
+  for (const k of Object.keys((SD.push && SD.push.subs) || {})) if (SD.push.subs[k].route) n += await pushNotify(item, k);
+  return n;
+}
+async function routeWatch() {
+  const R = SD.route, RC = CFG.route;
+  if (!R || !R.key || !R.from || !R.to) return;
+  const P = parisParts(), today = P.year + '-' + P.month + '-' + P.day, hm = P.hour + ':' + P.minute;
+  const wd = new Date(Date.UTC(+P.year, +P.month - 1, +P.day)).getUTCDay();
+  if (RC.days.indexOf(wd) < 0 || hm >= '08:05') return;
+  const slot = RC.checks.filter((c) => hm >= c).pop();
+  if (!slot) return;
+  if (R.day !== today) { R.day = today; R.slots = {}; R.alert = null; }
+  const sl = R.slots[slot] = R.slots[slot] || { n: 0 };
+  if (sl.done || sl.n >= 3 || (sl.at && sl.at > Date.now() - 120000)) return; // 3 essais au plus par contrôle
+  sl.n++; sl.at = Date.now();
+  let st;
+  try { st = await routeStatus(); } catch (e) { R.err = String(e.httpCode || (e.response && e.response.status) || e.message || e).slice(0, 80); return; }
+  if (!st) return;
+  sl.done = true; R.err = null; R.last = st;
+  const ids = st.items.map((i) => i.id), A = R.alert;
+  const fresh = A ? ids.filter((i) => A.ids.indexOf(i) < 0).length > 0 : true;
+  const head = st.travel + ' min de trajet au lieu de ' + st.usual + ' habituellement';
+  if (st.bad && (!A || fresh || st.delay >= A.delay + 5)) {
+    const top = st.items[0];
+    const title = st.delay >= RC.delay ? '🚗 Bouchon : +' + st.delay + ' min pour aller au travail' : '🚧 ' + (top ? ROUTE_CAT[top.cat] + (top.on ? ' sur le trajet' : ' sur une route du trajet') : 'Problème sur le trajet');
+    R.alert = { ids, delay: st.delay };
+    await routeNotify({ tag: 'route', title, body: [head].concat(st.items.slice(0, 3).map((i) => i.txt)).join(' · ').slice(0, 300) });
+  } else if (!st.bad && A) {
+    R.alert = null;
+    await routeNotify({ tag: 'route', title: '✅ Trajet dégagé', body: head });
+  }
 }
 async function meteoWatch() {
   const M = SD.meteo = SD.meteo || {};
@@ -1686,6 +1767,7 @@ try {
     try { await boilerWatch(); } catch (e) {}
     try { await meteoWatch(); } catch (e) {}
     try { await smokeWatch(); } catch (e) {}
+    try { await routeWatch(); } catch (e) {}
     let gu = null; try { gu = await garageCamDue(); } catch (e) {}
     return (gu ? [{ json: { garageUrl: gu } }] : []).concat(OUT_PUSH); // aucune réponse HTTP à envoyer
   }
@@ -1714,6 +1796,33 @@ try {
     const cut = enKey(Date.now() - 45 * 86400000).slice(0, 8);
     Object.keys(SD.wh).forEach((k) => { if (k < cut) delete SD.wh[k]; });
     return reply(200, { ok: true, day, hours: h });
+  }
+  // ---- Trajet vers le travail : clé TomTom et adresses (collées dans l'appli ou envoyées une fois), état, essai ----
+  if (/^route[.](key|set|state|test)$/.test(String(body.action))) {
+    const R = SD.route = SD.route || {};
+    if (body.action === 'route.key') {
+      const key = String(body.key || '').trim();
+      if (!/^[A-Za-z0-9]{20,64}$/.test(key)) return reply(400, { ok: false, error: 'bad_key' });
+      R.key = key; R.err = null;
+    }
+    if (body.action === 'route.set') {
+      if (!R.key) return reply(400, { ok: false, error: 'no_key' });
+      const geo = async (v) => {
+        if (v && typeof v === 'object' && isFinite(v.lat) && isFinite(v.lon)) return { lat: Number(v.lat), lon: Number(v.lon), label: String(v.label || '').slice(0, 120) };
+        const a = String(v || '').trim().slice(0, 160); if (a.length < 5) return null;
+        const g = await helpers.httpRequest({ method: 'GET', url: 'https://api.tomtom.com/search/2/geocode/' + encodeURIComponent(a) + '.json?key=' + encodeURIComponent(R.key) + '&countrySet=FR&limit=1&language=fr-FR', json: true, timeout: 20000 });
+        const x = (g.results || [])[0]; if (!x) return null;
+        return { lat: x.position.lat, lon: x.position.lon, label: (x.address && x.address.freeformAddress) || a };
+      };
+      let f, t;
+      try { f = await geo(body.from); t = await geo(body.to); } catch (e) { return reply(200, { ok: false, error: 'tomtom', detail: String(e.httpCode || (e.response && e.response.status) || e.message || e).slice(0, 80) }); }
+      if (!f || !t) return reply(200, { ok: false, error: 'address_not_found' });
+      R.from = f; R.to = t;
+    }
+    if (body.action === 'route.test') {
+      try { const st = await routeStatus(); if (st) R.last = st; R.err = null; } catch (e) { R.err = String(e.httpCode || (e.response && e.response.status) || e.message || e).slice(0, 80); }
+    }
+    return reply(200, { ok: true, configured: !!R.key, from: R.from || null, to: R.to || null, last: R.last || null, err: R.err || null, cfg: CFG.route });
   }
   // ---- Compteur Linky (Enedis, via Conso API) : consommation électrique réelle jour par jour ----
   // La clé (jeton Enedis) est collée dans l'appli ; gardée ici et renvoyée par l'iPhone si elle se perd.
@@ -1806,6 +1915,7 @@ try {
         /^https:[/][/][a-z0-9.-]+[/][^?#]*$/i.test(app) ? { app: app } : {});
     }
     if (body.action === 'push.unsub' && k) delete SD.push.subs[k];
+    if (body.action === 'push.route' && k && SD.push.subs[k]) SD.push.subs[k].route = !!body.on; // alerte trajet sur cet iPhone
     if (body.action === 'push.cfg') { const d = Number(body.delay); if ([1, 2, 3, 5, 10, 15, 20, 30, 45, 60].includes(d)) SD.push.delay = d; }
     // Test lancé depuis le serveur (avec jeton) : une notification de test vers tous les iPhone inscrits
     if (body.action === 'push.testall') {
@@ -1816,7 +1926,7 @@ try {
       return reply(200, { ok: true, sent: n });
     }
     if (body.action === 'push.test') { const n = k && SD.push.subs[k] ? await pushNotify({ tag: 'test', title: 'Maison', body: 'Les notifications fonctionnent sur cet iPhone 👍', badge: null }, k) : 0; if (!n) return reply(200, { ok: false, error: (k && SD.push.subs[k] && SD.push.subs[k].lastErr) || 'not_subscribed' }); }
-    return reply(200, { ok: true, on: !!(k && SD.push.subs[k]), keys: !!(k && SD.push.subs[k] && SD.push.subs[k].keys), delay: SD.push.delay || 2, count: Object.keys(SD.push.subs).length });
+    return reply(200, { ok: true, on: !!(k && SD.push.subs[k]), keys: !!(k && SD.push.subs[k] && SD.push.subs[k].keys), route: !!(k && SD.push.subs[k] && SD.push.subs[k].route), delay: SD.push.delay || 2, count: Object.keys(SD.push.subs).length });
   }
 
   // Historique d'un capteur eedomus (liste blanche « readable »), mis en cache 10 min
