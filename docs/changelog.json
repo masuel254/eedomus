@@ -1,7 +1,16 @@
 {
-  "version": "2.43.1",
-  "date": "2026-11-22",
+  "version": "2.43.2",
+  "date": "2026-11-23",
   "releases": [
+    {
+      "version": "2.43.2",
+      "date": "2026-11-23",
+      "time": "06:51",
+      "title": "Lecteur sans bandes noires",
+      "changes": [
+        "Enregistrements : le lecteur prend la forme de la vidéo, plus de bandes noires sur les côtés (caméras Imou lues depuis la Freebox)"
+      ]
+    },
     {
       "version": "2.43.1",
       "date": "2026-11-22",
@@ -1496,5 +1505,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "23:05"
+  "time": "06:51"
 }
