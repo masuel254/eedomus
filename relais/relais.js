@@ -322,7 +322,7 @@ function sumState(date) {
   let info = null; try { info = JSON.parse(fs.readFileSync(P.json, 'utf8')); } catch (e) {}
   let building = false;
   try { const st = fs.statSync(P.lock); building = Date.now() - st.mtimeMs < 40 * 60000; } catch (e) {}
-  const ready = !!info && fs.existsSync(P.mp4) && (info.speed || 1) === SPEED && info.v === 3; // ancien montage : refait
+  const ready = !!info && fs.existsSync(P.mp4) && (info.speed || 1) === SPEED && info.v === 4; // ancien montage : refait
   return { ok: true, date, state: building ? 'building' : ready || (info && info.empty) ? 'ready' : info && info.error ? 'error' : 'none', building,
     url: ready ? '/v/resume/' + date + '.mp4?v=' + (info.builtAt || 0) : null, parts: ready ? info.parts : [], duration: ready ? info.duration : 0,
     builtAt: info ? info.builtAt || null : null, error: info && info.error ? info.error : null, progress: building ? readProgress(P.lock) : null };
@@ -421,7 +421,7 @@ async function buildSummary(date) {
       let vf = (j.cam === 'presence' ? 'scale=640:360:force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2' : 'scale=640:360') + ',setsar=1,setpts=PTS/' + SPEED + ',fps=15';
       // une couleur par caméra pour les repérer d'un coup d'œil
       const col = { presence: '0xF97316', piscine: '0x0EA5E9', jardin: '0x22C55E' }[j.cam === 'presence' ? 'presence' : String(j.name).toLowerCase()] || '0x8B5CF6';
-      if (font) vf += ",drawbox=x=0:y=0:w=iw:h=6:color=" + col + "@1:t=fill,drawtext=fontfile=" + font + ":text='" + (j.name + ' · ' + hm).replace(/[':\\]/g, ' ') + "':x=12:y=16:fontsize=22:fontcolor=white:box=1:boxcolor=" + col + "@0.85:boxborderw=6";
+      if (font) vf += ",drawbox=x=0:y=0:w=iw:h=6:color=" + col + "@1:t=fill,drawtext=fontfile=" + font + ":text='" + j.name.replace(/[':\\%]/g, ' ') + " · %{pts\\:localtime\\:" + Math.floor(j.t0) + "\\:%H\\\\\\:%M\\\\\\:%S}':x=12:y=16:fontsize=22:fontcolor=white:box=1:boxcolor=" + col + "@0.85:boxborderw=6";
       const r = spawnSync('ffmpeg', ['-v', 'error', '-y', '-ss', String(j.off), '-t', String(j.dur), '-i', j.file, '-an', '-vf', vf,
         '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '28', '-pix_fmt', 'yuv420p', '-r', '15', '-movflags', '+faststart', out], { timeout: 300000 });
       if (r.status !== 0 || !fs.existsSync(out)) continue;
@@ -445,7 +445,7 @@ async function buildSummary(date) {
     const r = spawnSync('ffmpeg', ['-v', 'error', '-y', '-f', 'concat', '-safe', '0', '-i', list, '-c', 'copy', '-movflags', '+faststart', full], { timeout: 600000 });
     if (r.status !== 0) throw new Error('assemblage impossible');
     fs.copyFileSync(full, P.mp4 + '.tmp'); fs.renameSync(P.mp4 + '.tmp', P.mp4);
-    fs.writeFileSync(P.json, JSON.stringify({ date, v: 3, builtAt: Date.now(), speed: SPEED, duration: Math.round(at), parts: parts.map((p) => ({ at: p.at, cam: p.cam, name: p.name, time: p.time })) }));
+    fs.writeFileSync(P.json, JSON.stringify({ date, v: 4, builtAt: Date.now(), speed: SPEED, duration: Math.round(at), parts: parts.map((p) => ({ at: p.at, cam: p.cam, name: p.name, time: p.time })) }));
   } finally {
     spawnSync('rm', ['-rf', tmp]);
   }
