@@ -1111,3 +1111,12 @@ svg.hl-svg { touch-action: none; }
 .lk-form > span { display: flex; flex-direction: column; gap: 8px; width: 100%; }
 .lk-form input { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--ln); background: var(--s2); color: var(--tx, #fff); font-size: 15px; }
 .lk-form .act { align-self: flex-start; }
+
+/* Climat : Confort+ temporaire */
+.boostrow { display: flex; gap: 8px; margin: 10px 0 2px; }
+.boostrow .act { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 6px; font-size: 14px; }
+.boostrow .act.main { background: rgba(255,138,91,.16); color: #FF8A5B; border-color: rgba(255,138,91,.45); }
+.boostrow .act svg.i { width: 16px; height: 16px; }
+.boostrow.on { align-items: center; justify-content: space-between; padding: 10px 12px; border-radius: 14px; background: rgba(255,138,91,.14); color: #FF8A5B; font-size: 14px; }
+.boostrow.on span { display: inline-flex; align-items: center; gap: 6px; }
+.boostrow.on .act { flex: none; }

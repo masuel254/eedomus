@@ -1,7 +1,18 @@
 {
-  "version": "2.44.1",
+  "version": "2.45.0",
   "date": "2026-11-23",
   "releases": [
+    {
+      "version": "2.45.0",
+      "date": "2026-11-23",
+      "time": "12:08",
+      "title": "Confort+ temporaire",
+      "changes": [
+        "Climat : boutons « Confort+ 1 h / 2 h / 3 h » : toute la maison passe en Confort+ puis revient toute seule au planning",
+        "Bouton « Revenir au planning » pour arrêter avant la fin",
+        "Courbe 24 h du Climat : plus de fausse ligne droite quand l'historique gardé sur l'iPhone est ancien"
+      ]
+    },
     {
       "version": "2.44.1",
       "date": "2026-11-23",
@@ -1560,5 +1571,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "07:57"
+  "time": "12:08"
 }

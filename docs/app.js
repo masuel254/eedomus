@@ -418,6 +418,10 @@
       '<span class="sched-ic">' + icon('cal') + '</span><span class="sched-t"><b>' + esc(NT.schedule) + '</b><small>' + esc(when) + '</small></span>' +
       '<span class="sched-ch" aria-label="Changer de planning">' + icon('down') + '</span></button>' +
       '<button class="sched-edit" data-plan-cur aria-label="Modifier le planning ' + esc(NT.schedule) + '">' + icon('pen') + '<span>Modifier</span></button></div>';
+    // Confort+ temporaire : toutes les pièces en « Confort+ », retour automatique au planning à la fin
+    var bo = boostNow();
+    h += bo ? '<div class="boostrow on"><span>' + icon('flame') + '<b>Confort+</b> jusqu’à ' + esc(new Date(bo.until * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })) + '</span><button class="act" data-boost-cancel>Revenir au planning</button></div>'
+      : '<div class="boostrow">' + [1, 2, 3].map(function (x) { return '<button class="act' + (x === 2 ? ' main' : '') + '" data-boost="' + x + '">' + icon('flame') + 'Confort+ ' + x + ' h</button>'; }).join('') + '</div>';
     if (schedOpen) {
       h += '<div class="schedlist">' + (NT.schedules || []).map(function (x) {
         return '<button class="' + (String(x.id) === String(NT.scheduleId) ? 'on' : '') + '" data-sched="' + esc(x.id) + '">' + esc(x.name) + '</button>';
@@ -535,6 +539,8 @@
     if (!pts || !pts.length) return pts;
     var ms = pts[pts.length - 1][0] > 1e11, lim = (ms ? Date.now() : Date.now() / 1000) - h * (ms ? 3600000 : 3600);
     var keep = pts.filter(function (p) { return p[0] >= lim; });
+    var real = pts.length > 1 ? pts[pts.length - 2][0] : 0, nowx = ms ? Date.now() : Date.now() / 1000; // avant-dernier point = dernière vraie mesure
+    if (nowx - real > (ms ? 3 * 3600000 : 3 * 3600)) return null;
     // historique gardé sur l'iPhone trop ancien (appli rouverte le matin) : pas de fausse ligne droite, on attend le vrai
     return keep.length >= 3 ? keep : null;
   }
@@ -1297,16 +1303,24 @@
     return h;
   }
 
+  // Confort+ en cours : donné par le serveur, ou reconnu sur les pièces (toutes en manuel avec la même heure de fin)
+  function boostNow() {
+    if (!NT) return null; var now = Date.now() / 1000;
+    if (NT.boost && NT.boost.until > now) return NT.boost;
+    var m = (NT.rooms || []).filter(function (x) { return x.mode === 'manual' && x.end > now; });
+    if (m.length >= Math.max(2, (NT.rooms || []).length - 1) && m.every(function (x) { return Math.abs(x.end - m[0].end) < 120; })) return { until: m[0].end };
+    return null;
+  }
   // ---------- Onglet Climat ----------
   function climateHTML() {
     var h = heroHTML();
     var r = ntCurrentRoom();
     if (r) {
       loadRoomHist(r.id);
-      var hp = HISTN[r.id], sp = ntPend && String(ntPend.room) === String(r.id) ? ntPend.temp : r.setpoint;
+      var hp = freshHist(r.id), sp = ntPend && String(ntPend.room) === String(r.id) ? ntPend.temp : r.setpoint;
       h += manualHTML(r).replace('class="manual"', 'class="manual big"');
       h += '<div class="lbl">Température · ' + esc(r.name) + ' · 24 h</div><button class="card2 gtap" data-graph="' + esc(r.id) + '">' +
-        spark(livePts(hp, r), { w: 320, h: 90, ref: sp, spLine: spHist(hp, r), hours: 4, axis: true }) +
+        spark(lastHours(livePts(hp, r), 24), { w: 320, h: 90, ref: sp, spLine: spHist(hp, r), hours: 4, axis: true }) +
         '<div class="legend"><span><i style="background:#FF8A5B"></i>Mesurée</span><span><i class="dash"></i>Consigne ' + fmt(sp, 1) + '°</span><span class="more">Détails ›</span></div></button>';
       h += '<div class="lbl">Toutes les pièces</div><div class="card2 rooms2">' + NT.rooms.map(function (x) {
         var man = x.mode === 'manual' || x.mode === 'max';
@@ -3076,6 +3090,16 @@
         .catch(function () { toast('Netatmo ne répond pas, réessaie', true); });
     }
     if (e.target.closest('[data-plans]')) { schedOpen = false; render(); return openPlans(); }
+    if ((b = e.target.closest('[data-boost]'))) {
+      var bh = +b.dataset.boost; b.classList.add('busy'); toast('Confort+ pendant ' + bh + ' h…');
+      return api({ action: 'nt.boost', hours: bh }).then(function (j) { NT = j; pcSet('nt', j); render(); toast('Confort+ jusqu’à ' + new Date(j.boost ? j.boost.until * 1000 : Date.now() + bh * 3600e3).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) + ', puis retour au planning'); })
+        .catch(function () { b.classList.remove('busy'); toast('Netatmo ne répond pas, réessaie', true); });
+    }
+    if (e.target.closest('[data-boost-cancel]')) {
+      toast('Retour au planning…');
+      return api({ action: 'nt.boost', cancel: true }).then(function (j) { NT = j; pcSet('nt', j); render(); toast('Retour au planning'); })
+        .catch(function () { toast('Netatmo ne répond pas, réessaie', true); });
+    }
     if (e.target.closest('[data-plan-cur]')) {
       schedOpen = false; render(); var cur = NT && NT.scheduleId;
       var go = function () { if (PLANS && PLANS.schedules && PLANS.schedules.some(function (x) { return String(x.id) === String(cur); })) openPlan(cur); else openPlans(); };

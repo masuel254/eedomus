@@ -404,6 +404,8 @@ async function ntHeating(fresh) {
   const modes = data.rooms.map((r) => r.mode);
   data.mode = modes.length && modes.every((m) => m === 'away') ? 'away' : modes.length && modes.every((m) => m === 'hg') ? 'hg' : 'schedule';
   data.presence = presenceOut();
+  // Confort+ temporaire en cours (Netatmo revient seul au planning à l'heure de fin)
+  data.boost = SD.boost && SD.boost.until > Date.now() / 1000 ? { until: SD.boost.until, hours: SD.boost.hours } : null;
   SD.ntHeat = { at: Date.now(), data };
   return data;
 }
@@ -1470,6 +1472,33 @@ async function netatmo(b) {
     SD.ntDay[day] = { at: Date.now(), data };
     Object.keys(SD.ntDay).sort().slice(0, -10).forEach((k) => { delete SD.ntDay[k]; });
     return data;
+  }
+  // Confort+ pendant quelques heures : toutes les pièces passent à la température de l'ambiance « Confort+ »
+  // du planning en cours, avec une heure de fin ; Netatmo revient tout seul au planning ensuite.
+  // cancel : retour immédiat au planning.
+  if (b.action === 'nt.boost') {
+    const H = await ntHomes();
+    if (!H.heat) throw fail(404, 'no_heating');
+    if (b.cancel) {
+      const rooms = (SD.boost && SD.boost.rooms) || H.heat.rooms.map((r) => r.id);
+      for (const id of rooms) { try { await nt('POST', 'setroomthermpoint', { home_id: H.heat.id, room_id: id, mode: 'home' }); } catch (e) {} }
+      SD.boost = null;
+      return ntHeating(true);
+    }
+    const hours = Math.max(1, Math.min(4, Math.round(Number(b.hours) || 2)));
+    const sel = H.heat.schedules.find((x) => x.selected) || {};
+    const zone = (sel.zones || []).find((z) => /^(confort|comfort) ?[+]$/i.test(String(z.name || '').trim()));
+    const st = SD.ntHeat && SD.ntHeat.data ? SD.ntHeat.data.rooms : [];
+    const end = Math.round(Date.now() / 1000 + hours * 3600), done = [];
+    for (const r of H.heat.rooms) {
+      const zr = zone && (zone.rooms || []).find((x) => String(x.id) === String(r.id));
+      const cur = (st.find((x) => String(x.id) === String(r.id)) || {}).setpoint;
+      const t = zr && zr.t != null ? Number(zr.t) : cur != null ? Math.min(23, Number(cur) + 1.5) : 21.5;
+      try { await nt('POST', 'setroomthermpoint', { home_id: H.heat.id, room_id: r.id, mode: 'manual', temp: Math.round(t * 2) / 2, endtime: end }); done.push(r.id); } catch (e) {}
+    }
+    if (!done.length) throw fail(502, 'netatmo');
+    SD.boost = { until: end, hours, rooms: done, at: Date.now() };
+    return ntHeating(true);
   }
   if (b.action === 'nt.setpoint') {
     const H = await ntHomes();
