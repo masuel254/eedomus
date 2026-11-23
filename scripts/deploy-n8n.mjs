@@ -121,7 +121,9 @@ const CODE_CFG = {
   im: env.IMOU_APP_ID ? { id: env.IMOU_APP_ID, secret: env.IMOU_APP_SECRET } : null,
   // clé commune avec le relais caméras de la Freebox : déduite du jeton principal (même valeur depuis le PC ou le cloud)
   // retention / presRetention : jours de conservation des vidéos Imou et Présence sur la Freebox (envoyés au relais)
-  relay: { secret: createHash('sha256').update('relais-cameras|' + env.MAISON_TOKEN).digest('hex'), retention: 30, presRetention: 30 },
+  relay: { secret: createHash('sha256').update('relais-cameras|' + env.MAISON_TOKEN).digest('hex'), retention: 30, presRetention: 30,
+    // caméras Imou retenues dans le résumé de la journée (extérieures)
+    sumCams: ['piscine', 'jardin'] },
   tu: env.TUYA_CLIENT_ID ? {
     id: env.TUYA_CLIENT_ID, secret: env.TUYA_CLIENT_SECRET, base: 'https://openapi.tuyaeu.com',
     devices: { sauna: env.TUYA_DEV_SAUNA, pac: env.TUYA_DEV_PAC, elec: env.TUYA_DEV_ELEC },
@@ -865,12 +867,15 @@ async function relay(b) {
     const h = String(b.host || '').toLowerCase();
     if (!/^[a-z0-9-]+([.][a-z0-9-]+)+$/.test(h) || h.length > 100) throw fail(403, 'not_allowed');
     R.host = h;
-    return { ok: true, host: h };
+    // adresse de secours (réseaux qui bloquent la principale, ex. Wi-Fi d'entreprise)
+    const a = String(b.alt || '').toLowerCase();
+    if (/^[a-z0-9-]+([.][a-z0-9-]+)+$/.test(a) && a.length <= 100) R.alt = a;
+    return { ok: true, host: h, alt: R.alt || null };
   }
   if (b.action === 'relay.sign') {
     if (!R.url) return { ok: true, url: null };
     const exp = (Math.floor(Date.now() / 3600000) + 25) * 3600; // change toutes les heures : les vidéos restent en cache sur l'iPhone
-    return { ok: true, url: R.url, t: exp + '.' + hmac256hex(CFG.relay.secret, 'relais|' + exp), exp, seen: R.seen || null, status: R.status || null };
+    return { ok: true, url: R.url, alt: R.alt && R.url.indexOf(R.alt) < 0 ? 'https://' + R.alt : null, t: exp + '.' + hmac256hex(CFG.relay.secret, 'relais|' + exp), exp, seen: R.seen || null, status: R.status || null };
   }
   throw fail(400, 'unknown_action');
 }
@@ -880,7 +885,8 @@ async function relayEvents(b) {
   if (Math.abs(Date.now() / 1000 - ts) > 300 || String(b.sig || '') !== hmac256hex(CFG.relay.secret, 'events|' + day + '|' + ts)) return reply(401, { ok: false, error: 'unauthorized' });
   if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(day)) return reply(400, { ok: false });
   const out = { ok: true, date: day, imou: {}, presence: [] };
-  if (CFG.im) for (const d of await imDevices()) {
+  // résumé : seulement les caméras extérieures (et la Présence), seulement les personnes
+  if (CFG.im) for (const d of (await imDevices()).filter((x) => CFG.relay.sumCams.includes(String(x.name).toLowerCase()))) {
     try { const r = await imou({ action: 'im.alarms', cam: d.id, date: day }); out.imou[d.id] = r.alarms.filter((a) => /human|person/i.test(a.kind)).map((a) => a.time); } catch (e) { out.imou[d.id] = []; }
   }
   if (CFG.nt) {
@@ -908,7 +914,7 @@ async function relayHello(b) {
   if (b.status && typeof b.status === 'object') R.status = { disk: b.status.disk || null, retention: b.status.retention || null,
     cams: (b.status.cams || []).slice(0, 12).map((c) => ({ id: String(c.id), ok: !!c.ok, gb: Number(c.gb) || 0, from: c.from || null })),
     presence: b.status.presence || null };
-  return reply(200, { ok: true, url, cfg: { retention: CFG.relay.retention, presRetention: CFG.relay.presRetention, host: R.host || null } });
+  return reply(200, { ok: true, url, cfg: { retention: CFG.relay.retention, presRetention: CFG.relay.presRetention, host: R.host || null, alt: R.alt || null } });
 }
 
 // ---------------- Smart Life / Tuya ----------------

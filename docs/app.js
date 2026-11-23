@@ -2050,8 +2050,11 @@
       function () { relayP = null; return RELAY && RELAY.url && RELAY.exp * 1000 > Date.now() ? RELAY : null; });
     return relayP;
   }
-  function relayUrl(path) { return RELAY.url + path + (path.indexOf('?') < 0 ? '?' : '&') + 't=' + encodeURIComponent(RELAY.t); }
-  function relayJson(path) {
+  // adresse principale, ou adresse de secours si la principale ne répond pas sur ce réseau (ex. Wi-Fi d'entreprise)
+  var relayAlt = false;
+  function relayBase() { return relayAlt && RELAY.alt ? RELAY.alt : RELAY.url; }
+  function relayUrl(path) { return relayBase() + path + (path.indexOf('?') < 0 ? '?' : '&') + 't=' + encodeURIComponent(RELAY.t); }
+  function relayJson(path, second) {
     return relayGet().then(function (R) {
       if (!R) throw new Error('no_relay');
       return new Promise(function (ok, ko) {
@@ -2061,6 +2064,10 @@
           return r.json().then(function (j) { if (!r.ok || !j.ok) throw new Error('HTTP ' + r.status); return j; });
         }).then(function (j) { if (!done) { done = true; clearTimeout(t); ok(j); } }, function (e) { if (RELAY) RELAY.exp = 0; /* adresse ou jeton périmés : on les redemande au prochain essai */ if (!done) { done = true; clearTimeout(t); ko(e); } });
       });
+    }).catch(function (e) {
+      // pas de réponse : on bascule sur l'autre adresse et on réessaie une fois
+      if (second || !RELAY || !RELAY.alt) throw e;
+      relayAlt = !relayAlt; return relayJson(path, true);
     });
   }
   // La vidéo du relais ne se lit pas (Freebox injoignable…) : on bascule sur la source d'origine

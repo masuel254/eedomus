@@ -288,9 +288,13 @@ async function hello() {
     if (Number(v) >= 7 && Number(v) <= 365 && String(E[k]) !== String(v)) { saveEnv(k, Number(v)); console.log(k + ' = ' + v); }
   });
   // nouveau nom internet décidé côté serveur : certificat HTTPS (Caddy) et adresse annoncée
-  if (C.host && /^[a-z0-9-]+([.][a-z0-9-]+)+$/.test(C.host) && 'https://' + C.host !== E.PUBLIC_URL) {
+  const okH = (x) => x && /^[a-z0-9-]+([.][a-z0-9-]+)+$/.test(x);
+  const want = [C.host, C.alt].filter(okH).join(', ');
+  if (okH(C.host) && ('https://' + C.host !== E.PUBLIC_URL || want !== (E.CADDY_HOSTS || ''))) {
+    // un ou deux noms (le second : adresse de secours) servis par Caddy avec leurs certificats
     fs.writeFileSync('/etc/caddy/Caddyfile', '# Relais caméras : HTTPS automatique (certificat Let\'s Encrypt), tout est transmis au relais\n' +
-      C.host + ' {\n\treverse_proxy 127.0.0.1:' + (Number(E.PORT) || 8080) + '\n}\n');
+      want + ' {\n\treverse_proxy 127.0.0.1:' + (Number(E.PORT) || 8080) + '\n}\n');
+    saveEnv('CADDY_HOSTS', want);
     require('child_process').execFileSync('systemctl', ['restart', 'caddy']);
     saveEnv('PUBLIC_URL', 'https://' + C.host); E = loadEnv();
     console.log('Nouveau nom : ' + C.host);

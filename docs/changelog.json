@@ -1,7 +1,17 @@
 {
-  "version": "2.45.5",
+  "version": "2.46.0",
   "date": "2026-11-23",
   "releases": [
+    {
+      "version": "2.46.0",
+      "date": "2026-11-23",
+      "time": "14:26",
+      "title": "Résumé extérieur, adresse de secours",
+      "changes": [
+        "Résumé de la journée : seulement les caméras extérieures (Présence, Piscine, Jardin) et seulement les personnes",
+        "Relais : adresse de secours, utilisée toute seule quand un réseau (Wi-Fi du travail) bloque l'adresse principale"
+      ]
+    },
     {
       "version": "2.45.5",
       "date": "2026-11-23",
@@ -1618,5 +1628,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "14:19"
+  "time": "14:26"
 }
