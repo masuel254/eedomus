@@ -637,7 +637,8 @@ async function routeStatus(rev) {
     const k = await helpers.httpRequest({ method: 'GET', url: 'https://api.tomtom.com/traffic/services/5/incidentDetails?' + q + '&bbox=' + [x0 - 0.01, y0 - 0.01, x1 + 0.01, y1 + 0.01].map((v) => v.toFixed(5)).join(',') +
       '&fields=' + encodeURIComponent(fields) + '&language=fr-FR&timeValidityFilter=present', json: true, timeout: 20000 });
     inc = k.incidents || [];
-  } catch (e) {}
+  } catch (e) { inc = null; }
+  const nInc = inc ? inc.length : -1; inc = inc || [];
   const near = (c) => { let b = 1e9, bi = -1; for (let i = 0; i < pts.length; i++) { const d = routeDist(c, pts[i]); if (d < b) { b = d; bi = i; } } return [b, bi]; };
   const items = [];
   inc.forEach((x) => {
@@ -657,7 +658,7 @@ async function routeStatus(rev) {
   items.sort((u, v) => v.delay - u.delay);
   const travel = Math.round((s.travelTimeInSeconds || 0) / 60), delay = Math.round((s.trafficDelayInSeconds || 0) / 60);
   const bad = delay >= RC.delay || items.some((i) => [1, 7, 8, 9, 14].indexOf(i.cat) >= 0 || i.delay >= 5);
-  return { at: Date.now(), travel, usual: travel - delay, delay, km: Math.round((s.lengthInMeters || 0) / 100) / 10, items: items.slice(0, 6), bad };
+  return { at: Date.now(), travel, usual: travel - delay, delay, km: Math.round((s.lengthInMeters || 0) / 100) / 10, items: items.slice(0, 6), bad, nInc };
 }
 async function routeNotify(item) {
   let n = 0;
