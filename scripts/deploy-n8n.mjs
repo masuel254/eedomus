@@ -1866,6 +1866,11 @@ try {
   }
   // Correction manuelle de l'état de la porte de garage (après vérification sur la caméra)
   if (body.action === 'meteo') return reply(200, await meteo(!!body.force));
+  if (body.action === 'meteo.morning') { // diagnostic de l'alerte du matin
+    const M = SD.meteo || {}, P = parisParts();
+    return reply(200, { ok: true, now: P.hour + ':' + P.minute, morningDay: M.morningDay || null, meteoAge: M.at ? Math.round((Date.now() - M.at) / 60000) : null, tNow: M.data && M.data.now ? M.data.now.t : null,
+      hours: M.data ? (M.data.hours || []).slice(0, 4).map((x) => x.t.slice(11, 16) + ' ' + x.temp + ' code ' + x.code) : null, subs: SD.push ? Object.values(SD.push.subs || {}).map((x) => ({ seen: x.seen ? new Date(x.seen.at).toISOString() + ' shown=' + x.seen.shown + ' err=' + x.seen.err : null, q: (x.q || []).map((i) => i.tag + '@' + new Date(i.at).toISOString()), lastSent: x.lastSent || null, fail: x.fail || null })) : [] });
+  }
   if (body.action === 'out.hist') return reply(200, await outHist(body.from, body.to));
   if (body.action === 'garage.mark') {
     if (body.state !== 'open' && body.state !== 'closed') return reply(403, { ok: false, error: 'not_allowed' });
