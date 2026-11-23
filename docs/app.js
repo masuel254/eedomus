@@ -1481,7 +1481,8 @@
     pts = (pts || []).filter(function (p) { return p[0] >= x0 - 3600 && p[0] <= x1 + 60; });
     if (pts.length < 2) return s + '<text x="' + ((L + W - R) / 2) + '" y="42" class="g-om" text-anchor="middle">' + ((x1 - x0 > 40 * 86400 ? (OUTH[outRange(x0, x1).from + '|' + outRange(x0, x1).to] && !OUTH[outRange(x0, x1).from + '|' + outRange(x0, x1).to].busy) : !outsBusy) ? 'Pas de mesure extérieure sur cette période' : 'Chargement…') + '</text></svg>';
     var mn = Infinity, mx = -Infinity; pts.forEach(function (p) { if (p[1] < mn) mn = p[1]; if (p[1] > mx) mx = p[1]; });
-    var lo = Math.floor(mn), hi = Math.ceil(mx); if (hi - lo < 2) { lo = Math.floor((mn + mx) / 2) - 1; hi = lo + 2; }
+    // marge en haut et en bas : la courbe et le point ne touchent jamais les bords (ni ne passent sous l'axe)
+    var pad = Math.max(0.4, (mx - mn) * 0.1), lo = Math.floor(mn - pad), hi = Math.ceil(mx + pad); if (hi - lo < 2) { lo = Math.floor((mn + mx) / 2) - 1; hi = lo + 2; }
     var X = function (t) { return L + (Math.max(x0, Math.min(x1, t)) - x0) / (x1 - x0) * (W - L - R); }, Y = function (v) { return T + (1 - (v - lo) / (hi - lo)) * (H - T - B); };
     s += '<text x="' + (W - R) + '" y="13" class="g-om" text-anchor="end">min ' + fmt(mn, 1) + '° · max ' + fmt(mx, 1) + '°</text>';
     [lo, hi].forEach(function (v) { s += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + Y(v).toFixed(1) + '" y2="' + Y(v).toFixed(1) + '" class="g-grid"/><text x="' + (L - 6) + '" y="' + (Y(v) + 3).toFixed(1) + '" class="g-yl" text-anchor="end">' + v + '</text>'; });
