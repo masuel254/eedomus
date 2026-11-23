@@ -123,7 +123,7 @@ const CODE_CFG = {
   // retention / presRetention : jours de conservation des vidéos Imou et Présence sur la Freebox (envoyés au relais)
   relay: { secret: createHash('sha256').update('relais-cameras|' + env.MAISON_TOKEN).digest('hex'), retention: 30, presRetention: 30,
     // caméras Imou retenues dans le résumé de la journée (extérieures)
-    sumCams: ['piscine', 'jardin'] },
+    sumCams: ['piscine', 'jardin', 'garage'] },
   tu: env.TUYA_CLIENT_ID ? {
     id: env.TUYA_CLIENT_ID, secret: env.TUYA_CLIENT_SECRET, base: 'https://openapi.tuyaeu.com',
     devices: { sauna: env.TUYA_DEV_SAUNA, pac: env.TUYA_DEV_PAC, elec: env.TUYA_DEV_ELEC },

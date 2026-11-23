@@ -2304,10 +2304,10 @@
     else if (st.state === 'ready' && !st.parts.length && !SUM.err) h += '<p class="muted">Personne n’a été détecté ce jour-là.</p>';
     if (st && st.state !== 'building' && SUM.date === ymd(new Date())) h += '<button class="act wide" data-sumbuild>' + (st.state === 'ready' ? 'Mettre à jour avec les derniers passages' : 'Préparer le résumé d’aujourd’hui') + '</button>';
     if (ready && st.parts.length) h += '<h3>Passages</h3><div class="evlist">' + st.parts.map(function (p) {
-      var col = { presence: '#F97316', piscine: '#0EA5E9', jardin: '#22C55E' }[p.cam === 'presence' ? 'presence' : String(p.name).toLowerCase()] || '#8B5CF6';
+      var col = { presence: '#F97316', piscine: '#0EA5E9', jardin: '#22C55E', garage: '#EAB308' }[p.cam === 'presence' ? 'presence' : String(p.name).toLowerCase()] || '#8B5CF6';
       return '<button class="ev rec" data-sumat="' + p.at + '"><span class="evic" style="color:' + col + ';background:' + col + '22">' + icon('walk') + '</span><span><b>' + esc(p.name) + '</b><small>Personne</small></span><span class="evt">' + hhmm(p.time) + '</span></button>';
     }).join('') + '</div>';
-    h += '<p class="note-q">Les passages de personnes détectés par les caméras extérieures (Présence, Piscine, Jardin), extraits des enregistrements gardés sur la Freebox. Lu en accéléré ×4 par défaut : ×1 pour le temps réel. Le résumé d’aujourd’hui est refait tout seul toutes les 30 minutes ; celui de la veille une dernière fois après minuit.</p>';
+    h += '<p class="note-q">Les passages de personnes détectés par les caméras Présence, Piscine, Jardin et Garage, extraits des enregistrements gardés sur la Freebox. Lu en accéléré ×4 par défaut : ×1 pour le temps réel. Le résumé d’aujourd’hui est refait tout seul toutes les 30 minutes ; celui de la veille une dernière fois après minuit.</p>';
     var keep = sheet.scrollTop; sheet.innerHTML = '<div class="sh-in">' + h + '</div>'; sheet.scrollTop = keep;
     var v = document.getElementById('sumv');
     if (v) { var sp = function () { try { v.defaultPlaybackRate = SUM.rate || 4; v.playbackRate = SUM.rate || 4; } catch (e) {} }; sp(); v.addEventListener('loadedmetadata', sp); v.addEventListener('playing', sp, { once: true }); }

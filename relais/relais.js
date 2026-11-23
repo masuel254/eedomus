@@ -433,7 +433,7 @@ async function buildSummary(date) {
       // caméras Imou : flux 16:9 livré écrasé en 640×480, remis en 640×360 ; Présence : déjà en 16:9
       let vf = (j.cam === 'presence' ? 'scale=640:360:force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2' : 'scale=640:360') + ',setsar=1,setpts=PTS/' + SPEED + ',fps=15';
       // une couleur par caméra pour les repérer d'un coup d'œil
-      const col = { presence: '0xF97316', piscine: '0x0EA5E9', jardin: '0x22C55E' }[j.cam === 'presence' ? 'presence' : String(j.name).toLowerCase()] || '0x8B5CF6';
+      const col = { presence: '0xF97316', piscine: '0x0EA5E9', jardin: '0x22C55E', garage: '0xEAB308' }[j.cam === 'presence' ? 'presence' : String(j.name).toLowerCase()] || '0x8B5CF6';
       if (font) vf += ",drawbox=x=0:y=0:w=iw:h=6:color=" + col + "@1:t=fill,drawtext=fontfile=" + font + ":text='" + j.name.replace(/[':\\%]/g, ' ') + " · %{pts\\:localtime\\:" + Math.floor(j.t0) + "\\:%H\\\\\\:%M\\\\\\:%S}':x=12:y=16:fontsize=22:fontcolor=white:box=1:boxcolor=" + col + "@0.85:boxborderw=6";
       const r = spawnSync('ffmpeg', ['-v', 'error', '-y', '-ss', String(j.off), '-t', String(j.dur), '-i', j.file, '-an', '-vf', vf,
         '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '28', '-pix_fmt', 'yuv420p', '-r', '15', '-movflags', '+faststart', out], { timeout: 300000 });
