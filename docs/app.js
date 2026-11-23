@@ -2285,6 +2285,12 @@
       '<div class="cammeta"><b>' + st.parts.length + ' passage' + (st.parts.length > 1 ? 's' : '') + ' · ' + Math.floor(st.duration / 60) + ' min ' + String(st.duration % 60).padStart(2, '0') + ' en temps réel</b><span class="src-tag fb">Freebox</span></div></div>'
       : '<div class="camcard player empty"><span>' + icon('play') + (st && st.state === 'building' ? 'Montage en cours… (voir ci-dessous)' : 'Pas encore de résumé') + '</span></div>';
     h += '<div class="days">' + days + '</div>';
+    // heure du dernier montage (refait tout seul chaque heure pour aujourd'hui)
+    if (st && st.builtAt && st.state !== 'building') {
+      var bt = new Date(st.builtAt), isToday = SUM.date === ymd(new Date());
+      h += '<p class="sum-at">Montage du ' + esc(bt.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric' })) + ' à ' + esc(bt.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })) +
+        (isToday ? ' · mis à jour tout seul chaque heure' : '') + '</p>';
+    }
     if (SUM.err) h += '<p class="muted">La Freebox ne répond pas pour le moment' + (SUM.tries < 4 ? ', nouvel essai…' : '.') + '</p>';
     else if (!st) h += '<p class="muted">Lecture de la Freebox…</p>';
     else if (st.state === 'building') {
@@ -2300,7 +2306,7 @@
     if (ready && st.parts.length) h += '<h3>Passages</h3><div class="evlist">' + st.parts.map(function (p) {
       return '<button class="ev rec" data-sumat="' + p.at + '"><span class="evic">' + icon('walk') + '</span><span><b>' + esc(p.name) + '</b><small>Personne</small></span><span class="evt">' + hhmm(p.time) + '</span></button>';
     }).join('') + '</div>';
-    h += '<p class="note-q">Les moments où une personne a été détectée (Imou et Netatmo), extraits des enregistrements gardés sur la Freebox. Lu en accéléré ×4 par défaut : ×1 pour le temps réel. Le résumé de la veille est préparé chaque nuit ; celui d’aujourd’hui à la demande.</p>';
+    h += '<p class="note-q">Les passages de personnes détectés par les caméras extérieures (Présence, Piscine, Jardin), extraits des enregistrements gardés sur la Freebox. Lu en accéléré ×4 par défaut : ×1 pour le temps réel. Le résumé d’aujourd’hui est refait tout seul chaque heure ; celui de la veille une dernière fois après minuit.</p>';
     var keep = sheet.scrollTop; sheet.innerHTML = '<div class="sh-in">' + h + '</div>'; sheet.scrollTop = keep;
     var v = document.getElementById('sumv');
     if (v) { var sp = function () { try { v.defaultPlaybackRate = SUM.rate || 4; v.playbackRate = SUM.rate || 4; } catch (e) {} }; sp(); v.addEventListener('loadedmetadata', sp); v.addEventListener('playing', sp, { once: true }); }

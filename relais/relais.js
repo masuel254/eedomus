@@ -377,23 +377,25 @@ async function buildSummary(date) {
       if (dur >= 2) jobs.push({ t0: g.b + off, cam: c.id, name: c.name, file: g.file, off, dur });
     });
   });
-  // Présence : clips déposés par Netatmo sur la Freebox
+  // Présence : clips déposés par Netatmo sur la Freebox. Le nom ne donne que la minute de début (12:02) et le fichier
+  // arrive avec un peu de retard : le vrai début est entre cette minute et « fin du dépôt − durée ». On prend large.
   if (PRES() && ev.presence && ev.presence.length) {
     const clips = presList().filter((c) => c.begin.slice(0, 10) === date);
     const durs = {};
-    windows(ev.presence, 3, 12).forEach(([a, b]) => {
-      const t = a + 3;
+    ev.presence.slice().sort((x, y) => x - y).forEach((t) => {
       const cl = clips.find((c) => {
+        if (t < c.time - 5 || t > c.time + 600) return false;
         const f = path.join(PRES(), decodeURIComponent(c.url.slice('/v/presence/'.length)));
-        const end = new Date(c.end.replace(' ', 'T')).getTime() / 1000;
-        if (t > end + 5 || t < c.time - 90) return false;
-        if (durs[f] === undefined) durs[f] = probeDur(f);
-        c._f = f; c._s = end - durs[f];
-        return t >= c._s - 5 && t <= end + 5;
+        if (durs[f] === undefined) durs[f] = probeDur(f) || 60;
+        const upTo = new Date(c.end.replace(' ', 'T')).getTime() / 1000;
+        c._f = f; c._lo = c.time; c._hi = Math.max(c.time, Math.min(c.time + 59, upTo - durs[f])); // début réel entre _lo et _hi
+        return t <= c._hi + durs[f] + 5;
       });
       if (!cl) return;
-      const off = Math.max(0, a - cl._s), dur = Math.min(b - a, durs[cl._f] - off);
-      if (dur >= 2) jobs.push({ t0: cl._s + off, cam: 'presence', name: 'Présence', file: cl._f, off, dur });
+      const off = Math.max(0, t - 3 - cl._hi), end = Math.min(durs[cl._f], t + 12 - cl._lo);
+      const last = jobs[jobs.length - 1];
+      if (last && last.file === cl._f && off <= last.off + last.dur + 2) { last.dur = Math.max(last.dur, end - last.off); return; } // même clip, passages rapprochés
+      if (end - off >= 2) jobs.push({ t0: cl._lo + off, cam: 'presence', name: 'Présence', file: cl._f, off, dur: end - off });
     });
   }
   jobs.sort((x, y) => x.t0 - y.t0);
@@ -437,10 +439,16 @@ async function buildSummary(date) {
 }
 // chaque nuit (après 1h), le résumé de la veille est préparé tout seul
 function nightlySummary() {
-  const now = new Date(); if (now.getHours() < 1 || !E.SECRET) return;
-  const y = new Date(now.getTime() - 86400000), date = y.getFullYear() + '-' + pad(y.getMonth() + 1) + '-' + pad(y.getDate());
-  const st = sumState(date);
-  if (st.state === 'none') startSummary(date);
+  // aujourd'hui : refait toutes les heures (de 6h à minuit) avec les nouveaux passages ;
+  // hier : refait une dernière fois après minuit, pour les passages de la fin de soirée
+  if (!E.SECRET) return;
+  const now = new Date(), d = (x) => x.getFullYear() + '-' + pad(x.getMonth() + 1) + '-' + pad(x.getDate());
+  const today = d(now), y = d(new Date(now.getTime() - 86400000));
+  const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const sy = sumState(y);
+  if (!sy.building && now.getHours() >= 0 && (sy.state === 'none' || sy.state === 'error' || (sy.builtAt && sy.builtAt < midnight + 5 * 60000))) return startSummary(y);
+  const st = sumState(today);
+  if (now.getHours() >= 6 && !st.building && (st.state !== 'ready' || !st.builtAt || Date.now() - st.builtAt > 55 * 60000)) startSummary(today);
 }
 function cleanSummaries() {
   const days = Number(E.RETENTION_DAYS) || 14, lim = Date.now() - days * 86400000;

@@ -1,7 +1,17 @@
 {
-  "version": "2.46.0",
+  "version": "2.47.0",
   "date": "2026-11-23",
   "releases": [
+    {
+      "version": "2.47.0",
+      "date": "2026-11-23",
+      "time": "15:48",
+      "title": "Résumé automatique chaque heure",
+      "changes": [
+        "Résumé de la journée : refait tout seul chaque heure (et une dernière fois après minuit), avec l'heure du dernier montage affichée",
+        "Présence : les passages ne sont plus oubliés (vidéos Netatmo nommées à la minute près et déposées en retard)"
+      ]
+    },
     {
       "version": "2.46.0",
       "date": "2026-11-23",
@@ -1628,5 +1638,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "14:26"
+  "time": "15:48"
 }
