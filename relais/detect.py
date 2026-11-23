@@ -23,7 +23,7 @@ def frames(path, start, dur):
 def main():
     path, start, dur = sys.argv[1], float(sys.argv[2]), float(sys.argv[3])
     net = cv2.dnn.readNetFromCaffe(MODEL + 'deploy.prototxt', MODEL + 'mobilenet_iter_73000.caffemodel')
-    best, seen = 0.0, 0
+    best, seen, dbg = 0.0, 0, []
     for img in frames(path, start, dur):
         seen += 1
         h, w = img.shape[:2]
@@ -36,13 +36,17 @@ def main():
             blob = cv2.dnn.blobFromImage(cv2.resize(c, (300, 300)), 0.007843, (300, 300), 127.5)
             net.setInput(blob)
             det = net.forward()
+            if os.environ.get('DETECT_DEBUG') and len(dbg) < 6:
+                dbg.append([[int(det[0, 0, i, 1]), round(float(det[0, 0, i, 2]), 3)] for i in range(min(5, det.shape[2]))])
             for i in range(det.shape[2]):
                 if int(det[0, 0, i, 1]) == PERSON:
                     best = max(best, float(det[0, 0, i, 2]))
         if best >= 0.8:
             break  # personne bien visible : inutile de continuer
     # aucune image lue : on ne sait pas (le passage sera gardé)
-    print(json.dumps({'score': round(best, 3) if seen else None, 'frames': seen}))
+    out = {'score': round(best, 3) if seen else None, 'frames': seen}
+    if dbg: out['dbg'] = dbg
+    print(json.dumps(out))
 
 if __name__ == '__main__':
     main()
