@@ -1153,6 +1153,7 @@ body.pfs { overflow: hidden; }
 .rt-items { margin: 8px 0 0 !important; color: var(--tx, #fff) !important; }
 .alr-b .lnk { color: var(--cool); font-weight: 700; font-size: 14px; background: none; padding: 4px 0; }
 .alr-b .mu { color: var(--mu); }
-.sw-b { background: none; padding: 0; }
+.sw-b { background: none; padding: 0; flex: none; }
+.sw-b .sw { display: block; }
 .sw-b.is-on .sw { background: var(--ok); }
 .sw-b.is-on .sw::after { transform: translateX(20px); background: #fff; }
