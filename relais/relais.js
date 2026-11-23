@@ -412,6 +412,9 @@ async function buildSummary(date) {
     }
     fs.mkdirSync(SUMDIR(), { recursive: true });
     if (!parts.length) {
+      // des passages connus mais aucun extrait réussi : on garde le film précédent plutôt que de l'effacer
+      if (jobs.length) throw new Error('aucun extrait lisible');
+      if (fs.existsSync(P.mp4) && sumState(date).parts.length) return;
       fs.writeFileSync(P.json, JSON.stringify({ date, builtAt: Date.now(), parts: [], duration: 0, empty: true }));
       try { fs.unlinkSync(P.mp4); } catch (e) {}
       return;
@@ -450,6 +453,7 @@ else if (cmd === 'status') console.log(JSON.stringify(status(), null, 1));
 else if (cmd === 'summary') {
   const date = process.argv[3] || '';
   buildSummary(date).catch((e) => {
+    if (fs.existsSync(sumPaths(date).mp4) && sumState(date).state === 'ready') return; // le film précédent reste disponible
     try { fs.writeFileSync(sumPaths(date).json, JSON.stringify({ date, builtAt: Date.now(), error: String(e.message || e) })); } catch (x) {}
   }).finally(() => { try { fs.unlinkSync(sumPaths(date).lock); } catch (e) {} });
 }
