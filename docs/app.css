@@ -1103,3 +1103,6 @@ svg.hl-svg { touch-action: none; }
 /* Résumé de la journée */
 .sumbtn .val { color: var(--mu); font-size: 22px; }
 .act.wide { display: block; width: 100%; margin: 4px 0 12px; padding: 12px; }
+
+/* enregistrements Imou de la Freebox : 640×480 écrasé → affiché en 16:9 */
+.camcard.player video.unsqueeze { object-fit: fill; aspect-ratio: 16 / 9; }

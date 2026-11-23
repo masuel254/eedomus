@@ -318,7 +318,7 @@ function sumState(date) {
   let info = null; try { info = JSON.parse(fs.readFileSync(P.json, 'utf8')); } catch (e) {}
   let building = false;
   try { const st = fs.statSync(P.lock); building = Date.now() - st.mtimeMs < 40 * 60000; } catch (e) {}
-  const ready = !!info && fs.existsSync(P.mp4) && (info.speed || 1) === SPEED; // ancien film accéléré : refait
+  const ready = !!info && fs.existsSync(P.mp4) && (info.speed || 1) === SPEED && info.v === 2; // ancien montage : refait
   return { ok: true, date, state: building ? 'building' : ready || (info && info.empty) ? 'ready' : info && info.error ? 'error' : 'none', building,
     url: ready ? '/v/resume/' + date + '.mp4?v=' + (info.builtAt || 0) : null, parts: ready ? info.parts : [], duration: ready ? info.duration : 0,
     builtAt: info ? info.builtAt || null : null, error: info && info.error ? info.error : null, progress: building ? readProgress(P.lock) : null };
@@ -399,7 +399,8 @@ async function buildSummary(date) {
       const j = jobs[i], out = path.join(tmp, 'p' + String(i).padStart(4, '0') + '.mp4');
       progress({ step: 'montage', done: i, total: jobs.length });
       const d = new Date(j.t0 * 1000), hm = pad(d.getHours()) + 'h' + pad(d.getMinutes());
-      let vf = 'scale=640:360:force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2,setsar=1,setpts=PTS/' + SPEED + ',fps=15';
+      // caméras Imou : flux 16:9 livré écrasé en 640×480, remis en 640×360 ; Présence : déjà en 16:9
+      let vf = (j.cam === 'presence' ? 'scale=640:360:force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2' : 'scale=640:360') + ',setsar=1,setpts=PTS/' + SPEED + ',fps=15';
       if (font) vf += ",drawtext=fontfile=" + font + ":text='" + (j.name + ' · ' + hm).replace(/[':\\]/g, ' ') + "':x=12:y=12:fontsize=22:fontcolor=white:box=1:boxcolor=black@0.55:boxborderw=6";
       const r = spawnSync('ffmpeg', ['-v', 'error', '-y', '-ss', String(j.off), '-t', String(j.dur), '-i', j.file, '-an', '-vf', vf,
         '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '28', '-pix_fmt', 'yuv420p', '-r', '15', '-movflags', '+faststart', out], { timeout: 300000 });
@@ -421,7 +422,7 @@ async function buildSummary(date) {
     const r = spawnSync('ffmpeg', ['-v', 'error', '-y', '-f', 'concat', '-safe', '0', '-i', list, '-c', 'copy', '-movflags', '+faststart', full], { timeout: 600000 });
     if (r.status !== 0) throw new Error('assemblage impossible');
     fs.copyFileSync(full, P.mp4 + '.tmp'); fs.renameSync(P.mp4 + '.tmp', P.mp4);
-    fs.writeFileSync(P.json, JSON.stringify({ date, builtAt: Date.now(), speed: SPEED, duration: Math.round(at), parts: parts.map((p) => ({ at: p.at, cam: p.cam, name: p.name, time: p.time })) }));
+    fs.writeFileSync(P.json, JSON.stringify({ date, v: 2, builtAt: Date.now(), speed: SPEED, duration: Math.round(at), parts: parts.map((p) => ({ at: p.at, cam: p.cam, name: p.name, time: p.time })) }));
   } finally {
     spawnSync('rm', ['-rf', tmp]);
   }

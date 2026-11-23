@@ -2204,8 +2204,8 @@
     var rv = document.getElementById('recv'), P = REC.play;
     if (rv && P && P.relay) rv.addEventListener('error', function () { relayFail(P); });
     if (rv && P && P.relay && P.seek) rv.addEventListener('loadedmetadata', function () { try { if (rv.currentTime < P.seek - 2) rv.currentTime = P.seek; } catch (er) {} }, { once: true });
-    // le lecteur prend la forme de la vidéo (4:3 pour les enregistrements Imou de la Freebox) : pas de bandes noires
-    if (rv) rv.addEventListener('loadedmetadata', function () { if (rv.videoWidth && rv.videoHeight) rv.style.aspectRatio = rv.videoWidth + ' / ' + rv.videoHeight; });
+    // flux Imou en qualité réduite enregistré par la Freebox : image 16:9 livrée écrasée en 640×480, on lui rend sa largeur
+    if (rv && P && P.relay && c && c.src === 'imou') rv.classList.add('unsqueeze');
     if (rv) { // vitesse choisie (avance rapide), gardée d'une vidéo à l'autre
       var sp = function () { try { rv.defaultPlaybackRate = REC.rate || 1; rv.playbackRate = REC.rate || 1; } catch (er) {} };
       sp(); rv.addEventListener('loadedmetadata', sp); rv.addEventListener('playing', sp, { once: true });

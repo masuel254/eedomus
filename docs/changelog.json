@@ -1,7 +1,17 @@
 {
-  "version": "2.43.2",
+  "version": "2.43.3",
   "date": "2026-11-23",
   "releases": [
+    {
+      "version": "2.43.3",
+      "date": "2026-11-23",
+      "time": "06:52",
+      "title": "Images Imou au bon format",
+      "changes": [
+        "Enregistrements Imou lus depuis la Freebox : image remise au format large (16:9), plein cadre et plus écrasée",
+        "Résumé de la journée : même correction, les résumés déjà faits sont refaits automatiquement"
+      ]
+    },
     {
       "version": "2.43.2",
       "date": "2026-11-23",
@@ -1505,5 +1515,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "06:51"
+  "time": "06:52"
 }
