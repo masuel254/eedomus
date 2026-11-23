@@ -203,6 +203,16 @@ function serve() {
         const all = presList();
         return json(res, 200, { ok: true, date, clips: /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(date) ? all.filter((c) => c.begin.slice(0, 10) === date) : all.slice(0, 200) });
       }
+      // diagnostic de la reconnaissance des personnes sur un enregistrement Imou
+      if (u.pathname === '/api/detecttest') {
+        const m2 = /^([A-Za-z0-9_-]+)\/([0-9]{8}-[0-9]{6}\.mp4)$/.exec(u.searchParams.get('f') || '');
+        if (!m2) return json(res, 403, { ok: false });
+        const file = path.join(REC(), m2[1], m2[2]);
+        const r = spawnSync('python3', ['/opt/relais/detect.py', file, u.searchParams.get('off') || '0', u.searchParams.get('dur') || '20'], { encoding: 'utf8', timeout: 180000 });
+        const v = spawnSync('python3', ['-c', 'import cv2; print(cv2.__version__)'], { encoding: 'utf8' });
+        let sizes = {}; try { fs.readdirSync('/opt/relais/models').forEach((n) => { sizes[n] = fs.statSync('/opt/relais/models/' + n).size; }); } catch (e) {}
+        return json(res, 200, { ok: true, out: r.stdout, err: String(r.stderr || '').slice(-1500), cv: v.stdout, sizes });
+      }
       if (u.pathname === '/api/summary' || u.pathname === '/api/summary/build') {
         const date = u.searchParams.get('date') || '';
         if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(date)) return json(res, 403, { ok: false, error: 'not_allowed' });
