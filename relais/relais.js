@@ -322,10 +322,11 @@ function sumState(date) {
   let info = null; try { info = JSON.parse(fs.readFileSync(P.json, 'utf8')); } catch (e) {}
   let building = false;
   try { const st = fs.statSync(P.lock); building = Date.now() - st.mtimeMs < 40 * 60000; } catch (e) {}
-  const ready = !!info && fs.existsSync(P.mp4) && (info.speed || 1) === SPEED && info.v === 5; // ancien montage : refait
+  const ready = !!info && fs.existsSync(P.mp4) ; // un film d'une ancienne version reste affiché pendant qu'on le refait
+  const old = ready && !((info.speed || 1) === SPEED && info.v === 5); // ancien montage : refait
   return { ok: true, date, state: building ? 'building' : ready || (info && info.empty) ? 'ready' : info && info.error ? 'error' : 'none', building,
     url: ready ? '/v/resume/' + date + '.mp4?v=' + (info.builtAt || 0) : null, parts: ready ? info.parts : [], duration: ready ? info.duration : 0,
-    builtAt: info ? info.builtAt || null : null, checks: info && info.checks ? info.checks : [], error: info && info.error ? info.error : null, progress: building ? readProgress(P.lock) : null };
+    old, builtAt: info ? info.builtAt || null : null, checks: info && info.checks ? info.checks : [], error: info && info.error ? info.error : null, progress: building ? readProgress(P.lock) : null };
 }
 function readProgress(lock) { try { return JSON.parse(fs.readFileSync(lock, 'utf8')); } catch (e) { return null; } }
 function startSummary(date) {
@@ -461,9 +462,9 @@ function nightlySummary() {
   const today = d(now), y = d(new Date(now.getTime() - 86400000));
   const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   const sy = sumState(y);
-  if (!sy.building && now.getHours() >= 0 && (sy.state === 'none' || sy.state === 'error' || (sy.builtAt && sy.builtAt < midnight + 5 * 60000))) return startSummary(y);
+  if (!sy.building && (sy.state === 'none' || sy.state === 'error' || sy.old || (sy.builtAt && sy.builtAt < midnight + 5 * 60000))) startSummary(y);
   const st = sumState(today);
-  if (now.getHours() >= 6 && !st.building && (st.state !== 'ready' || !st.builtAt || Date.now() - st.builtAt > 25 * 60000)) startSummary(today);
+  if (now.getHours() >= 6 && !st.building && (st.state !== 'ready' || st.old || !st.builtAt || Date.now() - st.builtAt > 25 * 60000)) startSummary(today);
 }
 function cleanSummaries() {
   const days = Number(E.RETENTION_DAYS) || 14, lim = Date.now() - days * 86400000;
