@@ -208,7 +208,7 @@ function serve() {
         const m2 = /^([A-Za-z0-9_-]+)\/([0-9]{8}-[0-9]{6}\.mp4)$/.exec(u.searchParams.get('f') || '');
         if (!m2) return json(res, 403, { ok: false });
         const file = path.join(REC(), m2[1], m2[2]);
-        const r = spawnSync('python3', ['/opt/relais/detect.py', file, u.searchParams.get('off') || '0', u.searchParams.get('dur') || '20'], { encoding: 'utf8', timeout: 180000, env: Object.assign({}, process.env, { DETECT_DEBUG: '1' }) });
+        const r = spawnSync('python3', ['/opt/relais/detect.py', file, u.searchParams.get('off') || '0', u.searchParams.get('dur') || '20'], { encoding: 'utf8', timeout: 180000, env: Object.assign({}, process.env, { DETECT_DEBUG: '1', DETECT_MODE: u.searchParams.get('mode') || 'safe' }) });
         const v = spawnSync('python3', ['-c', 'import cv2; print(cv2.__version__)'], { encoding: 'utf8' });
         let sizes = {}; try { fs.readdirSync('/opt/relais/models').forEach((n) => { sizes[n] = fs.statSync('/opt/relais/models/' + n).size; }); } catch (e) {}
         return json(res, 200, { ok: true, out: r.stdout, err: String(r.stderr || '').slice(-1500), cv: v.stdout, sizes });

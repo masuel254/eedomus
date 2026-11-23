@@ -23,6 +23,13 @@ def frames(path, start, dur):
 def main():
     path, start, dur = sys.argv[1], float(sys.argv[2]), float(sys.argv[3])
     net = cv2.dnn.readNetFromCaffe(MODEL + 'deploy.prototxt', MODEL + 'mobilenet_iter_73000.caffemodel')
+    # réglages prudents (la Freebox a un processeur ARM, sur lequel certaines optimisations d'OpenCV faussent les résultats)
+    mode = os.environ.get('DETECT_MODE', 'safe')
+    net.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV); net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
+    if mode in ('safe', 'nofuse'):
+        net.enableFusion(False)
+    if mode in ('safe', 'one'):
+        cv2.setNumThreads(1)
     best, seen, dbg = 0.0, 0, []
     for img in frames(path, start, dur):
         seen += 1
