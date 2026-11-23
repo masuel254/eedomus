@@ -1673,6 +1673,29 @@ try {
     Object.keys(SD.wh).forEach((k) => { if (k < cut) delete SD.wh[k]; });
     return reply(200, { ok: true, day, hours: h });
   }
+  // ---- Compteur Linky (Enedis, via Conso API) : consommation électrique réelle jour par jour ----
+  // La clé (jeton Enedis) est collée dans l'appli ; gardée ici et renvoyée par l'iPhone si elle se perd.
+  if (body.action === 'linky.token' || body.action === 'linky.probe' || body.action === 'linky.state') {
+    SD.linky = SD.linky || {};
+    if (body.action === 'linky.token') {
+      const tok = String(body.tok || '').trim(), prm = String(body.prm || '').replace(/[^0-9]/g, '');
+      if (!/^[A-Za-z0-9._-]{20,4000}$/.test(tok) || prm.length !== 14) return reply(400, { ok: false, error: 'bad_token' });
+      SD.linky.tok = tok; SD.linky.prm = prm; SD.linky.at = Date.now();
+    }
+    if (!SD.linky.tok) return reply(200, { ok: true, configured: false });
+    if (body.action === 'linky.state') return reply(200, { ok: true, configured: true, prm: SD.linky.prm.slice(0, 4) + '…' + SD.linky.prm.slice(-2), last: SD.linky.last || null, err: SD.linky.err || null });
+    // essai : la consommation des derniers jours, réponse brute (pour vérifier la clé et le format)
+    const P = parisParts(), d1 = P.year + '-' + P.month + '-' + P.day, d0 = new Date(Date.UTC(+P.year, +P.month - 1, +P.day) - 7 * 86400000).toISOString().slice(0, 10);
+    try {
+      const raw = await helpers.httpRequest({ method: 'GET', url: 'https://conso.boris.sh/api/consommation_quotidienne?pointId=' + SD.linky.prm + '&dateDebut=' + d0 + '&dateFin=' + d1,
+        headers: { Authorization: 'Bearer ' + SD.linky.tok, 'User-Agent': 'maison-eedomus (appli domotique privee)' }, json: false, timeout: 20000 });
+      SD.linky.err = null;
+      return reply(200, { ok: true, configured: true, sample: String(raw).slice(0, 3000) });
+    } catch (e) {
+      SD.linky.err = String(e.httpCode || (e.response && e.response.status) || e.message || e).slice(0, 120);
+      return reply(200, { ok: false, configured: true, error: 'linky', detail: SD.linky.err });
+    }
+  }
   // ---- Coût de l'énergie ----
   if (body.action === 'cost' || body.action === 'cost.cfg' || body.action === 'cost.meter') {
     const C = costCfg();

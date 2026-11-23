@@ -1106,3 +1106,8 @@ svg.hl-svg { touch-action: none; }
 
 /* enregistrements Imou de la Freebox : 640×480 écrasé → affiché en 16:9 */
 .camcard.player video.unsqueeze { object-fit: fill; aspect-ratio: 16 / 9; }
+
+/* Réglages : clé du compteur Linky */
+.lk-form > span { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+.lk-form input { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--ln); background: var(--s2); color: var(--tx, #fff); font-size: 15px; }
+.lk-form .act { align-self: flex-start; }

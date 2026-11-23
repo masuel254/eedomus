@@ -2894,6 +2894,30 @@
     else h += '<button class="row" data-relay-pair><span class="ic">' + icon('play') + '</span><span><b>Associer le relais</b><small>Affiche un code pour l’installation sur la Freebox</small></span><span class="val">›</span></button>';
     return h + '</div>';
   }
+  // ---------- Compteur Linky (Enedis) : clé collée ici, gardée aussi sur l'iPhone et renvoyée si le serveur l'a perdue ----------
+  var LINKY = null, linkyAsk = 0, linkyEdit = false;
+  function linkyHTML() {
+    if (!LINKY && Date.now() - linkyAsk > 60000) {
+      linkyAsk = Date.now();
+      api({ action: 'linky.state' }).then(function (j) {
+        LINKY = j;
+        var L = store.get('maison.linky'); // clé perdue côté serveur : on la renvoie
+        if (!j.configured && L) { try { L = JSON.parse(L); api({ action: 'linky.token', tok: L.tok, prm: L.prm }).catch(function () {}); } catch (e) {} }
+        if (!sheet.hidden && sheet.dataset.view === 'settings') renderSettings();
+      }).catch(function () {});
+    }
+    var h = '<h3>Compteur Linky (Enedis)</h3><div class="card2 flat rs-list">';
+    if (LINKY && LINKY.configured && !linkyEdit) {
+      h += '<div class="row"><span class="ic">' + icon('bolt') + '</span><span><b>Consommation électrique réelle</b><small>Compteur ' + esc(LINKY.prm) + (LINKY.last ? ' · dernier jour reçu : ' + esc(LINKY.last) : '') + (LINKY.err ? ' · erreur : ' + esc(LINKY.err) : '') + '</small></span><span class="' + (LINKY.err ? 'bad' : 'ok') + '">' + (LINKY.err ? 'À vérifier' : 'Reliée') + '</span></div>' +
+        '<button class="row" data-linky-edit><span class="ic">' + icon('pen') + '</span><span><b>Changer la clé</b><small>Si Enedis a renouvelé l’autorisation</small></span><span class="val">›</span></button>';
+    } else {
+      h += '<div class="row lk-form"><span><b>Clé Conso API</b><small>Sur conso.boris.sh, autorise Enedis puis copie la clé affichée et colle-la ici.</small>' +
+        '<input id="lk-tok" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Colle la clé ici">' +
+        '<input id="lk-prm" type="text" inputmode="numeric" placeholder="N° de compteur (PRM, 14 chiffres)">' +
+        '<button class="act" data-linky-save>Enregistrer</button></span></div>';
+    }
+    return h + '</div>';
+  }
   function renderSettings() {
     var L = LOG || { version: '—', releases: [], works: [], todo: [] };
     var h = '<div class="sh-hd"><h2>Réglages</h2><button class="close" data-close aria-label="Fermer">×</button></div>' +
@@ -2902,7 +2926,7 @@
       '<div class="card"><div class="kv"><span>Connecté en tant que</span><b>' + esc(userName || '—') + '</b></div>' +
       '<div class="kv"><span>Box eedomus</span><b class="' + (offline ? 'bad' : 'ok') + '">' + (offline ? 'Hors ligne' : lastOk ? 'Connectée' : '…') + '</b></div>' +
       '<div class="kv"><span>Netatmo</span><b class="' + (NT ? 'ok' : ntErr ? 'bad' : '') + '">' + (NT ? 'Connecté' : ntErr ? 'Indisponible' : '…') + '</b></div></div>' +
-      pushHTML() + relayHTML() +
+      pushHTML() + relayHTML() + linkyHTML() +
       '<h3>Suivi du projet</h3>' +
       '<details class="acc2"><summary><span>Ce qui fonctionne</span><span class="cnt ok">' + L.works.length + '</span>' + icon('down') + '</summary>' +
       '<ul class="lst ok">' + L.works.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></details>' +
@@ -2915,7 +2939,12 @@
           '<ul>' + r.changes.map(function (c) { return '<li>' + esc(c) + '</li>'; }).join('') + '</ul></details>';
       }).join('') + (L.releases.length > 3 ? '<p class="note-q">' + (L.releases.length - 3) + ' versions plus anciennes ne sont pas affichées.</p>' : '') +
       '<p class="note-q">Les mises à jour s\'installent toutes seules à l\'ouverture de l\'appli.</p>';
+    // ce qui est en train d'être tapé (clé Linky) survit à un rafraîchissement de l'écran
+    var keepV = {}; ['lk-tok', 'lk-prm'].forEach(function (id) { var el = document.getElementById(id); if (el) keepV[id] = el.value; });
+    var keepS = sheet.scrollTop;
     sheet.innerHTML = '<div class="sh-in">' + h + '</div>';
+    Object.keys(keepV).forEach(function (id) { var el = document.getElementById(id); if (el) el.value = keepV[id]; });
+    sheet.scrollTop = keepS;
     if (newVersion) { newVersion = false; store.set('maison.seenVersion', L.version); render(); }
   }
 
@@ -3321,6 +3350,17 @@
       b.textContent = 'Chargement HD…';
       return api({ action: 'im.playback', cam: REC.cam, begin: P.imou.begin, end: P.imou.end }).then(function (j) { if (REC && REC.play === P) go(j.url); })
         .catch(function () { toast('HD indisponible pour le moment', true); renderRec(); });
+    }
+    if (e.target.closest('[data-linky-edit]')) { linkyEdit = true; return renderSettings(); }
+    if (e.target.closest('[data-linky-save]')) {
+      var lt = ((document.getElementById('lk-tok') || {}).value || '').trim(), lp = ((document.getElementById('lk-prm') || {}).value || '').replace(/[^0-9]/g, '');
+      if (lt.length < 20) return toast('Colle la clé copiée sur conso.boris.sh', true);
+      if (lp.length !== 14) return toast('Le numéro de compteur a 14 chiffres', true);
+      toast('Vérification auprès d’Enedis…');
+      return api({ action: 'linky.token', tok: lt, prm: lp }).then(function (j) {
+        store.set('maison.linky', JSON.stringify({ tok: lt, prm: lp })); linkyEdit = false; LINKY = null; linkyAsk = 0;
+        toast(j.ok ? 'Compteur relié, merci !' : 'Clé enregistrée, mais Enedis ne répond pas encore (' + (j.detail || '?') + ')', !j.ok); renderSettings();
+      }).catch(function () { toast('Clé ou numéro refusé, vérifie-les', true); });
     }
     if (e.target.closest('[data-push-toggle]')) return pushToggle();
     if ((b = e.target.closest('[data-push-delay]'))) {
