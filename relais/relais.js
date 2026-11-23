@@ -210,10 +210,10 @@ function serve() {
         const file = path.join(REC(), m2[1], m2[2]);
         const r = spawnSync('python3', ['/opt/relais/detect.py', file, u.searchParams.get('off') || '0', u.searchParams.get('dur') || '20'], { encoding: 'utf8', timeout: 180000, env: Object.assign({}, process.env, { DETECT_DEBUG: '1', DETECT_MODE: u.searchParams.get('mode') || 'safe' }) });
         const v = spawnSync('python3', ['-c', 'import cv2; print(cv2.__version__)'], { encoding: 'utf8' });
-        const im = spawnSync('ffmpeg', ['-v', 'error', '-ss', u.searchParams.get('off') || '0', '-i', file, '-frames:v', '1', '-vf', 'scale=320:-1', '-f', 'image2', '-c:v', 'mjpeg', 'pipe:1'], { timeout: 60000, maxBuffer: 4e6 });
+        const im = spawnSync('ffmpeg', ['-v', 'error', '-ss', u.searchParams.get('off') || '0', '-i', file, '-frames:v', '1', '-vf', 'scale=320:-1', '-f', 'mjpeg', 'pipe:1'], { timeout: 60000, maxBuffer: 4e6 });
         const dsum = String(spawnSync('md5sum', ['/opt/relais/detect.py'], { encoding: 'utf8' }).stdout || '').slice(0, 8);
         let sizes = {}; try { fs.readdirSync('/opt/relais/models').forEach((n) => { sizes[n] = fs.statSync('/opt/relais/models/' + n).size; }); } catch (e) {}
-        return json(res, 200, { ok: true, out: r.stdout, err: String(r.stderr || '').slice(-1500), cv: v.stdout, sizes, dsum, img: im.stdout ? Buffer.from(im.stdout).toString('base64') : null });
+        return json(res, 200, { ok: true, out: r.stdout, err: String(r.stderr || '').slice(-1500), cv: v.stdout, sizes, dsum, img: im.stdout && im.stdout.length ? Buffer.from(im.stdout).toString('base64') : null, imerr: String(im.stderr || '').slice(-300), ffv: String(spawnSync('ffmpeg', ['-version'], { encoding: 'utf8' }).stdout || '').split('\n')[0] });
       }
       if (u.pathname === '/api/summary' || u.pathname === '/api/summary/build') {
         const date = u.searchParams.get('date') || '';
