@@ -348,7 +348,8 @@ function windows(times, before, after) { // fenêtres autour des détections, fu
   return w;
 }
 async function buildSummary(date) {
-  const P = sumPaths(date), progress = (o) => { try { fs.writeFileSync(P.lock, JSON.stringify(o)); } catch (e) {} };
+  const T0 = Date.now(), P = sumPaths(date), progress = (o) => { try { fs.writeFileSync(P.lock, JSON.stringify(Object.assign({ t0: T0 }, o))); } catch (e) {} };
+  progress({ step: 'recherche', done: 0, total: 0 });
   const ts = Math.floor(Date.now() / 1000);
   const ev = await post({ action: 'relay.events', date, ts, sig: crypto.createHmac('sha256', E.SECRET).update('events|' + date + '|' + ts).digest('hex') });
   const jobs = []; // { t0, cam, name, file, off, dur }
