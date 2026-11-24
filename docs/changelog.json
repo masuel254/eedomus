@@ -1,7 +1,16 @@
 {
-  "version": "2.53.0",
+  "version": "2.54.0",
   "date": "2026-11-24",
   "releases": [
+    {
+      "version": "2.54.0",
+      "date": "2026-11-24",
+      "time": "16:20",
+      "title": "Alarme harmonisée",
+      "changes": [
+        "Alarme : « Activer l’alarme » et « Mode de l’alarme » réunis dans une seule carte, avec les mêmes boutons sobres"
+      ]
+    },
     {
       "version": "2.53.0",
       "date": "2026-11-24",
@@ -1767,5 +1776,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "16:18"
+  "time": "16:20"
 }

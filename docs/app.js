@@ -1286,9 +1286,14 @@
     var h = '<div class="acard ' + st[1] + '"><span class="aic">' + icon('shield') + '</span><span><b>Alarme ' + esc(st[0].toLowerCase()) + '</b><small>' + esc(since(A.status)) + '</small></span></div>';
     // « Activer l'alarme » ou « Désactiver l'alarme » selon l'état : OUI = on le fait, NON = on ne touche à rien
     var ak = armed ? 'alarm-off' : 'alarm-on';
-    h += '<div class="card2 alarm-onoff"><span><b>' + (armed ? 'Désactiver l’alarme' : 'Activer l’alarme') + '</b><small>' + (armed ? 'L’alarme est activée' : 'L’alarme est désactivée') + '</small></span>' +
-      '<span class="seg2 qseg"><button class="' + (armed ? 'yes-off' : 'yes-on') + '" data-qgo="' + ak + '">' + (qBusy[ak] ? 'Envoi…' : 'OUI') + '</button>' +
-      '<button class="on">NON</button></span></div>';
+    // une seule carte, même style pour les deux réglages : activer / désactiver, puis mode Manuel / Automatique
+    var mode = A.items.filter(function (it) { return it.group === 'mode'; })[0], mv = mode ? val(mode.id) : null;
+    h += '<div class="card2 flat alarm-ctl"><div class="actl"><span class="ic">' + icon('shield') + '</span><span><b>' + (armed ? 'Désactiver l’alarme' : 'Activer l’alarme') + '</b><small>' + (armed ? 'L’alarme est activée' : 'L’alarme est désactivée') + '</small></span>' +
+      '<span class="seg2 qseg"><button data-qgo="' + ak + '">' + (qBusy[ak] ? 'Envoi…' : 'Oui') + '</button>' +
+      '<button class="on">Non</button></span></div>' +
+      (mode ? '<div class="actl"><span class="ic">' + icon('gear') + '</span><span><b>' + esc(mode.name) + '</b><small>' + esc(since(mode.id)) + '</small></span>' +
+        '<span class="seg2 qseg">' + mode.options.map(function (o) { return '<button class="' + (String(o[0]) === mv ? 'on' : '') + '" data-choice="' + mode.id + ':' + o[0] + '">' + esc(o[1]) + '</button>'; }).join('') + '</span></div>' : '') +
+      '</div>';
     var grp = function (g, title) {
       var items = A.items.filter(function (it) { return it.group === g; }); if (!items.length) return '';
       // détecteurs : mouvement en cours d'abord, puis du plus récent au plus ancien
@@ -1299,7 +1304,7 @@
       return '<div class="lbl">' + title + '</div><div class="card2 flat">' + items.map(rowHTML).join('') + '</div>';
     };
     // mode Manuel / Automatique juste sous « Activer l'alarme »
-    h += grp('mode', '').replace('<div class="lbl"></div>', '') + smokeHTML() + grp('zones', 'Zones surveillées') + grp('motion', 'Détecteurs de mouvement');
+    h += smokeHTML() + grp('zones', 'Zones surveillées') + grp('motion', 'Détecteurs de mouvement');
     h += '<p class="note-q">Les réglages et les boutons ON / OFF s\'appliquent tout de suite, en un seul appui.</p>';
     return h;
   }

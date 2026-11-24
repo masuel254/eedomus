@@ -879,8 +879,13 @@ body { padding: 0 !important; }
 .alarm-onoff { display: grid; grid-template-columns: 1fr 150px; align-items: center; gap: 12px; }
 .alarm-onoff b { display: block; font-size: 15px; } .alarm-onoff small { color: var(--mu); font-size: 12.5px; }
 .alarm-onoff { margin-top: 10px !important; }
-.alarm-onoff .qseg button.yes-on { color: var(--ok); }
-.alarm-onoff .qseg button.yes-off { color: var(--amber); }
+.alarm-ctl { margin-top: 10px; }
+.alarm-ctl .actl { display: grid; grid-template-columns: 38px 1fr 164px; gap: 12px; align-items: center; padding: 12px 14px; }
+.alarm-ctl .actl + .actl { border-top: 1px solid #1F2329; }
+.alarm-ctl b { display: block; font-size: 15px; } .alarm-ctl small { display: block; color: var(--mu); font-size: 12.5px; margin-top: 2px; }
+.alarm-ctl .ic { width: 38px; height: 38px; border-radius: 12px; background: var(--s2); display: grid; place-items: center; color: var(--mu); }
+.alarm-ctl .qseg button { font-size: 13px; font-weight: 700; padding: 8px 0; color: var(--mu); }
+.alarm-ctl .qseg button.on { background: var(--s3); color: var(--tx); box-shadow: 0 1px 2px rgba(0,0,0,.35); }
 
 /* plusieurs températures sur une tuile (piscine : eau et dôme) */
 .rc-hd span.rc-ts { display: grid; justify-items: end; gap: 2px; }
