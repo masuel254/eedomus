@@ -753,9 +753,17 @@ async function battScan() {
     const fold = (x) => x.normalize('NFD').replace(/[^A-Za-z ]/g, '').toLowerCase();
     if (room && fold(nm).indexOf(fold(room)) < 0) nm += ' (' + room + ')';
     const main = String(p.periph_id) === k;
-    if (!by[k] || (main && !by[k].main)) by[k] = { k, name: nm, batt: b, main };
+    if (!by[k] || (main && !by[k].main)) by[k] = Object.assign({ k, name: nm, batt: b, main, ids: [] }, by[k] ? { ids: by[k].ids } : {});
+    by[k].ids.push(String(p.periph_id));
   });
-  return Object.values(by).map((x) => ({ k: x.k, name: x.name, batt: x.batt }));
+  // seuls les modules utilisés : affichés dans l'appli (ou sirènes de l'alarme) et qui ont donné signe de vie depuis 6 mois
+  const used = new Set(CFG.readable.map(String).concat(CFG.alarmW ? CFG.alarmW.sirens : []));
+  const lc = SD.lastChange || {}, old = new Date(Date.now() - 180 * 86400000).toISOString().slice(0, 10);
+  return Object.values(by).filter((x) => {
+    const mine = x.ids.filter((i) => used.has(i)); if (!mine.length) return false;
+    const seen = mine.map((i) => String(lc[i] || '')).filter((d) => d); // dates connues des changements
+    return !seen.length || seen.some((d) => d.slice(0, 10) >= old);
+  }).map((x) => ({ k: x.k, name: x.name, batt: x.batt }));
 }
 async function battWatch() {
   const B = SD.batt = SD.batt || { sent: {} };

@@ -1,7 +1,16 @@
 {
-  "version": "2.59.0",
+  "version": "2.59.1",
   "date": "2026-11-24",
   "releases": [
+    {
+      "version": "2.59.1",
+      "date": "2026-11-24",
+      "time": "19:13",
+      "title": "Piles : modules utilisés seulement",
+      "changes": [
+        "L'alerte piles faibles ignore les modules qui ne sont pas dans l'appli ou muets depuis plus de 6 mois"
+      ]
+    },
     {
       "version": "2.59.0",
       "date": "2026-11-24",
@@ -1823,5 +1832,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "19:11"
+  "time": "19:13"
 }

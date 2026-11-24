@@ -2938,7 +2938,8 @@
       'Rappel toutes les 3 min tant qu’elle sonne, puis message « l’alarme ne sonne plus ».',
       'Pas d’alerte pendant le délai d’entrée (le temps de désactiver en rentrant).'] },
     { k: 'batt', ic: 'batt', t: 'Piles faibles', w: 'Tous les jours', s: 'À 20 % ou moins, vers 10h', c: [
-      'Chaque jour vers 10h, contrôle de la pile de tous les modules sans fil d’eedomus (détecteurs, portes, sondes…).',
+      'Chaque jour vers 10h, contrôle de la pile des modules sans fil d’eedomus utilisés dans l’appli (détecteurs, portes, sondes) et des sirènes.',
+      'Les modules muets depuis plus de 6 mois (plus utilisés) sont ignorés.',
       'Pile à 20 % ou moins : alerte tout de suite la première fois, puis rappel une fois par semaine tant qu’elle n’est pas changée.',
       'Une pile remontée au-dessus de 50 % est considérée comme changée.'] },
     { k: 'smoke', ic: 'flame', t: 'Détecteur de fumée', w: 'Toujours', s: 'Alerte immédiate', c: [
