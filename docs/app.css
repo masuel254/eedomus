@@ -1165,3 +1165,10 @@ body.pfs { overflow: hidden; }
 .sw-b .sw { display: block; }
 .sw-b.is-on .sw { background: var(--ok); }
 .sw-b.is-on .sw::after { transform: translateX(20px); background: #fff; }
+/* Niveau de pile des détecteurs */
+.batt { display: inline-flex; align-items: center; gap: 5px; margin-left: 8px; font-size: 12px; font-weight: 700; color: var(--mu); white-space: nowrap; vertical-align: 1px; }
+.batt .bg { position: relative; width: 20px; height: 10px; border: 1.5px solid currentColor; border-radius: 3px; padding: 1px; }
+.batt .bg::after { content: ""; position: absolute; right: -4px; top: 2.5px; width: 2px; height: 3px; background: currentColor; border-radius: 0 1px 1px 0; }
+.batt .bg i { display: block; height: 100%; background: currentColor; border-radius: 1px; }
+.batt.mid { color: var(--amber); }
+.batt.low { color: var(--warn); }

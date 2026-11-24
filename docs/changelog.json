@@ -1,7 +1,16 @@
 {
-  "version": "2.57.0",
+  "version": "2.58.0",
   "date": "2026-11-24",
   "releases": [
+    {
+      "version": "2.58.0",
+      "date": "2026-11-24",
+      "time": "19:10",
+      "title": "Niveau des piles",
+      "changes": [
+        "Alarme : niveau de pile de chaque détecteur de mouvement et de fumée (orange sous 40 %, rouge sous 20 %)"
+      ]
+    },
     {
       "version": "2.57.0",
       "date": "2026-11-24",
@@ -1804,5 +1813,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "18:53"
+  "time": "19:10"
 }

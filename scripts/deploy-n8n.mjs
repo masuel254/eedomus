@@ -1991,6 +1991,7 @@ try {
     const states = {};
     for (const p of r.body) {
       states[p.periph_id] = { value: p.last_value, text: p.last_value_text, unit: (p.unit || '').trim(), changed: p.last_value_change };
+      if (p.battery !== '' && p.battery != null && isFinite(Number(p.battery))) states[p.periph_id].batt = Number(p.battery); // pile (%) des modules sans fil
     }
     // mémorisé pour les journaux : ils ne relisent que les modules qui ont changé
     SD.lastChange = {}; Object.keys(states).forEach((k) => { SD.lastChange[String(k)] = states[k].changed; }); SD.lastChangeAt = Date.now();

@@ -320,7 +320,7 @@
       var old = ch && Date.now() - ch > 14 * 86400000;
       var ago2 = ch ? since(id).replace('depuis ', 'il y a ') : ''; // « à 09h04 · il y a 36 min »
       return '<div class="row motion' + (mv ? ' mv' : '') + (old ? ' old' : '') + '"><span class="ic">' + icon('walk') + '</span><span><b>' + esc(it.name) + '</b><small>' +
-        esc(mv ? 'Mouvement détecté ' + since(id) : old ? 'Dernier signal ' + since(id) + ' · pile à vérifier ?' : 'Dernier passage ' + ago2) + '</small></span>' +
+        esc(mv ? 'Mouvement détecté ' + since(id) : old ? 'Dernier signal ' + since(id) + ((STATES[id] || {}).batt == null ? ' · pile à vérifier ?' : '') : 'Dernier passage ' + ago2) + battHTML(id) + '</small></span>' +
         '<span class="mvdot">' + (mv ? 'Mouvement' : old ? 'Inactif ?' : 'Calme') + '</span></div>';
     }
     if (it.type === 'state') {
@@ -1269,6 +1269,12 @@
     else { var dd = Math.round(m / 1440); dur = dd < 60 ? dd + ' jours' : Math.round(dd / 30) + ' mois'; }
     return when + ' · depuis ' + dur;
   }
+  // Niveau de pile d'un détecteur sans fil (donné par eedomus) : jauge remplie selon le niveau, orange sous 40 %, rouge sous 20 %
+  function battHTML(id) {
+    var b = (STATES[id] || {}).batt; if (b == null) return '';
+    var lv = b <= 20 ? ' low' : b <= 40 ? ' mid' : '';
+    return '<span class="batt' + lv + '" title="Pile"><span class="bg"><i style="width:' + Math.max(8, Math.min(100, b)) + '%"></i></span>' + b + ' %</span>';
+  }
   // Détecteurs de fumée (eedomus : 0 = OK, 100 = alarme)
   function smokeItems() { return ((CFG.alarm || {}).items || []).filter(function (it) { return it.type === 'smoke'; }); }
   function smokeOn() { return smokeItems().filter(function (it) { return String((STATES[it.id] || {}).value) === '100'; }); }
@@ -1277,7 +1283,7 @@
     return '<div class="lbl">Détecteurs de fumée</div><div class="card2 flat">' + items.map(function (it) {
       var st = STATES[it.id] || {}, v = String(st.value == null ? '' : st.value), on = v === '100', none = v === '';
       return '<div class="row' + (on ? ' smoke-on' : '') + '"><span class="ic' + (on ? ' bad' : '') + '">' + icon('flame') + '</span><span><b>' + esc(it.name) + '</b><small>' +
-        esc(none ? 'Aucun signal reçu par eedomus · à vérifier' : (it.sub ? it.sub + ' · ' : '') + since(it.id)) + '</small></span>' +
+        esc(none ? 'Aucun signal reçu par eedomus · à vérifier' : (it.sub ? it.sub + ' · ' : '') + since(it.id)) + battHTML(it.id) + '</small></span>' +
         '<span class="' + (on ? 'bad' : none ? 'mu2' : 'ok') + '">' + (on ? 'FUMÉE !' : none ? '—' : 'OK') + '</span></div>';
     }).join('') + '</div><p class="note-q">En cas de fumée, une notification part tout de suite sur les iPhone (et un rappel toutes les 3 minutes tant que l’alarme dure).</p>';
   }
