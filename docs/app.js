@@ -1284,16 +1284,21 @@
   function alarmHTML() {
     var A = CFG.alarm || { items: [] }, v = num(A.status), st = ALARM_STATE[v] || [(STATES[A.status] || {}).text || '—', ''], armed = v != null && v !== 0;
     var h = '<div class="acard ' + st[1] + '"><span class="aic">' + icon('shield') + '</span><span><b>Alarme ' + esc(st[0].toLowerCase()) + '</b><small>' + esc(since(A.status)) + '</small></span></div>';
-    // « Activer l'alarme » ou « Désactiver l'alarme » selon l'état : OUI = on le fait, NON = on ne touche à rien
-    var ak = armed ? 'alarm-off' : 'alarm-on';
-    // une seule carte, même style pour les deux réglages : activer / désactiver, puis mode Manuel / Automatique
+    // Deux choix illustrés à cocher, même présentation pour l'alarme et pour son mode (le choix actuel est entouré)
+    var opt = function (on, attr, ic, t, sub) {
+      return '<button class="aopt' + (on ? ' on' : '') + '" ' + attr + '><span class="rad"></span><span class="aic2">' + icon(ic) + '</span><b>' + esc(t) + '</b><small>' + esc(sub) + '</small></button>';
+    };
+    h += '<div class="lbl">Alarme</div><div class="aopts">' +
+      opt(!armed, 'data-qgo="alarm-off"', 'shieldoff', qBusy['alarm-off'] ? 'Envoi…' : 'Désactivée', 'La maison n’est pas surveillée') +
+      opt(armed, 'data-qgo="alarm-on"', 'shieldok', qBusy['alarm-on'] ? 'Envoi…' : 'Activée', 'Ouvertures et mouvements surveillés') + '</div>';
     var mode = A.items.filter(function (it) { return it.group === 'mode'; })[0], mv = mode ? val(mode.id) : null;
-    h += '<div class="card2 flat alarm-ctl"><div class="actl"><span class="ic">' + icon('shield') + '</span><span><b>' + (armed ? 'Désactiver l’alarme' : 'Activer l’alarme') + '</b><small>' + (armed ? 'L’alarme est activée' : 'L’alarme est désactivée') + '</small></span>' +
-      '<span class="seg2 qseg"><button data-qgo="' + ak + '">' + (qBusy[ak] ? 'Envoi…' : 'Oui') + '</button>' +
-      '<button class="on">Non</button></span></div>' +
-      (mode ? '<div class="actl"><span class="ic">' + icon('gear') + '</span><span><b>' + esc(mode.name) + '</b><small>' + esc(since(mode.id)) + '</small></span>' +
-        '<span class="seg2 qseg">' + mode.options.map(function (o) { return '<button class="' + (String(o[0]) === mv ? 'on' : '') + '" data-choice="' + mode.id + ':' + o[0] + '">' + esc(o[1]) + '</button>'; }).join('') + '</span></div>' : '') +
-      '</div>';
+    if (mode) {
+      var mdesc = { 'Manuel': ['hand', 'Vous activez et désactivez vous-même'], 'Automatique': ['clock', 'eedomus active selon ses règles'] };
+      h += '<div class="lbl">Mode de l’alarme</div><div class="aopts">' + mode.options.map(function (o) {
+        var d = mdesc[o[1]] || ['gear', ''];
+        return opt(String(o[0]) === mv, 'data-choice="' + mode.id + ':' + o[0] + '"', d[0], o[1], d[1]);
+      }).join('') + '</div>';
+    }
     var grp = function (g, title) {
       var items = A.items.filter(function (it) { return it.group === g; }); if (!items.length) return '';
       // détecteurs : mouvement en cours d'abord, puis du plus récent au plus ancien
@@ -3120,7 +3125,7 @@
       }).catch(function () { gsay('Impossible d’enregistrer, réessaie.', true); });
     }
     if ((b = e.target.closest('[data-yesno]'))) { var yid = +b.dataset.yesno; return send(yid, num(yid) === 1 ? 0 : 1); }
-    if ((b = e.target.closest('[data-choice]'))) { var cp = b.dataset.choice.split(':'); return send(+cp[0], +cp[1]); }
+    if ((b = e.target.closest('[data-choice]'))) { if (b.classList.contains('on')) return; var cp = b.dataset.choice.split(':'); return send(+cp[0], +cp[1]); }
     if ((b = e.target.closest('[data-graph]'))) return openGraph(b.dataset.graph);
     if ((b = e.target.closest('[data-nt-homeroom]'))) return resetRoom(b.dataset.ntHomeroom);
     if ((b = e.target.closest('[data-qgo]'))) {

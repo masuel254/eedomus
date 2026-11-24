@@ -1,7 +1,16 @@
 {
-  "version": "2.54.0",
+  "version": "2.55.0",
   "date": "2026-11-24",
   "releases": [
+    {
+      "version": "2.55.0",
+      "date": "2026-11-24",
+      "time": "16:26",
+      "title": "Alarme en choix illustrés",
+      "changes": [
+        "Alarme : « Désactivée / Activée » et « Manuel / Automatique » se choisissent en touchant une carte illustrée, le choix actuel est coché"
+      ]
+    },
     {
       "version": "2.54.0",
       "date": "2026-11-24",
@@ -1776,5 +1785,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "16:20"
+  "time": "16:26"
 }
