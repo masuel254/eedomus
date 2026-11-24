@@ -2937,6 +2937,10 @@
       'Le message indique les détecteurs de mouvement qui ont vu quelque chose dans les 5 dernières minutes.',
       'Rappel toutes les 3 min tant qu’elle sonne, puis message « l’alarme ne sonne plus ».',
       'Pas d’alerte pendant le délai d’entrée (le temps de désactiver en rentrant).'] },
+    { k: 'batt', ic: 'batt', t: 'Piles faibles', w: 'Tous les jours', s: 'À 20 % ou moins, vers 10h', c: [
+      'Chaque jour vers 10h, contrôle de la pile de tous les modules sans fil d’eedomus (détecteurs, portes, sondes…).',
+      'Pile à 20 % ou moins : alerte tout de suite la première fois, puis rappel une fois par semaine tant qu’elle n’est pas changée.',
+      'Une pile remontée au-dessus de 50 % est considérée comme changée.'] },
     { k: 'smoke', ic: 'flame', t: 'Détecteur de fumée', w: 'Toujours', s: 'Alerte immédiate', c: [
       'Un détecteur de fumée passe en alarme : alerte immédiate (vérifié toutes les 30 s).',
       'Rappel toutes les 3 min tant qu’il est en alarme, puis message de fin d’alerte.'] },
@@ -2959,6 +2963,14 @@
       'Nouvelle alerte seulement si ça s’aggrave (5 min de plus ou un nouvel incident), puis « trajet dégagé » quand c’est fini.',
       'Pas de notification si tout va bien. Seulement sur les iPhone où elle est activée ci-dessous.'] }
   ];
+  // piles faibles en ce moment (relevé du serveur), affichées dans le volet de l'alerte
+  var BATT = null, battAsk = 0;
+  function battListHTML() {
+    if (Date.now() - battAsk > 300000) { battAsk = Date.now(); api({ action: 'batt.state' }).then(function (j) { BATT = j; if (!sheet.hidden && sheet.dataset.view === 'settings') renderSettings(); }).catch(function () {}); }
+    if (!BATT) return '<div class="alr-set"><span class="mu">Relevé des piles…</span></div>';
+    if (!BATT.low.length) return '<div class="alr-set"><span>Aucune pile faible en ce moment 👍</span></div>';
+    return '<div class="alr-set"><span>Piles faibles en ce moment :</span></div><ul class="rt-items">' + BATT.low.map(function (x) { return '<li>' + esc(x.name) + ' : <b>' + x.batt + ' %</b></li>'; }).join('') + '</ul>';
+  }
   // ---------- Trajet vers le travail (TomTom) : clé collée ici, gardée aussi sur l'iPhone et renvoyée si le serveur l'a perdue ----------
   var ROUTE = null, routeAsk = 0, routeEdit = false;
   function routeLoad() {
@@ -3008,7 +3020,7 @@
         return '<details class="acc2 alr" data-alr="' + a.k + '"' + (ALR_OPEN[a.k] ? ' open' : '') + '><summary><span class="ic">' + icon(a.ic) + '</span><span class="alr-t"><b>' + esc(a.t) + '</b><small>' + esc(typeof a.s === 'function' ? a.s(d) : a.s) + '</small></span>' +
           '<span class="ok">' + esc(a.w) + '</span>' + icon('down') + '</summary><div class="alr-b"><ul>' +
           a.c.map(function (x) { return '<li>' + esc(typeof x === 'function' ? x(d) : x) + '</li>'; }).join('') + '</ul>' +
-          (a.k === 'route' ? routeHTML() : '') +
+          (a.k === 'route' ? routeHTML() : '') + (a.k === 'batt' ? battListHTML() : '') +
           (a.k === 'garage' ? '<div class="alr-set"><span>Délai avant l’alerte : <b>' + d + ' min</b></span><span class="stp2"><button data-push-delay="' + (PUSH_DELAYS[i - 1] || d) + '" aria-label="Moins">−</button><button data-push-delay="' + (PUSH_DELAYS[i + 1] || d) + '" aria-label="Plus">+</button></span></div>' : '') +
           '</div></details>';
       }).join('') +

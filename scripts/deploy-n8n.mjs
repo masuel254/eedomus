@@ -737,6 +737,42 @@ async function smokeWatch() {
     }
   }
 }
+// Piles des modules sans fil (eedomus) : une fois par jour (à partir de 10h), alerte pour celles à 20 % ou moins.
+// Nouvelle pile faible : alerte tout de suite ; déjà signalée : rappel une fois par semaine. Pile changée (> 50 %) : oubliée.
+async function battScan() {
+  const r = await eedomus('get', 'action=periph.list');
+  if (r.success !== 1) throw new Error('eedomus');
+  const by = {};
+  [].concat(r.body).forEach((p) => {
+    const b = Number(p.battery); if (p.battery === '' || p.battery == null || !isFinite(b)) return;
+    if (/invisible/i.test(String(p.room_name || ''))) return;
+    const k = String(p.parent_periph_id && p.parent_periph_id !== '0' ? p.parent_periph_id : p.periph_id);
+    // un module = plusieurs mesures (mouvement, température…) : on garde le nom du module principal ; eedomus ajoute la pièce au nom
+    const room = String(p.room_name || '').trim(); let nm = String(p.name).trim();
+    if (room && nm.length > room.length && nm.slice(-room.length - 1) === ' ' + room) nm = nm.slice(0, -room.length - 1);
+    const fold = (x) => x.normalize('NFD').replace(/[^A-Za-z ]/g, '').toLowerCase();
+    if (room && fold(nm).indexOf(fold(room)) < 0) nm += ' (' + room + ')';
+    const main = String(p.periph_id) === k;
+    if (!by[k] || (main && !by[k].main)) by[k] = { k, name: nm, batt: b, main };
+  });
+  return Object.values(by).map((x) => ({ k: x.k, name: x.name, batt: x.batt }));
+}
+async function battWatch() {
+  const B = SD.batt = SD.batt || { sent: {} };
+  const P = parisParts(), today = P.year + '-' + P.month + '-' + P.day, hm = P.hour + ':' + P.minute;
+  if (hm < '10:00' || B.day === today || (B.tryAt && B.tryAt > Date.now() - 600000)) return;
+  B.tryAt = Date.now();
+  const all = await battScan();
+  B.day = today; B.at = Date.now();
+  B.low = all.filter((x) => x.batt <= 20).sort((a, b) => a.batt - b.batt);
+  all.forEach((x) => { if (x.batt > 50) delete B.sent[x.k]; });
+  const due = B.low.filter((x) => !B.sent[x.k] || Date.now() - B.sent[x.k] > 7 * 86400000);
+  if (!due.length) return;
+  const fresh = due.filter((x) => !B.sent[x.k]);
+  due.forEach((x) => { B.sent[x.k] = Date.now(); });
+  await pushNotify({ tag: 'batt', title: '🔋 ' + (due.length > 1 ? due.length + ' piles faibles' : 'Pile faible : ' + due[0].name),
+    body: due.slice(0, 6).map((x) => x.name + ' ' + x.batt + ' %').join(' · ') + (fresh.length ? '' : ' · rappel de la semaine') + ' · à changer bientôt' });
+}
 // Alarme de la maison : notification dès qu'elle sonne (sirène), rappel toutes les 3 min, puis message de fin
 async function alarmWatch() {
   const W = CFG.alarmW; if (!W) return;
@@ -1800,6 +1836,7 @@ try {
     try { await meteoWatch(); } catch (e) {}
     try { await smokeWatch(); } catch (e) {}
     try { await alarmWatch(); } catch (e) {}
+    try { await battWatch(); } catch (e) {}
     try { await routeWatch(); } catch (e) {}
     let gu = null; try { gu = await garageCamDue(); } catch (e) {}
     return (gu ? [{ json: { garageUrl: gu } }] : []).concat(OUT_PUSH); // aucune réponse HTTP à envoyer
@@ -1954,7 +1991,7 @@ try {
     if (body.action === 'push.testall') {
       if (!body.token || !CFG.tokens.includes(body.token)) return reply(401, { ok: false, error: 'unauthorized' });
       if (body.fmt === 'decl' || body.fmt === 'plain') SD.push.fmt = body.fmt === 'decl' ? 'decl' : null;
-      const tg = /^(test|garage|water|meteo|smoke|boiler|alarm)$/.test(String(body.tag || '')) ? body.tag : 'test';
+      const tg = /^(test|garage|water|meteo|smoke|boiler|alarm|batt)$/.test(String(body.tag || '')) ? body.tag : 'test';
       const n = await pushNotify({ tag: tg, title: String(body.title || 'Maison').slice(0, 60), body: String(body.text || 'Test des notifications').slice(0, 120), badge: null });
       return reply(200, { ok: true, sent: n });
     }
@@ -2052,6 +2089,12 @@ try {
   }
   // Correction manuelle de l'état de la porte de garage (après vérification sur la caméra)
   if (body.action === 'meteo') return reply(200, await meteo(!!body.force));
+  // piles faibles (pour l'appli) : relevé du jour, refait si plus vieux que 6 h
+  if (body.action === 'batt.state') {
+    const B = SD.batt = SD.batt || { sent: {} };
+    if (!B.at || B.at < Date.now() - 6 * 3600000 || body.force) { try { const all = await battScan(); B.low = all.filter((x) => x.batt <= 20).sort((a, b) => a.batt - b.batt); B.at = Date.now(); } catch (e) {} }
+    return reply(200, { ok: true, at: B.at || null, low: B.low || [] });
+  }
   if (body.action === 'meteo.morning') { // diagnostic de l'alerte du matin
     const M = SD.meteo || {}, P = parisParts();
     return reply(200, { ok: true, now: P.hour + ':' + P.minute, morningDay: M.morningDay || null, meteoAge: M.at ? Math.round((Date.now() - M.at) / 60000) : null, tNow: M.data && M.data.now ? M.data.now.t : null,

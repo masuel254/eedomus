@@ -1,7 +1,17 @@
 {
-  "version": "2.58.0",
+  "version": "2.59.0",
   "date": "2026-11-24",
   "releases": [
+    {
+      "version": "2.59.0",
+      "date": "2026-11-24",
+      "time": "19:11",
+      "title": "Alerte piles faibles",
+      "changes": [
+        "Nouvelle alerte : chaque jour vers 10h, prévient quand la pile d'un module sans fil d'eedomus est à 20 % ou moins (rappel chaque semaine)",
+        "Réglages › Alertes › Piles faibles affiche la liste des piles à changer"
+      ]
+    },
     {
       "version": "2.58.0",
       "date": "2026-11-24",
@@ -1813,5 +1823,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "19:10"
+  "time": "19:11"
 }
