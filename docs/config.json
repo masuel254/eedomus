@@ -393,7 +393,7 @@
     "items": [
       {
         "id": 922325,
-        "name": "Paramétrage",
+        "name": "Mode de l'alarme",
         "type": "choice",
         "group": "mode",
         "options": [

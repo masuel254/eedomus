@@ -1298,7 +1298,8 @@
       });
       return '<div class="lbl">' + title + '</div><div class="card2 flat">' + items.map(rowHTML).join('') + '</div>';
     };
-    h += smokeHTML() + grp('mode', 'Paramétrage') + grp('zones', 'Zones surveillées') + grp('motion', 'Détecteurs de mouvement');
+    // mode Manuel / Automatique juste sous « Activer l'alarme »
+    h += grp('mode', '').replace('<div class="lbl"></div>', '') + smokeHTML() + grp('zones', 'Zones surveillées') + grp('motion', 'Détecteurs de mouvement');
     h += '<p class="note-q">Les réglages et les boutons ON / OFF s\'appliquent tout de suite, en un seul appui.</p>';
     return h;
   }
