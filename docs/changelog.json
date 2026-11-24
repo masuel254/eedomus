@@ -1,7 +1,17 @@
 {
-  "version": "2.56.0",
+  "version": "2.57.0",
   "date": "2026-11-24",
   "releases": [
+    {
+      "version": "2.57.0",
+      "date": "2026-11-24",
+      "time": "18:53",
+      "title": "Résumé : montage plus rapide",
+      "changes": [
+        "Le résumé de la journée garde les passages déjà montés et vérifiés : seuls les nouveaux sont traités",
+        "Pendant un nouveau montage, le film précédent reste visible et le temps restant est mieux estimé"
+      ]
+    },
     {
       "version": "2.56.0",
       "date": "2026-11-24",
@@ -1794,5 +1804,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "16:31"
+  "time": "18:53"
 }

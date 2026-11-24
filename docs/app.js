@@ -2301,7 +2301,12 @@
       if (!SUM || SUM.date !== want) return;
       SUM.st = j; SUM.err = false; SUM.tries = 0;
       if (j.state === 'ready' && j.parts && j.parts.length) { var a = (pcGet('sum2') || {}).v || {}; a[want] = j; Object.keys(a).sort().reverse().slice(10).forEach(function (k) { delete a[k]; }); pcSet('sum2', a); } // seuls les vrais films sont gardés sur l'iPhone
-      if (j.state === 'building') SUM.timer = setTimeout(function () { if (sheet.dataset.view === 'summary' && !sheet.hidden) loadSummary(false); }, 3000);
+      if (j.state === 'building') {
+        SUM.timer = setTimeout(function () { if (sheet.dataset.view === 'summary' && !sheet.hidden) loadSummary(false); }, 3000);
+        // le film précédent est en cours de lecture : on ne met à jour que la barre d'avancement
+        var pv = document.getElementById('sumv'), pg = document.querySelector('#sheet .sumprog');
+        if (pv && pg && j.url && pv.getAttribute('src') === relayUrl(j.url)) { pg.outerHTML = sumProgHTML(j); return; }
+      }
       // pas encore de résumé pour un jour passé : on le prépare tout de suite
       else if (j.state === 'none' && !build && want < ymd(new Date())) return loadSummary(true);
       renderSummary();
@@ -2312,13 +2317,22 @@
     });
     renderSummary();
   }
+  // avancement du montage : étape, barre, nouveaux passages montés, temps restant estimé (d'après le début de l'étape)
+  function sumProgHTML(st) {
+    var p = st.progress || {}, pct = p.step === 'assemblage' ? 97 : p.total ? Math.round(5 + 90 * p.done / p.total) : 3;
+    var s0 = p.s0 || p.t0, el = s0 ? (Date.now() - s0) / 1000 : 0, rest = p.total && p.done ? Math.max(5, Math.round(el / p.done * (p.total - p.done))) : null;
+    var nv = function (n) { return n + ' nouveau' + (n > 1 ? 'x' : '') + ' passage' + (n > 1 ? 's' : ''); };
+    var lab = p.step === 'vérification' ? 'Vérification des personnes : ' + Math.min(p.done, p.total) + ' / ' + p.total : p.step === 'montage' ? 'Montage : ' + p.done + ' / ' + nv(p.total) : p.step === 'assemblage' ? 'Assemblage du film…' : 'Recherche des passages de la journée…';
+    return '<div class="sumprog"><div class="sp-t"><b>' + esc(lab) + '</b><span>' + (rest ? 'encore ≈ ' + (rest < 60 ? rest + ' s' : Math.round(rest / 60) + ' min') : '') + '</span></div><div class="sp-bar"><i style="width:' + pct + '%"></i></div></div>' +
+      (st.url ? '<p class="note-q">Le film ci-dessus est le montage précédent : il sera remplacé à la fin.</p>' : '');
+  }
   function renderSummary() {
     if (!SUM) return;
     var st = SUM.st, h = '<div class="sh-hd"><button class="back2" data-recback>' + icon('down') + 'Caméras</button><button class="close" data-close aria-label="Fermer">×</button></div>' +
       '<h2 class="rec-title">Résumé de la journée</h2>';
     var days = '';
     for (var i = 0; i < 7; i++) { var d = new Date(); d.setDate(d.getDate() - i); days += '<button class="' + (ymd(d) === SUM.date ? 'on' : '') + '" data-sumday="' + ymd(d) + '">' + esc(i === 0 ? "Aujourd'hui" : i === 1 ? 'Hier' : d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' })) + '</button>'; }
-    var ready = st && st.state === 'ready' && st.url && RELAY && RELAY.url;
+    var ready = st && (st.state === 'ready' || st.state === 'building') && st.url && RELAY && RELAY.url; // pendant un nouveau montage, le film précédent reste visible
     h += ready ? '<div class="camcard player' + (PFS ? ' fs' : '') + '"><video id="sumv" src="' + esc(relayUrl(st.url)) + '" playsinline controls></video>' +
       '<div class="rates">' + [1, 2, 4, 8].map(function (x) { return '<button class="' + ((SUM.rate || 4) === x ? 'on' : '') + '" data-sumrate="' + x + '">×' + x + '</button>'; }).join('') + fsBtn() + '</div>' +
       '<div class="cammeta"><b>' + st.parts.length + ' passage' + (st.parts.length > 1 ? 's' : '') + ' · ' + Math.floor(st.duration / 60) + ' min ' + String(st.duration % 60).padStart(2, '0') + ' en temps réel</b><span class="src-tag fb">Freebox</span></div></div>'
@@ -2332,13 +2346,7 @@
     }
     if (SUM.err) h += '<p class="muted">La Freebox ne répond pas pour le moment' + (SUM.tries < 4 ? ', nouvel essai…' : '.') + '</p>';
     else if (!st) h += '<p class="muted">Lecture de la Freebox…</p>';
-    else if (st.state === 'building') {
-      // avancement du montage : étape, barre, passages montés, temps restant estimé
-      var p = st.progress || {}, pct = p.step === 'assemblage' ? 97 : p.total ? Math.round(5 + 90 * p.done / p.total) : 3;
-      var el = p.t0 ? (Date.now() - p.t0) / 1000 : 0, rest = p.total && p.done ? Math.max(5, Math.round(el / p.done * (p.total - p.done))) : null;
-      var lab = p.step === 'vérification' ? 'Vérification des personnes : ' + p.done + ' / ' + p.total : p.step === 'montage' ? 'Montage : ' + p.done + ' / ' + p.total + ' passages' : p.step === 'assemblage' ? 'Assemblage du film…' : 'Recherche des passages de la journée…';
-      h += '<div class="sumprog"><div class="sp-t"><b>' + esc(lab) + '</b><span>' + (rest ? 'encore ≈ ' + (rest < 60 ? rest + ' s' : Math.round(rest / 60) + ' min') : '') + '</span></div><div class="sp-bar"><i style="width:' + pct + '%"></i></div></div>';
-    }
+    else if (st.state === 'building') h += sumProgHTML(st);
     else if (st.state === 'error') h += '<p class="muted">Le montage n’a pas abouti (' + esc(st.error || '?') + ').</p>';
     else if (st.state === 'ready' && !st.parts.length && !SUM.err) h += '<p class="muted">Personne n’a été détecté ce jour-là.</p>';
     if (st && st.state !== 'building' && SUM.date === ymd(new Date())) h += '<button class="act wide" data-sumbuild>' + (st.state === 'ready' ? 'Mettre à jour avec les derniers passages' : 'Préparer le résumé d’aujourd’hui') + '</button>';

@@ -328,7 +328,10 @@ async function pair(code) {
 const { spawn, spawnSync } = require('child_process');
 const SUMDIR = () => path.join(REC(), '_resumes');
 const SPEED = 1; // film à vitesse réelle : l'appli le lit en accéléré (×4 par défaut)
-function sumPaths(date) { const d = SUMDIR(); return { mp4: path.join(d, date + '.mp4'), json: path.join(d, date + '.json'), lock: path.join(d, date + '.building') }; }
+// parts : extraits déjà montés (gardés d'un montage à l'autre) ; det : résultats de la reconnaissance déjà faite
+function sumPaths(date) { const d = SUMDIR(); return { mp4: path.join(d, date + '.mp4'), json: path.join(d, date + '.json'), lock: path.join(d, date + '.building'), parts: path.join(d, date + '.parts'), det: path.join(d, date + '.det.json') }; }
+const PART_V = 1; // à changer si l'aspect des extraits change (couleurs, légende…) : tout sera refait
+function jobKey(j) { return crypto.createHash('sha1').update([PART_V, j.cam, path.basename(j.file), j.off.toFixed(1), j.dur.toFixed(1)].join('|')).digest('hex').slice(0, 16); }
 function sumState(date) {
   const P = sumPaths(date);
   let info = null; try { info = JSON.parse(fs.readFileSync(P.json, 'utf8')); } catch (e) {}
@@ -365,7 +368,8 @@ function windows(times, before, after) { // fenêtres autour des détections, fu
   return w;
 }
 async function buildSummary(date) {
-  const T0 = Date.now(), P = sumPaths(date), progress = (o) => { try { fs.writeFileSync(P.lock, JSON.stringify(Object.assign({ t0: T0 }, o))); } catch (e) {} };
+  const T0 = Date.now(), P = sumPaths(date); let S0 = T0, step = null;
+  const progress = (o) => { if (o.step !== step) { step = o.step; S0 = Date.now(); } try { fs.writeFileSync(P.lock, JSON.stringify(Object.assign({ t0: T0, s0: S0 }, o))); } catch (e) {} };
   progress({ step: 'recherche', done: 0, total: 0 });
   const ts = Math.floor(Date.now() / 1000);
   const ev = await post({ action: 'relay.events', date, ts, sig: crypto.createHmac('sha256', E.SECRET).update('events|' + date + '|' + ts).digest('hex') });
@@ -415,22 +419,38 @@ async function buildSummary(date) {
   // Caméras Imou : elles voient parfois une « personne » qui n'existe pas (ombre, feuillage, reflets).
   // On vérifie l'extrait avec un petit modèle de reconnaissance, ici sur la Freebox ; sans personne visible, on l'écarte.
   const DETECT = '/opt/relais/detect.py', canCheck = fs.existsSync(DETECT) && fs.existsSync('/opt/relais/models/mobilenet_iter_73000.caffemodel');
+  // les passages déjà vérifiés lors d'un montage précédent ne sont pas revérifiés
+  let det = {}; try { det = JSON.parse(fs.readFileSync(P.det, 'utf8')); } catch (e) {}
+  const det2 = {}, toCheck = canCheck ? jobs.filter((x) => x.cam !== 'presence' && det[jobKey(x)] === undefined).length : 0;
   let checked = 0, dropped = 0; const checks = [];
   for (let i = jobs.length - 1; i >= 0; i--) {
     const j = jobs[i]; if (j.cam === 'presence' || !canCheck) continue;
-    progress({ step: 'vérification', done: ++checked, total: jobs.filter((x) => x.cam !== 'presence').length });
-    // on regarde un peu plus large que l'extrait (la détection Imou peut être décalée de quelques secondes)
-    const r = spawnSync('python3', [DETECT, j.file, String(Math.max(0, j.off - 6)), String(j.dur + 12)], { encoding: 'utf8', timeout: 180000 });
-    let sc = null; try { sc = JSON.parse(String(r.stdout || '').trim()).score; } catch (e) {}
+    const k = jobKey(j);
+    let sc = det[k];
+    if (sc === undefined) {
+      progress({ step: 'vérification', done: ++checked, total: toCheck });
+      // on regarde un peu plus large que l'extrait (la détection Imou peut être décalée de quelques secondes)
+      const r = spawnSync('python3', [DETECT, j.file, String(Math.max(0, j.off - 6)), String(j.dur + 12)], { encoding: 'utf8', timeout: 180000 });
+      sc = null; try { sc = JSON.parse(String(r.stdout || '').trim()).score; } catch (e) {}
+      if (sc === undefined) sc = null;
+    }
+    if (sc !== null) det2[k] = sc; // un échec (null) sera retenté au prochain montage
     checks.push({ name: j.name, time: Math.floor(j.t0), score: sc });
     if (sc !== null && sc !== undefined && sc < 0.45) { jobs.splice(i, 1); dropped++; } // personne invisible : faux passage
   }
+  try { fs.mkdirSync(SUMDIR(), { recursive: true }); fs.writeFileSync(P.det, JSON.stringify(det2)); } catch (e) {}
+  // extraits gardés d'un montage à l'autre : seuls les nouveaux passages (ou ceux qui ont changé) sont montés
+  fs.mkdirSync(P.parts, { recursive: true });
+  let pidx = {}; try { pidx = JSON.parse(fs.readFileSync(path.join(P.parts, 'index.json'), 'utf8')); } catch (e) {}
+  const fresh = jobs.filter((j) => !(pidx[jobKey(j)] && fs.existsSync(path.join(P.parts, jobKey(j) + '.mp4')))).length;
+  let made = 0;
   const tmp = fs.mkdtempSync('/var/tmp/resume-'), font = ['/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'].find((f) => fs.existsSync(f));
   const parts = []; let at = 0;
   try {
     for (let i = 0; i < jobs.length; i++) {
-      const j = jobs[i], out = path.join(tmp, 'p' + String(i).padStart(4, '0') + '.mp4');
-      progress({ step: 'montage', done: i, total: jobs.length });
+      const j = jobs[i], key = jobKey(j), out = path.join(P.parts, key + '.mp4');
+      if (pidx[key] && fs.existsSync(out)) { parts.push({ at: Math.round(at * 10) / 10, cam: j.cam, name: j.name, time: Math.floor(j.t0), file: out }); at += pidx[key]; continue; }
+      progress({ step: 'montage', done: made++, total: fresh });
       const d = new Date(j.t0 * 1000), hm = pad(d.getHours()) + 'h' + pad(d.getMinutes());
       // caméras Imou : flux 16:9 livré écrasé en 640×480, remis en 640×360 ; Présence : déjà en 16:9
       let vf = (j.cam === 'presence' ? 'scale=640:360:force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2' : 'scale=640:360') + ',setsar=1,setpts=PTS/' + SPEED + ',fps=15';
@@ -438,9 +458,11 @@ async function buildSummary(date) {
       const col = { presence: '0xF97316', piscine: '0x0EA5E9', jardin: '0x22C55E', garage: '0xEAB308' }[j.cam === 'presence' ? 'presence' : String(j.name).toLowerCase()] || '0x8B5CF6';
       if (font) vf += ",drawbox=x=0:y=0:w=iw:h=6:color=" + col + "@1:t=fill,drawtext=fontfile=" + font + ":text='" + j.name.replace(/[':\\%]/g, ' ') + " · %{pts\\:localtime\\:" + Math.floor(j.t0) + "\\:%H\\\\\\:%M\\\\\\:%S}':x=12:y=16:fontsize=22:fontcolor=white:box=1:boxcolor=" + col + "@0.85:boxborderw=6";
       const r = spawnSync('ffmpeg', ['-v', 'error', '-y', '-ss', String(j.off), '-t', String(j.dur), '-i', j.file, '-an', '-vf', vf,
-        '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '28', '-pix_fmt', 'yuv420p', '-r', '15', '-movflags', '+faststart', out], { timeout: 300000 });
-      if (r.status !== 0 || !fs.existsSync(out)) continue;
-      const pd = probeDur(out); if (!pd) continue;
+        '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '28', '-pix_fmt', 'yuv420p', '-r', '15', '-movflags', '+faststart', out + '.tmp.mp4'], { timeout: 300000 });
+      if (r.status !== 0 || !fs.existsSync(out + '.tmp.mp4')) { try { fs.unlinkSync(out + '.tmp.mp4'); } catch (e) {} continue; }
+      const pd = probeDur(out + '.tmp.mp4'); if (!pd) { try { fs.unlinkSync(out + '.tmp.mp4'); } catch (e) {} continue; }
+      fs.renameSync(out + '.tmp.mp4', out); pidx[key] = pd;
+      try { fs.writeFileSync(path.join(P.parts, 'index.json'), JSON.stringify(pidx)); } catch (e) {}
       parts.push({ at: Math.round(at * 10) / 10, cam: j.cam, name: j.name, time: Math.floor(j.t0), file: out });
       at += pd;
     }
@@ -460,6 +482,10 @@ async function buildSummary(date) {
     const r = spawnSync('ffmpeg', ['-v', 'error', '-y', '-f', 'concat', '-safe', '0', '-i', list, '-c', 'copy', '-movflags', '+faststart', full], { timeout: 600000 });
     if (r.status !== 0) throw new Error('assemblage impossible');
     fs.copyFileSync(full, P.mp4 + '.tmp'); fs.renameSync(P.mp4 + '.tmp', P.mp4);
+    // les extraits qui ne servent plus (passage écarté ou modifié) sont effacés
+    const used = {}; parts.forEach((p) => { used[path.basename(p.file, '.mp4')] = 1; });
+    Object.keys(pidx).forEach((k) => { if (!used[k]) { delete pidx[k]; try { fs.unlinkSync(path.join(P.parts, k + '.mp4')); } catch (e) {} } });
+    try { fs.writeFileSync(path.join(P.parts, 'index.json'), JSON.stringify(pidx)); } catch (e) {}
     fs.writeFileSync(P.json, JSON.stringify({ date, v: 5, checks, builtAt: Date.now(), speed: SPEED, duration: Math.round(at), parts: parts.map((p) => ({ at: p.at, cam: p.cam, name: p.name, time: p.time })) }));
   } finally {
     spawnSync('rm', ['-rf', tmp]);
@@ -481,7 +507,10 @@ function nightlySummary() {
 function cleanSummaries() {
   const days = Number(E.RETENTION_DAYS) || 14, lim = Date.now() - days * 86400000;
   let ns = []; try { ns = fs.readdirSync(SUMDIR()); } catch (e) { return; }
-  ns.forEach((n) => { const m = /^([0-9]{4})-([0-9]{2})-([0-9]{2})\./.exec(n); if (m && new Date(+m[1], +m[2] - 1, +m[3]).getTime() < lim) { try { fs.unlinkSync(path.join(SUMDIR(), n)); } catch (e) {} } });
+  // extraits et vérifications gardés pour refaire vite le montage : inutiles au-delà d'hier (le film suffit)
+  const y = new Date(Date.now() - 86400000), yk = y.getFullYear() + '-' + pad(y.getMonth() + 1) + '-' + pad(y.getDate());
+  ns.forEach((n) => { const m = /^([0-9]{4}-[0-9]{2}-[0-9]{2})[.](parts|det[.]json)$/.exec(n); if (m && m[1] < yk) { try { fs.rmSync(path.join(SUMDIR(), n), { recursive: true, force: true }); } catch (e) {} } });
+  ns.forEach((n) => { const m = /^([0-9]{4})-([0-9]{2})-([0-9]{2})\./.exec(n); if (m && new Date(+m[1], +m[2] - 1, +m[3]).getTime() < lim) { try { fs.rmSync(path.join(SUMDIR(), n), { recursive: true, force: true }); } catch (e) {} } });
 }
 
 const cmd = process.argv[2] || 'serve';
