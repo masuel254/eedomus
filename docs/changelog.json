@@ -1,7 +1,16 @@
 {
-  "version": "2.55.0",
+  "version": "2.56.0",
   "date": "2026-11-24",
   "releases": [
+    {
+      "version": "2.56.0",
+      "date": "2026-11-24",
+      "time": "16:31",
+      "title": "Alerte : l'alarme sonne",
+      "changes": [
+        "Nouvelle alerte : notification immédiate quand l'alarme de la maison sonne, avec les détecteurs qui ont vu un mouvement, rappel toutes les 3 min puis message de fin"
+      ]
+    },
     {
       "version": "2.55.0",
       "date": "2026-11-24",
@@ -1785,5 +1794,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "16:26"
+  "time": "16:31"
 }

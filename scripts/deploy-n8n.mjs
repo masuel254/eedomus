@@ -114,6 +114,9 @@ const CODE_CFG = {
   // position de la météo (commune), gardée dans .env : METEO_POS=lat,lon,Nom
   meteoPos: env.METEO_POS ? (([la, lo, ...n]) => ({ lat: Number(la), lon: Number(lo), name: n.join(',').trim() || null }))(env.METEO_POS.split(',')) : null,
   smoke: ((cfg.alarm && cfg.alarm.items) || []).filter((t) => t.type === 'smoke').map((t) => ({ id: String(t.id), name: t.name })),
+  // alarme qui sonne : état de l'alarme (14 = sirène), sirènes (100 = alarme) et détecteurs de mouvement (pour dire où)
+  alarmW: cfg.alarm ? { status: String(cfg.alarm.status), sirens: ['930339', '961108'],
+    motion: (cfg.alarm.items || []).filter((t) => t.type === 'motion').map((t) => ({ id: String(t.id), name: t.name })) } : null,
   names: Object.fromEntries(String(env.PEOPLE_NAMES || '').split(',').map((x) => x.split('=').map((s) => s.trim())).filter((x) => x[0] && x[1])),
   qd: env.QUANDIFY_EMAIL ? { email: env.QUANDIFY_EMAIL, password: env.QUANDIFY_PASSWORD } : null,
   push: env.VAPID_PRIVATE ? { d: env.VAPID_PRIVATE, pub: env.VAPID_PUBLIC, sub: env.APP_URL || 'https://example.invalid/' } : null,
@@ -732,6 +735,29 @@ async function smokeWatch() {
       await pushNotify({ tag: 'smoke', title: 'Fin d’alerte fumée : ' + it.name, body: 'Le détecteur est revenu à la normale à ' + hm(), badge: 0 });
       S[it.id] = { on: false };
     }
+  }
+}
+// Alarme de la maison : notification dès qu'elle sonne (sirène), rappel toutes les 3 min, puis message de fin
+async function alarmWatch() {
+  const W = CFG.alarmW; if (!W) return;
+  const ids = [W.status].concat(W.sirens, W.motion.map((x) => x.id));
+  const r = await eedomus('get', 'action=periph.caract&periph_id=' + ids.join(','));
+  if (r.success !== 1) return;
+  const by = {}; [].concat(r.body).forEach((b) => { by[String(b.periph_id)] = b; });
+  const st = by[W.status] ? String(by[W.status].last_value) : null;
+  const ring = st === '14' || W.sirens.some((id) => by[id] && String(by[id].last_value) === '100');
+  const A = SD.alarmRing = SD.alarmRing || {}, hm = () => localNow().slice(11, 16).replace(':', 'h');
+  if (ring && (!A.on || Date.now() - A.remind > 180000)) {
+    // détecteurs en mouvement ou déclenchés dans les 5 dernières minutes
+    const lim = localNow().slice(0, 19).replace('T', ' ');
+    const recent = W.motion.filter((m) => { const b = by[m.id]; if (!b) return false; if (Number(b.last_value) > 0) return true;
+      const t = new Date(String(b.last_value_change).replace(' ', 'T') + 'Z').getTime(), n = new Date(lim + 'Z').getTime(); return n - t < 300000; }).map((m) => m.name);
+    await pushNotify({ tag: 'alarm', title: '🚨 L’alarme de la maison sonne !', body: (A.on ? 'Toujours en alarme (depuis ' + A.at + ')' : 'Déclenchée à ' + hm()) +
+      (recent.length ? ' · mouvement : ' + recent.join(', ') : '') + ' · regarde les caméras', badge: 1 });
+    SD.alarmRing = { on: true, at: A.on ? A.at : hm(), remind: Date.now() };
+  } else if (!ring && A.on) {
+    await pushNotify({ tag: 'alarm', title: 'L’alarme ne sonne plus', body: 'Fin de l’alarme à ' + hm() + (st === '0' ? ' · alarme désactivée' : ''), badge: 0 });
+    SD.alarmRing = { on: false };
   }
 }
 async function ntCameras(fresh) {
@@ -1773,6 +1799,7 @@ try {
     try { await boilerWatch(); } catch (e) {}
     try { await meteoWatch(); } catch (e) {}
     try { await smokeWatch(); } catch (e) {}
+    try { await alarmWatch(); } catch (e) {}
     try { await routeWatch(); } catch (e) {}
     let gu = null; try { gu = await garageCamDue(); } catch (e) {}
     return (gu ? [{ json: { garageUrl: gu } }] : []).concat(OUT_PUSH); // aucune réponse HTTP à envoyer
@@ -1927,7 +1954,7 @@ try {
     if (body.action === 'push.testall') {
       if (!body.token || !CFG.tokens.includes(body.token)) return reply(401, { ok: false, error: 'unauthorized' });
       if (body.fmt === 'decl' || body.fmt === 'plain') SD.push.fmt = body.fmt === 'decl' ? 'decl' : null;
-      const tg = /^(test|garage|water|meteo|smoke|boiler)$/.test(String(body.tag || '')) ? body.tag : 'test';
+      const tg = /^(test|garage|water|meteo|smoke|boiler|alarm)$/.test(String(body.tag || '')) ? body.tag : 'test';
       const n = await pushNotify({ tag: tg, title: String(body.title || 'Maison').slice(0, 60), body: String(body.text || 'Test des notifications').slice(0, 120), badge: null });
       return reply(200, { ok: true, sent: n });
     }

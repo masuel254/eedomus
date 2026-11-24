@@ -748,7 +748,7 @@
   function goNotif(tag) {
     closeSheet();
     if (tag === 'garage') return openLogs('doors');
-    if (tag === 'smoke') { TAB = 'alarm'; app.scrollTop = 0; return render(); }
+    if (tag === 'smoke' || tag === 'alarm') { TAB = 'alarm'; app.scrollTop = 0; return render(); }
     if (tag === 'meteo') { TAB = 'more'; render(); openMeteo(); return loadMeteo(true); }
     if (/^water/.test(tag)) { TAB = 'more'; loadWater(true); app.scrollTop = 0; return render(); }
     TAB = 'home'; render();
@@ -2918,6 +2918,11 @@
       'Le compteur d’eau détecte une fuite (petite, moyenne ou grosse) : alerte immédiate.',
       'Rappel toutes les 15 min tant que la fuite dure, puis message « fuite terminée ».',
       'Alerte aussi si le compteur ne donne plus de nouvelles depuis 3 h.'] },
+    { k: 'alarm', ic: 'shield', t: 'L’alarme sonne', w: 'Toujours', s: 'Alerte immédiate', c: [
+      'L’alarme de la maison se déclenche (sirène) : alerte immédiate, vérifiée toutes les 30 s.',
+      'Le message indique les détecteurs de mouvement qui ont vu quelque chose dans les 5 dernières minutes.',
+      'Rappel toutes les 3 min tant qu’elle sonne, puis message « l’alarme ne sonne plus ».',
+      'Pas d’alerte pendant le délai d’entrée (le temps de désactiver en rentrant).'] },
     { k: 'smoke', ic: 'flame', t: 'Détecteur de fumée', w: 'Toujours', s: 'Alerte immédiate', c: [
       'Un détecteur de fumée passe en alarme : alerte immédiate (vérifié toutes les 30 s).',
       'Rappel toutes les 3 min tant qu’il est en alarme, puis message de fin d’alerte.'] },
