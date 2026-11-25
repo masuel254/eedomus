@@ -2949,7 +2949,7 @@
   var ALR_OPEN = {}; // alertes dépliées (gardées quand les Réglages se redessinent)
   sheet.addEventListener('toggle', function (e) { var t = e.target; if (t && t.dataset && t.dataset.alr) ALR_OPEN[t.dataset.alr] = t.open; }, true);
   var ALR_GROUPS = [
-    { id: 'secu', ic: 'shield', t: 'Sécurité', k: ['alarm', 'smoke', 'garage', 'batt'] },
+    { id: 'secu', ic: 'shield', t: 'Sécurité', k: ['alarm', 'smoke', 'garage', 'batt', 'health'] },
     { id: 'maison', ic: 'home', t: 'Maison et piscine', k: ['water', 'boiler', 'pool', 'poolfrost'] },
     { id: 'dehors', ic: 'car', t: 'Météo et trajet', k: ['wind', 'morning', 'route'] }
   ];
@@ -2982,6 +2982,11 @@
       'L’eau de la piscine (sonde Ico) est à 2° ou moins : risque de gel, faire tourner la pompe (filtration).',
       'Vérifié toutes les 10 min ; rappel toutes les 3 h tant que l’eau reste froide.',
       'Message de fin quand l’eau remonte à 3,5° ou plus.'] },
+    { k: 'health', ic: 'gear', t: 'Service en panne', w: 'Toujours', s: 'Sans réponse depuis 1 h', c: [
+      'Box eedomus, Netatmo ou Tuya : alerte quand leurs réponses échouent depuis plus d’une heure.',
+      'Relais caméras de la Freebox : alerte s’il n’a pas donné de nouvelles depuis plus d’une heure.',
+      'Caméra Imou dont l’enregistrement est arrêté depuis plus d’une heure : une seule alerte (pas de rappel).',
+      'Rappel toutes les 6 h tant que la panne dure, puis message « répond à nouveau ».'] },
     { k: 'smoke', ic: 'flame', t: 'Détecteur de fumée', w: 'Toujours', s: 'Alerte immédiate', c: [
       'Un détecteur de fumée passe en alarme : alerte immédiate (vérifié toutes les 30 s).',
       'Rappel toutes les 3 min tant qu’il est en alarme, puis message de fin d’alerte.'] },

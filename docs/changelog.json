@@ -1,7 +1,17 @@
 {
-  "version": "2.64.0",
+  "version": "2.65.0",
   "date": "2026-11-25",
   "releases": [
+    {
+      "version": "2.65.0",
+      "date": "2026-11-25",
+      "time": "23:38",
+      "title": "Alerte service en panne",
+      "changes": [
+        "Nouvelle alerte : box eedomus, Netatmo, Tuya, relais caméras ou caméra qui ne répond plus depuis 1 h (rappel toutes les 6 h, message au retour)",
+        "Serveur allégé : un seul appel à eedomus toutes les 30 s pour la fumée et l'alarme"
+      ]
+    },
     {
       "version": "2.64.0",
       "date": "2026-11-25",
@@ -1933,5 +1943,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "23:31"
+  "time": "23:38"
 }

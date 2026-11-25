@@ -178,8 +178,10 @@ async function eedomus(kind, query, attempt) {
     });
     const r = JSON.parse(Buffer.from(raw).toString('latin1'));
     if (kind === 'get' && r.success !== 1 && attempt < 2) throw new Error('eedomus success=' + r.success);
+    svcMark('eedomus', r.success === 1);
     return r;
   } catch (e) {
+    if (attempt >= 2) svcMark('eedomus', false);
     const dns = /getaddrinfo|ENOTFOUND|EAI_AGAIN/i.test(String(e && (e.message || e.code) || ''));
     if (attempt >= 2 || (kind !== 'get' && !dns)) throw e;
     await new Promise((ok) => setTimeout(ok, attempt === 0 ? 600 : 1500));
@@ -274,10 +276,11 @@ async function nt(method, path, params, retry) {
     const opts = { method, headers: { Authorization: 'Bearer ' + tok }, json: false, timeout: 15000 };
     if (method === 'GET') opts.url = 'https://api.netatmo.com/api/' + path + (qs ? '?' + qs : '');
     else { opts.url = 'https://api.netatmo.com/api/' + path; opts.body = qs; opts.headers['Content-Type'] = 'application/x-www-form-urlencoded;charset=UTF-8'; }
-    return parse(await helpers.httpRequest(opts));
+    const out = parse(await helpers.httpRequest(opts)); svcMark('netatmo', true); return out;
   } catch (e) {
     const st = e.httpCode || (e.response && e.response.status) || (e.cause && e.cause.status);
     if (!retry && (String(st) === '403' || String(st) === '401')) { SD.nt.access = null; await ntToken(true); return nt(method, path, params, true); }
+    svcMark('netatmo', false);
     throw fail(502, 'netatmo', String(e.message || e));
   }
 }
@@ -728,11 +731,18 @@ async function meteoWatch() {
 // ---------------- Détecteurs de fumée ----------------
 // Lus toutes les 30 s (un seul appel eedomus pour tous). Passage à 100 = alarme : notification immédiate,
 // rappel toutes les 3 min tant que ça dure, puis message de fin d'alerte.
-async function smokeWatch() {
+// Sécurité (toutes les 30 s) : un seul appel à eedomus pour les détecteurs de fumée, l'alarme, ses sirènes et ses détecteurs
+async function secuWatch() {
+  const W = CFG.alarmW, ids = (CFG.smoke || []).map((x) => x.id).concat(W ? [W.status].concat(W.sirens, W.motion.map((x) => x.id)) : []);
+  if (!ids.length) return;
+  const r = await eedomus('get', 'action=periph.caract&periph_id=' + ids.join(','));
+  if (r.success !== 1) return;
+  try { await smokeWatch(r); } catch (e) {}
+  try { await alarmWatch(r); } catch (e) {}
+}
+async function smokeWatch(r) {
   const list = CFG.smoke || [];
   if (!list.length) return;
-  const r = await eedomus('get', 'action=periph.caract&periph_id=' + list.map((x) => x.id).join(','));
-  if (r.success !== 1) return;
   const S = SD.smoke = SD.smoke || {};
   const hm = () => localNow().slice(11, 16).replace(':', 'h');
   for (const b of [].concat(r.body)) {
@@ -864,12 +874,53 @@ async function poolFrostWatch() {
     F.on = false;
   }
 }
+// ---- Services en panne : alerte quand un service ne répond plus depuis 1 h (rappel toutes les 6 h, message quand il revient) ----
+// eedomus, Netatmo, Tuya : dernier appel réussi / raté (on n'alerte que si les appels échouent, pas s'il n'y a eu aucun appel).
+// Relais caméras : dernier signal reçu. Caméras Imou : état envoyé par le relais (enregistrement arrêté).
+function svcMark(name, ok) { const S = SD.svc = SD.svc || {}; const x = S[name] = S[name] || {}; if (ok) x.ok = Date.now(); else x.fail = Date.now(); }
+async function healthWatch() {
+  const H = SD.health = SD.health || { open: {} };
+  if (H.at && H.at > Date.now() - 5 * 60000) return;
+  H.at = Date.now();
+  const S = SD.svc || {}, HOUR = 3600000, now = Date.now(), down = {};
+  const NAMES = { eedomus: 'Box eedomus', netatmo: 'Netatmo (chauffage, caméra Présence)', tuya: 'Tuya / Smart Life (sauna, prises)' };
+  Object.keys(NAMES).forEach((k) => { const x = S[k]; if (x && x.fail && (!x.ok || x.fail > x.ok) && now - (x.ok || 0) > HOUR) down[k] = { name: NAMES[k], since: x.ok || null }; });
+  const R = SD.relay || {};
+  if (R.url && R.seen && now - R.seen > HOUR) down.relay = { name: 'Relais caméras (Freebox)', since: R.seen };
+  const names = {}; try { (await imDevices()).forEach((d) => { names[d.id] = d.name; }); } catch (e) {}
+  const camName = (id) => 'Caméra ' + (names[id] || String(id).slice(0, 6));
+  if (R.seen && now - R.seen < 30 * 60000 && R.status && R.status.cams) {
+    H.camOff = H.camOff || {};
+    R.status.cams.forEach((c) => {
+      if (c.ok) { delete H.camOff[c.id]; return; }
+      H.camOff[c.id] = H.camOff[c.id] || now;
+      if (now - H.camOff[c.id] > HOUR) down['cam:' + c.id] = { name: camName(c.id) + ' (enregistrement arrêté)', since: H.camOff[c.id], once: true };
+    });
+  }
+  const hm = (t) => { const d = new Date(t); return d.toLocaleString('fr-FR', { timeZone: 'Europe/Paris', weekday: 'short', hour: '2-digit', minute: '2-digit' }); };
+  // première fois : les pannes déjà connues (caméra débranchée…) sont notées sans alerte
+  if (!H.init) {
+    H.init = now;
+    Object.keys(down).forEach((k) => { H.open[k] = { at: now, remind: now, name: down[k].name }; });
+    ((R.status && R.status.cams) || []).filter((c) => !c.ok).forEach((c) => { H.open['cam:' + c.id] = { at: now, remind: now, name: camName(c.id) }; H.camOff = H.camOff || {}; H.camOff[c.id] = now; });
+    return;
+  }
+  for (const k of Object.keys(down)) {
+    const o = H.open[k], d = down[k];
+    if (!o || (!d.once && now - o.remind > 6 * HOUR)) {
+      await pushNotify({ tag: 'health', title: '⚠️ ' + d.name + ' ne répond plus', body: (d.since ? 'Dernière réponse ' + hm(d.since) : 'Aucune réponse depuis plus d’une heure') + (o ? ' · toujours en panne' : '') });
+      H.open[k] = { at: o ? o.at : now, remind: now, name: d.name };
+    }
+  }
+  for (const k of Object.keys(H.open)) if (!down[k]) {
+    const nm = k.indexOf('cam:') === 0 ? camName(k.slice(4)) + ' : enregistrement' : H.open[k].name;
+    await pushNotify({ tag: 'health', title: '✅ ' + nm.replace(/ [(]enregistrement arrêté[)]$/, ' : enregistrement') + ' repart', body: 'Revenu ' + hm(now) });
+    delete H.open[k];
+  }
+}
 // Alarme de la maison : notification dès qu'elle sonne (sirène), rappel toutes les 3 min, puis message de fin
-async function alarmWatch() {
+async function alarmWatch(r) {
   const W = CFG.alarmW; if (!W) return;
-  const ids = [W.status].concat(W.sirens, W.motion.map((x) => x.id));
-  const r = await eedomus('get', 'action=periph.caract&periph_id=' + ids.join(','));
-  if (r.success !== 1) return;
   const by = {}; [].concat(r.body).forEach((b) => { by[String(b.periph_id)] = b; });
   const st = by[W.status] ? String(by[W.status].last_value) : null;
   const ring = st === '14' || W.sirens.some((id) => by[id] && String(by[id].last_value) === '100');
@@ -1297,6 +1348,7 @@ async function tuToken(force) {
 async function tu(method, path, body, retry) {
   const r = await tuReq(method, path, await tuToken(false), body);
   if (!r.success && !retry && (r.code === 1010 || r.code === 1011)) { await tuToken(true); return tu(method, path, body, true); }
+  svcMark('tuya', !!r.success);
   if (!r.success) throw fail(502, 'tuya', r.code + ' ' + r.msg);
   return r.result;
 }
@@ -1925,8 +1977,8 @@ try {
     try { await presenceCheck(false); } catch (e) {}
     try { await boilerWatch(); } catch (e) {}
     try { await meteoWatch(); } catch (e) {}
-    try { await smokeWatch(); } catch (e) {}
-    try { await alarmWatch(); } catch (e) {}
+    try { await secuWatch(); } catch (e) {}
+    try { await healthWatch(); } catch (e) {}
     try { await battWatch(); } catch (e) {}
     try { await elecWatch(); } catch (e) {}
     try { await poolFrostWatch(); } catch (e) {}
@@ -2086,7 +2138,7 @@ try {
     if (body.action === 'push.testall') {
       if (!body.token || !CFG.tokens.includes(body.token)) return reply(401, { ok: false, error: 'unauthorized' });
       if (body.fmt === 'decl' || body.fmt === 'plain') SD.push.fmt = body.fmt === 'decl' ? 'decl' : null;
-      const tg = /^(test|garage|water|meteo|smoke|boiler|alarm|batt|pool)$/.test(String(body.tag || '')) ? body.tag : 'test';
+      const tg = /^(test|garage|water|meteo|smoke|boiler|alarm|batt|pool|health)$/.test(String(body.tag || '')) ? body.tag : 'test';
       const n = await pushNotify({ tag: tg, title: String(body.title || 'Maison').slice(0, 60), body: String(body.text || 'Test des notifications').slice(0, 120), badge: null });
       return reply(200, { ok: true, sent: n });
     }
