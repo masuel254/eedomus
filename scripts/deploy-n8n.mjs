@@ -2161,6 +2161,13 @@ try {
     return reply(200, out);
   }
   // Correction manuelle de l'état de la porte de garage (après vérification sur la caméra)
+  // « Reste à faire » : lignes marquées faites depuis l'appli (Claude les retire ensuite de docs/changelog.json)
+  if (body.action === 'todo.done' || body.action === 'todo.list') {
+    SD.todoDone = SD.todoDone || [];
+    const t = String(body.text || '').slice(0, 300);
+    if (body.action === 'todo.done' && t && SD.todoDone.indexOf(t) < 0) SD.todoDone = SD.todoDone.concat([t]).slice(-100);
+    return reply(200, { ok: true, done: SD.todoDone });
+  }
   if (body.action === 'meteo') return reply(200, await meteo(!!body.force));
   // piles faibles (pour l'appli) : relevé du jour, refait si plus vieux que 6 h
   if (body.action === 'batt.state') {

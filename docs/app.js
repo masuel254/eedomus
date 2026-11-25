@@ -759,6 +759,14 @@
     if (!window.caches) return;
     caches.open('maison-notifs').then(function (c) { return c.put('./__notifs', new Response(JSON.stringify(list), { headers: { 'Content-Type': 'application/json' } })); }).catch(function () {});
   }
+  // lignes « Reste à faire » enlevées par glissement (gardées sur l'iPhone ; le serveur les note pour nettoyer la liste)
+  function todoHidden() { try { return JSON.parse(store.get('maison.todohide') || '[]'); } catch (e) { return []; } }
+  function todoDelete(x) {
+    var h = todoHidden(); if (h.indexOf(x) < 0) h.push(x); store.set('maison.todohide', JSON.stringify(h));
+    api({ action: 'todo.done', text: x }).catch(function () {});
+    var row = sheet.querySelector('.nf-sw.td[data-todo="' + x.replace(/["\\]/g, '\\$&') + '"]');
+    if (row) { row.classList.add('gone'); setTimeout(renderSettings, 220); } else renderSettings();
+  }
   function notifDelete(at) {
     var row = sheet.querySelector('.nf-sw[data-nfat="' + at + '"]');
     var go = function () { notifsWrite(NOTIFS.filter(function (n) { return String(n.at) !== String(at); })); };
@@ -784,7 +792,7 @@
     if (!d.on) return;
     sheet._nfSwiped = Date.now(); setTimeout(function () { if (!d.row.classList.contains('open')) d.row.classList.remove('drag'); }, 220);
     var lg = d.row.querySelector('.lg'); lg.style.transition = '';
-    if (d.dx < -d.row.offsetWidth * 0.55) { lg.style.transform = 'translateX(-100%)'; return notifDelete(d.row.dataset.nfat); }
+    if (d.dx < -d.row.offsetWidth * 0.55) { lg.style.transform = 'translateX(-100%)'; return d.row.dataset.todo != null ? todoDelete(d.row.dataset.todo) : notifDelete(d.row.dataset.nfat); }
     if (d.dx < -48) { lg.style.transform = 'translateX(-96px)'; d.row.classList.add('open'); }
     else { lg.style.transform = ''; d.row.classList.remove('open'); }
   }
@@ -3117,8 +3125,13 @@
       '<h3>Suivi du projet</h3>' +
       '<details class="acc2"><summary><span>Ce qui fonctionne</span><span class="cnt ok">' + L.works.length + '</span>' + icon('down') + '</summary>' +
       '<ul class="lst ok">' + L.works.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></details>' +
-      '<details class="acc2"><summary><span>Reste à faire</span><span class="cnt todo">' + L.todo.length + '</span>' + icon('down') + '</summary>' +
-      '<ul class="lst todo">' + L.todo.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></details>' +
+      (function () { // « Reste à faire » : glisser une ligne vers la gauche pour l'enlever (gardé sur cet iPhone et signalé au serveur)
+        var hid = todoHidden(), list = L.todo.filter(function (x) { return hid.indexOf(x) < 0; });
+        return '<details class="acc2" data-alr="todo"' + (ALR_OPEN.todo ? ' open' : '') + '><summary><span>Reste à faire</span><span class="cnt todo">' + list.length + '</span>' + icon('down') + '</summary>' +
+          '<div class="lst todo tdl">' + list.map(function (x) { return '<div class="nf-sw td" data-todo="' + esc(x) + '"><button class="nf-del" data-tododel="' + esc(x) + '">Supprimer</button><div class="lg tdi">' + esc(x) + '</div></div>'; }).join('') + '</div>' +
+          (hid.length ? '<div class="alr-set" style="padding:0 14px 12px"><span class="mu">' + hid.length + ' ligne' + (hid.length > 1 ? 's' : '') + ' enlevée' + (hid.length > 1 ? 's' : '') + '</span><button class="lnk" data-todoback>Tout réafficher</button></div>' : '') +
+          '</details>';
+      })() +
       '<h3>Dernières versions</h3>' + L.releases.slice(0, 3).map(function (r, i) {
         return '<details class="acc2 rel"><summary><span class="rel-v">v' + esc(r.version) + '</span>' +
           '<span class="rel-t"><b>' + esc(r.title) + '</b><small>' + esc(dateFr(r.date)) + (r.time ? ' à ' + esc(r.time) : '') + '</small></span>' +
@@ -3168,6 +3181,8 @@
     if ((b = e.target.closest('[data-settings]'))) return openSheet('settings');
     if (e.target.closest('[data-notifs]')) return openNotifs();
     if ((b = e.target.closest('[data-nfdel]'))) return notifDelete(b.dataset.nfdel);
+    if ((b = e.target.closest('[data-tododel]'))) return todoDelete(b.dataset.tododel);
+    if (e.target.closest('[data-todoback]')) { store.set('maison.todohide', '[]'); return renderSettings(); }
     if ((b = e.target.closest('[data-nfclear]'))) { if (!confirmed(b)) { var cl = b.querySelector('span'); if (cl) cl.textContent = 'Effacer les ' + NOTIFS.length + ' ?'; return; } return notifsWrite([]); }
     if ((b = e.target.closest('[data-notif]'))) {
       if (sheet._nfSwiped && Date.now() - sheet._nfSwiped < 400) return; // fin d'un glisser : pas d'ouverture

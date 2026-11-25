@@ -1193,3 +1193,7 @@ body.pfs { overflow: hidden; }
 .alrg-b .acc2.alr + .acc2.alr { border-top: 1px solid #1F2329; }
 .alrg-b .acc2.alr > summary { padding-left: 18px; }
 .alrg-b .acc2.alr .ic { width: 32px; height: 32px; }
+/* Reste à faire : lignes à glisser vers la gauche */
+.acc2 > .lst.tdl { padding: 0; }
+.tdl .nf-sw.td .lg.tdi { position: relative; z-index: 1; display: block; background: #111418; padding: 11px 14px 11px 38px; font-size: 14px; line-height: 1.45; touch-action: pan-y; transition: transform .2s ease; }
+.tdl .nf-sw.td .lg.tdi::before { content: "○"; position: absolute; left: 14px; top: 11px; font-weight: 800; color: var(--amber); }
