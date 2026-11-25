@@ -1,7 +1,17 @@
 {
-  "version": "2.60.5",
+  "version": "2.61.0",
   "date": "2026-11-25",
   "releases": [
+    {
+      "version": "2.61.0",
+      "date": "2026-11-25",
+      "time": "21:15",
+      "title": "Alertes électrolyseur",
+      "changes": [
+        "Nouvelle alerte : électrolyseur de la piscine coupé (rappel toutes les 3 h, message quand il est rallumé)",
+        "Nouvelle alerte : chaque matin vers 9h, électrolyseur à vérifier s'il a consommé moins de 1 kWh la veille"
+      ]
+    },
     {
       "version": "2.60.5",
       "date": "2026-11-25",
@@ -1887,5 +1897,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "18:49"
+  "time": "21:15"
 }

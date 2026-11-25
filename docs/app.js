@@ -2962,6 +2962,9 @@
       'Capteurs de porte : à changer quand ils ne répondent plus depuis 30 jours ; une pile basse les annonce en « prochain changement ».',
       'L’alerte cite aussi le prochain changement à prévoir (piles entre 20 et 40 %).',
       'Une pile remontée au-dessus de 50 % est considérée comme changée.'] },
+    { k: 'pool', ic: 'drop', t: 'Électrolyseur de la piscine', w: 'Toujours', s: 'Coupé, ou moins de 1 kWh la veille', c: [
+      'La prise de l’électrolyseur est coupée : alerte (vérifié toutes les 15 min environ), rappel toutes les 3 h, puis message quand il est rallumé.',
+      'Chaque matin vers 9h : alerte si l’électrolyseur a consommé moins de 1 kWh la veille.'] },
     { k: 'smoke', ic: 'flame', t: 'Détecteur de fumée', w: 'Toujours', s: 'Alerte immédiate', c: [
       'Un détecteur de fumée passe en alarme : alerte immédiate (vérifié toutes les 30 s).',
       'Rappel toutes les 3 min tant qu’il est en alarme, puis message de fin d’alerte.'] },

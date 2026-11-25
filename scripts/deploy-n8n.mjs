@@ -820,6 +820,29 @@ async function battWatch() {
     body: B.low.slice(0, 6).map((x) => 'Changer ' + (x.kind === 'door' ? 'le ' : 'la ') + x.name + (x.mute ? ' (plus de signal depuis le ' + x.mute + ')' : ' (' + x.batt + ' %)')).join(' · ') +
       (fresh.length ? '' : ' (rappel)') + (nx.length ? ' · Prochain changement : ' + nx.join(', ') : '') });
 }
+// Électrolyseur de la piscine (prise Tuya) : alerte s'il est coupé (relevé toutes les 14 min environ), rappel toutes les 3 h,
+// message quand il est rallumé ; et chaque matin (à partir de 9h), alerte si la veille il a consommé moins de 1 kWh.
+async function elecWatch() {
+  if (!CFG.tu || !CFG.tu.devices.elec) return;
+  const W = SD.elecW = SD.elecW || {}, d = SD.tuState && SD.tuState.data && SD.tuState.data.devices && SD.tuState.data.devices.elec;
+  const hm = () => localNow().slice(11, 16).replace(':', 'h');
+  if (d && SD.tuState.at > Date.now() - 30 * 60000) {
+    if (d.on === false && (!W.off || Date.now() - W.remind > 3 * 3600000)) {
+      await pushNotify({ tag: 'pool', title: '⚠️ Électrolyseur coupé', body: (W.off ? 'Toujours coupé depuis ' + W.since : 'La prise de l’électrolyseur est coupée (' + hm() + ')') + ' · la piscine n’est plus traitée, à rallumer' });
+      SD.elecW = Object.assign(W, { off: true, since: W.off ? W.since : hm(), remind: Date.now() });
+    } else if (d.on === true && W.off) {
+      await pushNotify({ tag: 'pool', title: 'Électrolyseur rallumé', body: 'La prise de l’électrolyseur est de nouveau allumée (' + hm() + ')' });
+      W.off = false;
+    }
+  }
+  const P = parisParts(), today = P.year + P.month + P.day;
+  if (P.hour < '09' || W.day === today) return;
+  const days = enSeries('elec').days, y = new Date(Date.UTC(+P.year, +P.month - 1, +P.day) - 86400000).toISOString().slice(0, 10).replace(/-/g, '');
+  const row = days.find((x) => x.k === y), hasToday = days.some((x) => x.k === today);
+  if (!row || !hasToday) return; // relevé de la veille incomplet : on attend
+  W.day = today; W.yKwh = row.kwh;
+  if (row.kwh < 1) await pushNotify({ tag: 'pool', title: '🔎 Électrolyseur à vérifier', body: 'Seulement ' + String(row.kwh).replace('.', ',') + ' kWh consommés hier (moins de 1 kWh) · vérifier qu’il fonctionne bien (prise, filtration, chloration)' });
+}
 // Alarme de la maison : notification dès qu'elle sonne (sirène), rappel toutes les 3 min, puis message de fin
 async function alarmWatch() {
   const W = CFG.alarmW; if (!W) return;
@@ -1884,6 +1907,7 @@ try {
     try { await smokeWatch(); } catch (e) {}
     try { await alarmWatch(); } catch (e) {}
     try { await battWatch(); } catch (e) {}
+    try { await elecWatch(); } catch (e) {}
     try { await routeWatch(); } catch (e) {}
     let gu = null; try { gu = await garageCamDue(); } catch (e) {}
     return (gu ? [{ json: { garageUrl: gu } }] : []).concat(OUT_PUSH); // aucune réponse HTTP à envoyer
@@ -2040,7 +2064,7 @@ try {
     if (body.action === 'push.testall') {
       if (!body.token || !CFG.tokens.includes(body.token)) return reply(401, { ok: false, error: 'unauthorized' });
       if (body.fmt === 'decl' || body.fmt === 'plain') SD.push.fmt = body.fmt === 'decl' ? 'decl' : null;
-      const tg = /^(test|garage|water|meteo|smoke|boiler|alarm|batt)$/.test(String(body.tag || '')) ? body.tag : 'test';
+      const tg = /^(test|garage|water|meteo|smoke|boiler|alarm|batt|pool)$/.test(String(body.tag || '')) ? body.tag : 'test';
       const n = await pushNotify({ tag: tg, title: String(body.title || 'Maison').slice(0, 60), body: String(body.text || 'Test des notifications').slice(0, 120), badge: null });
       return reply(200, { ok: true, sent: n });
     }
