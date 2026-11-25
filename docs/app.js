@@ -78,7 +78,7 @@
     return fetch(CFG.api, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(body) })
       .then(function (r) {
         return r.json().catch(function () { return {}; }).then(function (j) {
-          if (!r.ok || !j.ok) { var e = new Error(j.error || 'HTTP ' + r.status); e.status = r.status; throw e; }
+          if (!r.ok || !j.ok) { var e = new Error(j.error || 'HTTP ' + r.status); e.status = r.status; e.detail = j.detail || null; throw e; }
           return j;
         });
       });
@@ -3539,14 +3539,16 @@
     }
     if (e.target.closest('[data-linky-edit]')) { linkyEdit = true; return renderSettings(); }
     if (e.target.closest('[data-linky-save]')) {
-      var lt = ((document.getElementById('lk-tok') || {}).value || '').trim(), lp = ((document.getElementById('lk-prm') || {}).value || '').replace(/[^0-9]/g, '');
+      var lt = ((document.getElementById('lk-tok') || {}).value || '').replace(/\s+/g, ''), lp = ((document.getElementById('lk-prm') || {}).value || '').replace(/[^0-9]/g, '');
       if (lt.length < 20) return toast('Colle la clé copiée sur conso.boris.sh', true);
       if (lp.length !== 14) return toast('Le numéro de compteur a 14 chiffres', true);
       toast('Vérification auprès d’Enedis…');
       return api({ action: 'linky.token', tok: lt, prm: lp }).then(function (j) {
         store.set('maison.linky', JSON.stringify({ tok: lt, prm: lp })); linkyEdit = false; LINKY = null; linkyAsk = 0;
         toast(j.ok ? 'Compteur relié, merci !' : 'Clé enregistrée, mais Enedis ne répond pas encore (' + (j.detail || '?') + ')', !j.ok); renderSettings();
-      }).catch(function () { toast('Clé ou numéro refusé, vérifie-les', true); });
+      }).catch(function (er) {
+        if (er && er.message === 'linky') { store.set('maison.linky', JSON.stringify({ tok: lt, prm: lp })); linkyEdit = false; LINKY = null; linkyAsk = 0; renderSettings(); return toast('Clé enregistrée, mais Enedis répond : ' + (er.detail || '?'), true); }
+        toast('Refusé : ' + ((er && er.detail) || (er && er.message) || 'vérifie la clé et le numéro'), true); });
     }
     if (e.target.closest('[data-push-toggle]')) return pushToggle();
     if ((b = e.target.closest('[data-push-delay]'))) {

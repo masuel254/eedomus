@@ -1946,8 +1946,10 @@ try {
   if (body.action === 'linky.token' || body.action === 'linky.probe' || body.action === 'linky.state') {
     SD.linky = SD.linky || {};
     if (body.action === 'linky.token') {
-      const tok = String(body.tok || '').trim(), prm = String(body.prm || '').replace(/[^0-9]/g, '');
-      if (!/^[A-Za-z0-9._-]{20,4000}$/.test(tok) || prm.length !== 14) return reply(400, { ok: false, error: 'bad_token' });
+      // la clé copiée sur l'iPhone peut contenir des retours à la ligne ou des espaces : on les enlève
+      const tok = String(body.tok || '').split('').filter((c) => c.charCodeAt(0) > 32 && c.charCodeAt(0) !== 160).join('').replace(/^Bearer/i, ''), prm = String(body.prm || '').replace(/[^0-9]/g, '');
+      if (!/^[A-Za-z0-9._~+/=-]{20,4000}$/.test(tok)) return reply(400, { ok: false, error: 'bad_token', detail: 'clé illisible (' + tok.length + ' caractères)' });
+      if (prm.length !== 14) return reply(400, { ok: false, error: 'bad_prm', detail: 'le numéro de compteur doit avoir 14 chiffres (' + prm.length + ' reçus)' });
       SD.linky.tok = tok; SD.linky.prm = prm; SD.linky.at = Date.now();
     }
     if (!SD.linky.tok) return reply(200, { ok: true, configured: false });
