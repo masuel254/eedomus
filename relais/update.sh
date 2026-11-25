@@ -7,13 +7,22 @@ T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 for f in relais.js record.sh update.sh detect.py; do curl -fsSL --max-time 30 "$SRC/$f" -o "$T/$f" && [ -s "$T/$f" ] || exit 0; done
 node --check "$T/relais.js" && bash -n "$T/record.sh" && bash -n "$T/update.sh" || { echo "Mise à jour ignorée : fichier invalide"; exit 0; }
 # police pour légender le résumé vidéo (caméra, heure)
-[ -f /usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf ] || DEBIAN_FRONTEND=noninteractive apt-get install -y -qq fonts-dejavu-core >/dev/null 2>&1
+[ -f /usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf ] || DEBIAN_FRONTEND=noninteractive timeout 600 apt-get install -y -qq fonts-dejavu-core >/dev/null 2>&1
 # reconnaissance des personnes pour le résumé (OpenCV de Debian + petit modèle MobileNet-SSD, 23 Mo)
-python3 -c 'import cv2' 2>/dev/null || DEBIAN_FRONTEND=noninteractive apt-get install -y -qq python3-opencv >/dev/null 2>&1
+python3 -c 'import cv2' 2>/dev/null || DEBIAN_FRONTEND=noninteractive timeout 900 apt-get install -y -qq python3-opencv >/dev/null 2>&1
 M=$OPT/models; mkdir -p $M
 for f in deploy.prototxt mobilenet_iter_73000.caffemodel; do
   [ -s $M/$f ] || curl -fsSL --max-time 300 "https://raw.githubusercontent.com/chuanqi305/MobileNet-SSD/master/$f" -o $M/$f.tmp && mv -f $M/$f.tmp $M/$f 2>/dev/null
 done
+# tâche des 15 min : chaque étape a un temps maximum, et le signal au serveur part même si le nettoyage échoue
+D=/etc/systemd/system/relais-clean.service.d; F=$D/limites.conf
+W="[Service]
+TimeoutStartSec=25min
+ExecStart=
+ExecStart=-/usr/bin/timeout 600 /usr/bin/node $OPT/relais.js clean
+ExecStart=-/usr/bin/timeout 120 /usr/bin/node $OPT/relais.js hello
+ExecStart=-/usr/bin/timeout 900 $OPT/update.sh"
+if [ "$(cat $F 2>/dev/null)" != "$W" ]; then mkdir -p $D; printf '%s\n' "$W" > $F; systemctl daemon-reload; fi
 cmp -s "$T/detect.py" $OPT/detect.py || install -m 755 "$T/detect.py" $OPT/detect.py
 WEB=0; CAM=0
 cmp -s "$T/relais.js" $OPT/relais.js || { install -m 644 "$T/relais.js" $OPT/relais.js; WEB=1; }

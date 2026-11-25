@@ -233,6 +233,15 @@ function serve() {
     } catch (e) { return json(res, 500, { ok: false, error: String(e.message || e) }); }
     json(res, 404, { ok: false, error: 'not_found' });
   }).listen(port, '127.0.0.1', () => { console.log('Relais caméras à l’écoute sur 127.0.0.1:' + port); setTimeout(presRefresh, 1000); });
+  // filet de sécurité : si la tâche des 15 min est bloquée, le relais donne quand même de ses nouvelles au serveur
+  // et relance la tâche (mise à jour comprise) ; un état « injoignable » ne dure ainsi pas plus de 30 min
+  setInterval(() => {
+    let last = 0; try { last = fs.statSync('/var/lib/relais/hello-ok').mtimeMs; } catch (e) {}
+    if (Date.now() - last < 30 * 60000) return;
+    hello().catch(() => {});
+    spawnSync('systemctl', ['kill', '--signal=KILL', 'relais-clean.service'], { timeout: 20000 });
+    spawnSync('systemctl', ['start', '--no-block', 'relais-clean.service'], { timeout: 20000 });
+  }, 10 * 60000);
   setInterval(() => { E = loadEnv(); }, 60000); // réglages relus sans redémarrer
 }
 
@@ -294,6 +303,7 @@ async function hello() {
   let st = null; try { st = status(); } catch (e) {}
   const j = await post({ action: 'relay.hello', url, ts, sig, status: st });
   console.log('Serveur prévenu : ' + (j.url || url));
+  try { fs.mkdirSync('/var/lib/relais', { recursive: true }); fs.writeFileSync('/var/lib/relais/hello-ok', String(Date.now())); } catch (e) {}
   // réglages décidés côté serveur (durées de conservation)
   const C = j.cfg || {};
   [['RETENTION_DAYS', C.retention], ['PRESENCE_RETENTION_DAYS', C.presRetention]].forEach(([k, v]) => {
