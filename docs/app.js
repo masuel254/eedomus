@@ -2940,6 +2940,11 @@
   // Alertes envoyées par le serveur : titre, résumé, quand, et conditions exactes de déclenchement (affichées en accordéon)
   var ALR_OPEN = {}; // alertes dépliées (gardées quand les Réglages se redessinent)
   sheet.addEventListener('toggle', function (e) { var t = e.target; if (t && t.dataset && t.dataset.alr) ALR_OPEN[t.dataset.alr] = t.open; }, true);
+  var ALR_GROUPS = [
+    { id: 'secu', ic: 'shield', t: 'Sécurité', k: ['alarm', 'smoke', 'garage', 'batt'] },
+    { id: 'maison', ic: 'home', t: 'Maison et piscine', k: ['water', 'boiler', 'pool'] },
+    { id: 'dehors', ic: 'car', t: 'Météo et trajet', k: ['wind', 'morning', 'route'] }
+  ];
   var ALERTS = [
     { k: 'garage', ic: 'garage', t: 'Porte de garage ouverte', w: 'Toujours', s: function (d) { return 'Après ' + d + ' min ouverte'; }, c: [
       function (d) { return 'La porte de garage est ouverte depuis ' + d + ' min (réglable ci-dessous).'; },
@@ -3042,15 +3047,20 @@
       (PUSH.on ? '<button class="row" data-push-test><span class="ic">' + icon('play') + '</span><span><b>Envoyer une notification de test</b><small>Pour vérifier que tout marche</small></span><span class="val">›</span></button>' : '') +
       '</div>' +
       // Une ligne repliée par alerte : touche pour voir exactement quand elle se déclenche
-      '<h3>Alertes</h3>' + ALERTS.map(function (a) {
+      // alertes rangées par thème : un volet par thème, puis un volet par alerte (moins de défilement)
+      '<h3>Alertes</h3>' + ALR_GROUPS.map(function (g) {
+        var list = ALERTS.filter(function (a) { return g.k.indexOf(a.k) >= 0; }); if (!list.length) return '';
+        return '<details class="acc2 alrg" data-alr="g-' + g.id + '"' + (ALR_OPEN['g-' + g.id] ? ' open' : '') + '><summary><span class="ic">' + icon(g.ic) + '</span><span class="alr-t"><b>' + esc(g.t) + '</b><small>' +
+          esc(list.map(function (a) { return a.t; }).join(' · ')) + '</small></span><span class="cnt">' + list.length + '</span>' + icon('down') + '</summary><div class="alrg-b">' + list.map(function (a) {
         return '<details class="acc2 alr" data-alr="' + a.k + '"' + (ALR_OPEN[a.k] ? ' open' : '') + '><summary><span class="ic">' + icon(a.ic) + '</span><span class="alr-t"><b>' + esc(a.t) + '</b><small>' + esc(typeof a.s === 'function' ? a.s(d) : a.s) + '</small></span>' +
           '<span class="ok">' + esc(a.w) + '</span>' + icon('down') + '</summary><div class="alr-b"><ul>' +
           a.c.map(function (x) { return '<li>' + esc(typeof x === 'function' ? x(d) : x) + '</li>'; }).join('') + '</ul>' +
           (a.k === 'route' ? routeHTML() : '') + (a.k === 'batt' ? battListHTML() : '') +
           (a.k === 'garage' ? '<div class="alr-set"><span>Délai avant l’alerte : <b>' + d + ' min</b></span><span class="stp2"><button data-push-delay="' + (PUSH_DELAYS[i - 1] || d) + '" aria-label="Moins">−</button><button data-push-delay="' + (PUSH_DELAYS[i + 1] || d) + '" aria-label="Plus">+</button></span></div>' : '') +
           '</div></details>';
+      }).join('') + '</div></details>';
       }).join('') +
-      '<p class="note-q">Touche une alerte pour voir exactement quand elle se déclenche. Le délai du garage est le même pour toute la famille. Chacun active les alertes sur son propre iPhone.</p>';
+      '<p class="note-q">Touche un thème puis une alerte pour voir exactement quand elle se déclenche. Le délai du garage est le même pour toute la famille. Chacun active les alertes sur son propre iPhone.</p>';
     return h;
   }
   function relayHTML() {

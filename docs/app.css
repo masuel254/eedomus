@@ -1182,3 +1182,14 @@ body.pfs { overflow: hidden; }
 .zdoors .row.sub { padding-left: 30px; min-height: 54px; }
 .zdoors .row.sub .ic { width: 32px; height: 32px; }
 .zrow .zsw { flex: none; padding: 0; } .zrow .zsw .sw { display: block; }
+/* Alertes rangées par thème */
+.acc2.alrg > summary { font-weight: 400; }
+.acc2.alrg > summary .ic { flex: none; width: 38px; height: 38px; border-radius: 12px; background: var(--s2); display: grid; place-items: center; color: var(--mu); }
+.acc2.alrg > summary .alr-t small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.acc2.alrg > summary .cnt { margin-left: auto; font-size: 12.5px; font-weight: 800; color: var(--mu); background: var(--s2); border-radius: 999px; padding: 3px 9px; }
+.acc2.alrg > summary > svg.i { margin-left: 4px; }
+.alrg-b { border-top: 1px solid var(--ln); }
+.alrg-b .acc2.alr { margin: 0; border: 0; border-radius: 0; background: transparent; }
+.alrg-b .acc2.alr + .acc2.alr { border-top: 1px solid #1F2329; }
+.alrg-b .acc2.alr > summary { padding-left: 18px; }
+.alrg-b .acc2.alr .ic { width: 32px; height: 32px; }
