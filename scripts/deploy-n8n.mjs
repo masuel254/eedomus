@@ -115,9 +115,10 @@ const CODE_CFG = {
   meteoPos: env.METEO_POS ? (([la, lo, ...n]) => ({ lat: Number(la), lon: Number(lo), name: n.join(',').trim() || null }))(env.METEO_POS.split(',')) : null,
   smoke: ((cfg.alarm && cfg.alarm.items) || []).filter((t) => t.type === 'smoke').map((t) => ({ id: String(t.id), name: t.name })),
   // piles : nom court des modules surveillés (détecteurs, portes, sirènes), toujours surveillés même s'ils se taisent
-  battNames: Object.assign({ '930339': 'Sirène 1', '961108': 'Sirène 2' },
-    Object.fromEntries(((cfg.alarm && cfg.alarm.items) || []).filter((t) => t.type === 'motion' || t.type === 'smoke').map((t) => [String(t.id), (t.type === 'smoke' ? 'Détecteur de fumée ' : 'Détecteur ') + t.name])),
-    Object.fromEntries(cfg.groups.flatMap((g) => g.rooms.flatMap((r) => r.items)).filter((t) => t.type === 'door').map((t) => [String(t.id), t.name]))),
+  // [sorte, nom] : les détecteurs de mouvement, de fumée et les sirènes ont une pile ; un capteur de porte se change quand il ne répond plus
+  battNames: Object.assign({ '930339': ['siren', 'Sirène 1'], '961108': ['siren', 'Sirène 2'] },
+    Object.fromEntries(((cfg.alarm && cfg.alarm.items) || []).filter((t) => t.type === 'motion' || t.type === 'smoke').map((t) => [String(t.id), [t.type, t.name]])),
+    Object.fromEntries(cfg.groups.flatMap((g) => g.rooms.flatMap((r) => r.items)).filter((t) => t.type === 'door').map((t) => [String(t.id), ['door', t.name]]))),
   // détecteurs de mouvement et portes : sans nouvelle depuis 30 jours, leur pile est sans doute vide
   battSilent: ((cfg.alarm && cfg.alarm.items) || []).filter((t) => t.type === 'motion').map((t) => String(t.id))
     .concat(cfg.groups.flatMap((g) => g.rooms.flatMap((r) => r.items)).filter((t) => t.type === 'door').map((t) => String(t.id))),
@@ -769,11 +770,11 @@ async function battScan() {
   const used = new Set(CFG.readable.map(String).concat(CFG.alarmW ? CFG.alarmW.sirens : []));
   const lc = SD.lastChange || {}, old = new Date(Date.now() - 180 * 86400000).toISOString().slice(0, 10), BN = CFG.battNames || {};
   const out = Object.values(by).filter((x) => {
-    const named = x.ids.find((i) => BN[i]); if (named) { x.name = BN[named]; return true; } // détecteurs, portes, sirènes : toujours
+    const named = x.ids.find((i) => BN[i]); if (named) { x.kind = BN[named][0]; x.name = BN[named][1]; return true; } // détecteurs, portes, sirènes : toujours
     const mine = x.ids.filter((i) => used.has(i)); if (!mine.length) return false;
     const seen = mine.map((i) => String(lc[i] || '')).filter((d) => d); // dates connues des changements
     return !seen.length || seen.some((d) => d.slice(0, 10) >= old);
-  }).map((x) => ({ k: x.k, name: x.name, batt: x.batt, ids: x.ids }));
+  }).map((x) => ({ k: x.k, name: x.name, kind: x.kind || null, batt: x.batt, ids: x.ids }));
   // modules muets : dernier signal de plus de 30 jours (détecteurs de mouvement, portes)
   const SIL = CFG.battSilent || [];
   if (SIL.length) {
@@ -782,12 +783,23 @@ async function battScan() {
     const lim = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
     out.forEach((x) => { const d = x.ids.map((i) => last[i]).filter((v) => v)[0]; if (d && d.slice(0, 10) < lim) x.mute = d.slice(8, 10) + '/' + d.slice(5, 7) + '/' + d.slice(0, 4); });
   }
-  return out.map((x) => ({ k: x.k, name: x.name, batt: x.batt, mute: x.mute || null }));
+  return out.map((x) => ({ k: x.k, name: battWhat(x), kind: x.kind, batt: x.batt, mute: x.mute || null }));
+}
+// ce qu'il faut changer, en clair : « pile du détecteur de mouvement Jardin », « capteur de la porte cellier »…
+function battWhat(x) {
+  const n = x.name, lo = n.charAt(0).toLowerCase() + n.slice(1);
+  if (x.kind === 'motion') return 'pile du détecteur de mouvement ' + n;
+  if (x.kind === 'smoke') return 'pile du détecteur de fumée ' + n;
+  if (x.kind === 'siren') return 'pile de la ' + lo;
+  if (x.kind === 'door') return 'capteur de la ' + lo;
+  return 'pile : ' + n;
 }
 // à changer : pile à 20 % ou moins, ou module muet ; prochain changement : pile entre 20 et 40 %
 function battSplit(B, all) {
-  B.low = all.filter((x) => x.batt <= 20 || x.mute).sort((a, b) => a.batt - b.batt);
-  B.next = all.filter((x) => x.batt > 20 && x.batt <= 40 && !x.mute).sort((a, b) => a.batt - b.batt);
+  // capteur de porte : à changer seulement quand il ne répond plus ; sa pile basse annonce le prochain changement
+  const now = (x) => x.mute || (x.kind !== 'door' && x.batt <= 20);
+  B.low = all.filter(now).sort((a, b) => a.batt - b.batt);
+  B.next = all.filter((x) => !now(x) && x.batt <= 40).sort((a, b) => a.batt - b.batt);
 }
 async function battWatch() {
   const B = SD.batt = SD.batt || { sent: {} };
@@ -803,8 +815,9 @@ async function battWatch() {
   const fresh = due.filter((x) => !B.sent[x.k]);
   due.forEach((x) => { B.sent[x.k] = Date.now(); });
   const nx = (B.next || []).slice(0, 3).map((x) => x.name + ' (' + x.batt + ' %)');
-  await pushNotify({ tag: 'batt', title: '🔋 Pile à changer : ' + B.low.map((x) => x.name.replace(/^Détecteur /, '')).join(', '),
-    body: B.low.slice(0, 6).map((x) => x.name + ' ' + x.batt + ' %' + (x.mute ? ' (plus de signal depuis le ' + x.mute + ')' : '')).join(' · ') + (fresh.length ? '' : ' (rappel)') + (nx.length ? ' · Prochain changement : ' + nx.join(', ') : '') });
+  await pushNotify({ tag: 'batt', title: '🔋 À changer : ' + B.low.map((x) => x.name).join(', '),
+    body: B.low.slice(0, 6).map((x) => 'Changer ' + (x.kind === 'door' ? 'le ' : 'la ') + x.name + (x.mute ? ' (plus de signal depuis le ' + x.mute + ')' : ' (' + x.batt + ' %)')).join(' · ') +
+      (fresh.length ? '' : ' (rappel)') + (nx.length ? ' · Prochain changement : ' + nx.join(', ') : '') });
 }
 // Alarme de la maison : notification dès qu'elle sonne (sirène), rappel toutes les 3 min, puis message de fin
 async function alarmWatch() {

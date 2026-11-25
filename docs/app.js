@@ -2958,7 +2958,8 @@
       'Chaque jour vers 10h, contrôle de la pile des modules sans fil d’eedomus utilisés dans l’appli (détecteurs, portes, sondes) et des sirènes.',
       'Les modules muets depuis plus de 6 mois (plus utilisés) sont ignorés.',
       'Pile à 20 % ou moins : alerte tout de suite la première fois, puis rappel une fois par semaine tant qu’elle n’est pas changée.',
-      'Détecteur de mouvement ou de porte sans aucun signal depuis 30 jours : pile sans doute vide, à changer aussi.',
+      'Détecteurs de mouvement, de fumée et sirènes : changer la pile à 20 % ou moins, ou si le détecteur de mouvement ne donne plus de signal depuis 30 jours.',
+      'Capteurs de porte : à changer quand ils ne répondent plus depuis 30 jours ; une pile basse les annonce en « prochain changement ».',
       'L’alerte cite aussi le prochain changement à prévoir (piles entre 20 et 40 %).',
       'Une pile remontée au-dessus de 50 % est considérée comme changée.'] },
     { k: 'smoke', ic: 'flame', t: 'Détecteur de fumée', w: 'Toujours', s: 'Alerte immédiate', c: [
@@ -2989,7 +2990,7 @@
     if (Date.now() - battAsk > 300000) { battAsk = Date.now(); api({ action: 'batt.state' }).then(function (j) { BATT = j; if (!sheet.hidden && sheet.dataset.view === 'settings') renderSettings(); }).catch(function () {}); }
     if (!BATT) return '<div class="alr-set"><span class="mu">Relevé des piles…</span></div>';
     if (!BATT.low.length && !(BATT.next || []).length) return '<div class="alr-set"><span>Aucune pile faible en ce moment 👍</span></div>';
-    var li = function (x) { return '<li>' + esc(x.name) + ' : <b>' + x.batt + ' %</b>' + (x.mute ? ' · plus de signal depuis le ' + esc(x.mute) : '') + '</li>'; };
+    var li = function (x) { return '<li>' + esc(x.name.charAt(0).toUpperCase() + x.name.slice(1)) + (x.mute ? ' · plus de signal depuis le ' + esc(x.mute) : ' : <b>' + x.batt + ' %</b>') + '</li>'; };
     return '<div class="alr-set"><span>À changer :</span></div><ul class="rt-items">' + BATT.low.map(li).join('') + '</ul>' +
       (BATT.next && BATT.next.length ? '<div class="alr-set"><span>Prochain changement :</span></div><ul class="rt-items">' + BATT.next.map(li).join('') + '</ul>' : '');
   }
