@@ -292,7 +292,8 @@ function cleanPresence() {
 // ---------- Échanges avec le serveur n8n ----------
 async function post(body) {
   if (!E.API) throw new Error('API absente dans ' + ENVF);
-  const r = await fetch(E.API, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(body) });
+  // 2 min au plus : un serveur qui ne répond pas ne doit jamais bloquer la tâche des 15 min
+  const r = await fetch(E.API, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(body), signal: AbortSignal.timeout(120000) });
   const j = await r.json().catch(() => ({}));
   if (!r.ok || !j.ok) throw new Error((j && j.error) || 'HTTP ' + r.status);
   return j;
