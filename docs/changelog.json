@@ -1,7 +1,16 @@
 {
-  "version": "2.60.0",
+  "version": "2.60.1",
   "date": "2026-11-25",
   "releases": [
+    {
+      "version": "2.60.1",
+      "date": "2026-11-25",
+      "time": "07:16",
+      "title": "Piles : détecteurs muets",
+      "changes": [
+        "Alerte piles : un détecteur de mouvement ou de porte sans signal depuis 30 jours est aussi à changer, avec la date du dernier signal"
+      ]
+    },
     {
       "version": "2.60.0",
       "date": "2026-11-25",
@@ -1842,5 +1851,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "07:14"
+  "time": "07:16"
 }
