@@ -1,7 +1,20 @@
 {
-  "version": "2.65.0",
+  "version": "2.66.0",
   "date": "2026-11-25",
   "releases": [
+    {
+      "version": "2.66.0",
+      "date": "2026-11-25",
+      "time": "23:44",
+      "title": "Boutons harmonisés",
+      "changes": [
+        "Un seul style de boutons partout : choix actif en clair, interrupteurs clairs, boutons d'action gris ; la couleur ne sert plus qu'à dire OK, problème, chauffe ou lumière",
+        "Règle unique : on glisse pour le portail, l'ouverture du garage, la désactivation de l'alarme et l'allumage du sauna ; un appui pour le reste",
+        "Notes explicatives repliées derrière « i En savoir plus », textes un peu plus grands",
+        "Détecteurs de mouvement : seuls ceux qui bougent ou posent problème sont affichés, « Tout voir » pour le reste",
+        "Le bouton touché vibre, clignote pendant l'envoi puis affiche ✓ (ou ! en cas d'échec)"
+      ]
+    },
     {
       "version": "2.65.0",
       "date": "2026-11-25",
@@ -1943,5 +1956,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "23:38"
+  "time": "23:44"
 }

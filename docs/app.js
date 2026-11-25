@@ -220,15 +220,42 @@
     if (room.camera) return true;
     return !!(IM && IM.cameras && IM.cameras.some(function (c) { return norm(c.name) === norm(room.name); })) || ['cellier', 'piscine', 'jardin', 'garage', 'salon'].indexOf(norm(room.name)) >= 0;
   }
+  // ---------- Retour visible sur le bouton touché : vibration, « en cours » puis ✓ (au lieu d'un message en bas) ----------
+  var FB = null, hapEl = null;
+  function haptic() {
+    try { if (navigator.vibrate) navigator.vibrate(12); } catch (e) {}
+    try { // iPhone : un interrupteur système caché donne une petite vibration (iOS 18 et plus)
+      if (!hapEl) { hapEl = document.createElement('label'); hapEl.style.cssText = 'position:fixed;left:-99px;top:0;opacity:0;pointer-events:none'; hapEl.innerHTML = '<input type="checkbox" switch>'; document.body.appendChild(hapEl); }
+      hapEl.click();
+    } catch (e) {}
+  }
+  var FB_ATTR = ['qgo', 'yesno', 'choice', 'action', 'tuya', 'iqTog', 'ntStep', 'light', 'shutter', 'pushTest', 'routeTest'];
+  function fbStart(el) {
+    if (!el) return;
+    for (var i = 0; i < FB_ATTR.length; i++) {
+      var k = FB_ATTR[i]; if (el.dataset[k] == null) continue;
+      var attr = 'data-' + k.replace(/[A-Z]/g, function (c) { return '-' + c.toLowerCase(); });
+      FB = { sel: '[' + attr + '="' + String(el.dataset[k]).replace(/["\\]/g, '') + '"]', st: 'wait', t: Date.now() };
+      haptic(); fbApply(); return;
+    }
+  }
+  function fbDone(ok) { if (!FB || Date.now() - FB.t > 15000) return false; FB.st = ok ? 'ok' : 'err'; FB.t = Date.now(); fbApply(); setTimeout(function () { if (FB && FB.st !== 'wait' && Date.now() - FB.t >= 1400) { FB = null; fbApply(); } }, 1500); return true; }
+  function fbApply() {
+    Array.prototype.forEach.call(document.querySelectorAll('.fb-wait, .fb-ok, .fb-err'), function (x) { x.classList.remove('fb-wait', 'fb-ok', 'fb-err'); });
+    if (!FB) return;
+    if (FB.st === 'wait' && Date.now() - FB.t > 8000) { FB = null; return; }
+    Array.prototype.forEach.call(document.querySelectorAll(FB.sel), function (x) { x.classList.add('fb-' + FB.st); });
+  }
+  document.addEventListener('click', function (e) { var el = e.target.closest && e.target.closest('button, [role="button"]'); if (el) fbStart(el); }, true);
   function send(id, value, opts) {
     opts = opts || {};
     if (opts.optimistic !== false) pending[id] = { value: value, until: Date.now() + 8000 };
     render();
     return api({ action: 'set', id: id, value: value }).then(function () {
-      if (opts.msg) toast(opts.msg);
+      if (!fbDone(true) && opts.msg) toast(opts.msg);
       setTimeout(refresh, 1500); setTimeout(refresh, 6000);
     }).catch(function (e) {
-      delete pending[id]; render();
+      delete pending[id]; render(); fbDone(false);
       toast(e.status === 403 ? 'Action non autorisée' : 'La maison ne répond pas, réessaie', true);
     });
   }
@@ -442,7 +469,7 @@
   // SLIDE = { key, where } : curseur affiché sous une tuile ou une ligne. Clés : gate, garage-1, garage-2, alarm-on, alarm-off, sauna-on
   var SLIDE = null, slideT = null, qBusy = {};
   var SLIDE_LABEL = {
-    gate: 'Glisser pour actionner le portail', garage: 'Ouvrir / fermer la porte de garage', 'garage-1': 'Glisser pour ouvrir le garage', 'garage-2': 'Glisser pour fermer le garage',
+    gate: 'Glisser pour actionner le portail', garage: 'Glisser pour la porte de garage', 'garage-1': 'Glisser pour ouvrir le garage', 'garage-2': 'Glisser pour fermer le garage',
     'alarm-on': "Glisser pour activer l'alarme", 'alarm-off': "Glisser pour désactiver l'alarme", 'sauna-on': 'Glisser pour allumer le sauna'
   };
   function openSlide(key, where) {
@@ -455,7 +482,7 @@
     var k = SLIDE.key, garage = false; // plus de choix Ouvrir / Fermer : une seule commande pour la porte de garage
     return '<div class="slidebox">' +
       (garage ? '<div class="seg2"><button class="' + (k === 'garage-1' ? 'on' : '') + '" data-slidekey="garage-1">Ouvrir</button><button class="' + (k === 'garage-2' ? 'on' : '') + '" data-slidekey="garage-2">Fermer</button></div>' : '') +
-      '<div class="slide' + (/alarm|sauna/.test(k) ? ' warm' : '') + '" data-slide="' + k + '"><span class="fill"></span><span class="knob">' + icon('chev') + '</span><span class="sl-t">' + esc(SLIDE_LABEL[k]) + '</span></div>' +
+      '<div class="slide" data-slide="' + k + '"><span class="fill"></span><span class="knob">' + icon('chev') + '</span><span class="sl-t">' + esc(SLIDE_LABEL[k]) + '</span></div>' +
       '<button class="sl-x" data-slidex>Annuler</button></div>';
   }
   function doSlide(key) {
@@ -854,15 +881,15 @@
       return '<button class="q' + (on ? ' on' : '') + (SLIDE && SLIDE.where === 'home' && SLIDE.key.indexOf(k) === 0 ? ' sel' : '') + '" data-qa="' + k + '"><span class="ic">' + icon(ic) + '</span>' + name + '<small>' + esc(st) + '</small></button>';
     };
     // Accès rapide : de vrais boutons, un seul appui (plus besoin de glisser)
-    var qrow = function (ic, cls, name, st, ctl) { return '<div class="qrow"><span class="ic ' + cls + '">' + icon(ic) + '</span><span class="qn"><b>' + name + '</b><small>' + esc(st) + '</small></span>' + ctl + '</div>'; };
+    var qrow = function (ic, cls, name, st, ctl, sk) { return '<div class="qrow"><span class="ic ' + cls + '">' + icon(ic) + '</span><span class="qn"><b>' + name + '</b><small>' + esc(st) + '</small></span>' + ctl + '</div>' + (sk ? sk.map(function (k) { return slideHTML('q-' + k); }).join('') : ''); };
     var qbtn = function (k, label) { return '<button class="qbtn' + (qBusy[k] ? ' busy' : '') + '" data-qgo="' + k + '">' + (qBusy[k] ? 'Envoi…' : label) + '</button>'; };
     var qseg = function (k, on, cls) { return '<span class="seg2 qseg"><button class="' + (on ? 'on ' + cls : '') + '" data-qgo="' + k + '-on">ON</button><button class="' + (!on ? 'on' : '') + '" data-qgo="' + k + '-off">OFF</button></span>'; };
     var gst = GAR ? GAR.state : null;
     h += '<div class="lbl">Accès rapide</div><div class="qlist">' +
-      qrow('gate', 'cool', 'Portail', gate.text || '—', qbtn('gate', 'Actionner')) +
-      qrow('garage', 'cool', 'Garage', gst === 'open' ? 'Ouverte' : gst === 'closed' ? 'Fermée' : GAR ? 'À vérifier' : '…', qbtn('garage', gst === 'open' ? 'Fermer' : gst === 'closed' ? 'Ouvrir' : 'Ouvrir / fermer')) +
-      qrow('flame', 'warm', 'Sauna', !sd ? '…' : son ? (sd.power > 50 ? watts(sd.power) : 'Allumé') : 'Éteint', qseg('sauna', son, 'warm')) +
-      qrow('shield', armed ? 'okc' : 'cool', 'Alarme', armed ? 'Activée' : 'Off', qseg('alarm', armed, 'ok')) +
+      qrow('gate', 'cool', 'Portail', gate.text || '—', qbtn('gate', 'Actionner'), ['gate']) +
+      qrow('garage', 'cool', 'Garage', gst === 'open' ? 'Ouverte' : gst === 'closed' ? 'Fermée' : GAR ? 'À vérifier' : '…', qbtn('garage', gst === 'open' ? 'Fermer' : gst === 'closed' ? 'Ouvrir' : 'Ouvrir / fermer'), ['garage']) +
+      qrow('flame', 'warm', 'Sauna', !sd ? '…' : son ? (sd.power > 50 ? watts(sd.power) : 'Allumé') : 'Éteint', qseg('sauna', son, 'warm'), ['sauna-on']) +
+      qrow('shield', armed ? 'okc' : 'cool', 'Alarme', armed ? 'Activée' : 'Off', qseg('alarm', armed, 'ok'), ['alarm-off']) +
       '</div>';
     // Favoris
     var salon = findRoom('salon'), lit = salon ? salon.items.filter(function (it) { return it.type === 'light' && isOn(it); }).length : 0;
@@ -1296,7 +1323,7 @@
     }).join('') + '</div><p class="note-q">En cas de fumée, une notification part tout de suite sur les iPhone (et un rappel toutes les 3 minutes tant que l’alarme dure).</p>';
   }
   // Zone « Ouvertures » : l'interrupteur active la zone ; toucher le nom déplie les portes (ouverte / fermée, pile)
-  var ZEXP = {};
+  var ZEXP = {}, MOT_ALL = false;
   function zoneDoorsHTML(it) {
     var id = it.id, yes = num(id) === 1, open = ZEXP[id];
     var doors = []; CFG.groups.forEach(function (g) { g.rooms.forEach(function (rm) { rm.items.forEach(function (d) { if (d.type === 'door') doors.push(d); }); }); });
@@ -1321,7 +1348,7 @@
     };
     h += '<div class="lbl">Alarme</div><div class="aopts">' +
       opt(!armed, 'data-qgo="alarm-off"', 'shieldoff', qBusy['alarm-off'] ? 'Envoi…' : 'Désactivée', 'La maison n’est pas surveillée') +
-      opt(armed, 'data-qgo="alarm-on"', 'shieldok', qBusy['alarm-on'] ? 'Envoi…' : 'Activée', 'Ouvertures et mouvements surveillés') + '</div>';
+      opt(armed, 'data-qgo="alarm-on"', 'shieldok', qBusy['alarm-on'] ? 'Envoi…' : 'Activée', 'Ouvertures et mouvements surveillés') + '</div>' + slideHTML('q-alarm-off');
     var mode = A.items.filter(function (it) { return it.group === 'mode'; })[0], mv = mode ? val(mode.id) : null;
     if (mode) {
       var mdesc = { 'Manuel': ['hand', 'Vous activez et désactivez vous-même'], 'Automatique': ['clock', 'eedomus active selon ses règles'] };
@@ -1333,11 +1360,19 @@
     var grp = function (g, title) {
       var items = A.items.filter(function (it) { return it.group === g; }); if (!items.length) return '';
       // détecteurs : mouvement en cours d'abord, puis du plus récent au plus ancien
-      if (g === 'motion') items = items.slice().sort(function (x, y) {
-        var mx = num(x.id) > 0, my = num(y.id) > 0; if (mx !== my) return mx ? -1 : 1;
-        var cx = (STATES[x.id] || {}).changed || '', cy = (STATES[y.id] || {}).changed || ''; return cx < cy ? 1 : cx > cy ? -1 : 0;
-      });
-      return '<div class="lbl">' + title + '</div><div class="card2 flat">' + items.map(function (it) { return it.doors ? zoneDoorsHTML(it) : rowHTML(it); }).join('') + '</div>';
+      var more = '';
+      if (g === 'motion') {
+        items = items.slice().sort(function (x, y) {
+          var mx = num(x.id) > 0, my = num(y.id) > 0; if (mx !== my) return mx ? -1 : 1;
+          var cx = (STATES[x.id] || {}).changed || '', cy = (STATES[y.id] || {}).changed || ''; return cx < cy ? 1 : cx > cy ? -1 : 0;
+        });
+        // liste repliée : seulement ce qui bouge ou pose problème (silencieux depuis 14 jours, pile à 20 % ou moins), puis « Tout voir »
+        var key = function (it) { var st = STATES[it.id] || {}, ch = st.changed ? new Date(st.changed.replace(' ', 'T')).getTime() : 0; return num(it.id) > 0 || (ch && Date.now() - ch > 14 * 86400000) || (st.batt != null && st.batt <= 20); };
+        var imp = items.filter(key);
+        if (!MOT_ALL && imp.length < items.length) { more = '<button class="row seeall" data-motall><span class="ic">' + icon('walk') + '</span><span><b>' + (imp.length ? 'Tout voir' : 'Tous calmes') + '</b><small>' + (items.length - imp.length) + ' détecteur' + (items.length - imp.length > 1 ? 's' : '') + ' sans mouvement ni souci</small></span><span class="val">›</span></button>'; items = imp; }
+        else if (MOT_ALL) more = '<button class="row seeall" data-motall><span class="ic">' + icon('walk') + '</span><span><b>Replier</b><small>N’afficher que ce qui bouge ou pose problème</small></span><span class="val">‹</span></button>';
+      }
+      return '<div class="lbl">' + title + '</div><div class="card2 flat">' + items.map(function (it) { return it.doors ? zoneDoorsHTML(it) : rowHTML(it); }).join('') + more + '</div>';
     };
     // mode Manuel / Automatique juste sous « Activer l'alarme »
     h += smokeHTML() + grp('zones', 'Zones surveillées') + grp('motion', 'Détecteurs de mouvement');
@@ -1723,6 +1758,18 @@
     return r.temp ? num(r.temp) : null;
   }
   var TITLES = { home: 'Accueil', rooms: 'Pièces', climate: 'Climat', cams: 'Caméras', alarm: 'Alarme', more: 'Plus' };
+  // Notes explicatives : repliées derrière un « ⓘ » (on touche pour lire), pour alléger les écrans
+  var NQ_OPEN = {};
+  function infoize(root) {
+    Array.prototype.forEach.call(root.querySelectorAll('p.note-q:not(.nq-in)'), function (p) {
+      var k = (p.textContent || '').slice(0, 40), d = document.createElement('details');
+      d.className = 'nq'; if (NQ_OPEN[k]) d.open = true;
+      d.innerHTML = '<summary><span class="nq-i">i</span>En savoir plus</summary>';
+      p.parentNode.insertBefore(d, p); p.classList.add('nq-in'); d.appendChild(p);
+      d.addEventListener('toggle', function () { NQ_OPEN[k] = d.open; });
+    });
+  }
+  try { new MutationObserver(function () { infoize(sheet); fbApply(); }).observe(sheet, { childList: true }); } catch (e) {}
   function render() {
     if (!CFG || !token) return;
     var y = app.scrollTop, body;
@@ -1747,6 +1794,7 @@
     if (!sheet.hidden && sheet.dataset.view === 'logs') renderLogs();
     var v = TAB === 'cams' && liveCam && document.getElementById('v-' + liveCam);
     attachLives(v ? v.parentNode : null);
+    fbApply(); infoize(app);
   }
 
   function setup() {
@@ -3215,6 +3263,7 @@
         setTimeout(function () { if (LOGS.doors) LOGS.doors.at = 0; loadLogs('doors', true); }, 40000);
       }).catch(function () { gsay('Impossible d’enregistrer, réessaie.', true); });
     }
+    if (e.target.closest('[data-motall]')) { MOT_ALL = !MOT_ALL; return render(); }
     if ((b = e.target.closest('[data-zexp]'))) { ZEXP[b.dataset.zexp] = !ZEXP[b.dataset.zexp]; return render(); }
     if ((b = e.target.closest('[data-yesno]'))) { var yid = +b.dataset.yesno; return send(yid, num(yid) === 1 ? 0 : 1); }
     if ((b = e.target.closest('[data-choice]'))) { if (b.classList.contains('on')) return; var cp = b.dataset.choice.split(':'); return send(+cp[0], +cp[1]); }
@@ -3223,6 +3272,9 @@
     if ((b = e.target.closest('[data-qgo]'))) {
       var qg = b.dataset.qgo;
       if (b.classList.contains('on') || qBusy[qg]) return; // déjà dans cet état / déjà envoyé
+      // règle unique : on glisse pour ce qui ouvre ou désarme la maison (portail, ouverture du garage, désactivation de l'alarme)
+      // et pour allumer le sauna ; un appui simple suffit pour tout le reste
+      if (qg === 'gate' || qg === 'alarm-off' || qg === 'sauna-on' || (qg === 'garage' && !(GAR && GAR.state === 'open'))) return openSlide(qg, 'q-' + qg);
       if (qg === 'sauna-on') return saunaSet(true);
       if (qg === 'sauna-off') return saunaSet(false);
       qBusy[qg] = true; setTimeout(function () { delete qBusy[qg]; render(); }, 2500);

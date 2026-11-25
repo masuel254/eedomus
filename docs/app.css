@@ -1197,3 +1197,49 @@ body.pfs { overflow: hidden; }
 .acc2 > .lst.tdl { padding: 0; }
 .tdl .nf-sw.td .lg.tdi { position: relative; z-index: 1; display: block; background: #111418; padding: 11px 14px 11px 38px; font-size: 14px; line-height: 1.45; touch-action: pan-y; transition: transform .2s ease; }
 .tdl .nf-sw.td .lg.tdi::before { content: "○"; position: absolute; left: 14px; top: 11px; font-weight: 800; color: var(--amber); }
+
+/* ================= Harmonisation : une seule famille de boutons =================
+   Choix actif = pastille claire, texte foncé · Interrupteur allumé = clair · Bouton d'action = gris, texte blanc.
+   La couleur est réservée au sens : vert = OK, rouge = problème, orange = chauffe (température), ambre = lumière allumée. */
+:root { --sel: #EEF0F3; --sel-tx: #0C0E11; --mu: #9AA3AF; }
+.tri button.on, .modes button.on, .hdbtn.on, .schedlist button.on, .en-tabs button.on, .chs button.on, .gc-btns .act.on,
+.hc-pres .seg2 button.on[data-presence="1"], .qseg button.on.ok, .qseg button.on.warm, .seg2 button.on, .alarm-ctl .qseg button.on {
+  background: var(--sel); color: var(--sel-tx); border-color: transparent; box-shadow: none; }
+.row.is-on .sw, .row.yes .sw, .row.is-on.heat .sw, .ctl.tog.is-on .sw, .ctl.tog.is-on.heat .sw, .ctl.tog.is-on.light .sw,
+.lt2.on .sw, .autolive.on .sw, .sw-b.is-on .sw, .zrow.is-on .sw { background: var(--sel); }
+.row.is-on .sw::after, .row.yes .sw::after, .ctl.tog.is-on .sw::after, .lt2.on .sw::after, .autolive.on .sw::after, .sw-b.is-on .sw::after { background: var(--sel-tx); }
+.act, .act.primary, .qbtn, .manual button, .recbtn { background: var(--s3); color: var(--tx); border: 1px solid #323843; }
+.qbtn { font-weight: 700; }
+.back2, .foot button, .legend .more, .wfoot .more, .qa-more, .pool-edit, .sched-ch, .alr-b .lnk, .schedlist .manage, .qb.v { color: var(--tx); }
+.dock button svg.i, .chip.act2 svg.i, .fv > svg.i, .q .ic, .qrow .ic, .sched-ic, .pool-hd .ic, .manual span svg.i, .chip.home svg.i { color: var(--tx); }
+.sched-ic, .pool-hd .ic { background: var(--s2); }
+.sched-edit { background: var(--s2); border-color: #323843; color: var(--tx); }
+.q.sel { border-color: var(--sel); box-shadow: 0 0 0 1px var(--sel) inset; }
+.mark.v { background: var(--s2); color: var(--tx); }
+.slide .knob, .slide.warm .knob { background: var(--sel); color: var(--sel-tx); }
+.slide.done .knob { background: var(--ok); }
+/* textes plus lisibles */
+.row small, .alr-t small, .rs-list small, .cammeta, .qn small, .fv small { font-size: 13.5px; }
+/* bouton « Tout voir » des listes repliées */
+.row.seeall { width: 100%; text-align: left; }
+.row.seeall b { font-weight: 700; } .row.seeall .val { color: var(--mu); }
+/* notes repliées derrière un « i » */
+details.nq { margin: 4px 20px 14px; }
+details.nq > summary { list-style: none; display: inline-flex; align-items: center; gap: 8px; color: var(--mu); font-size: 13.5px; font-weight: 600; cursor: pointer; }
+details.nq > summary::-webkit-details-marker { display: none; }
+.nq-i { width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid currentColor; display: inline-grid; place-items: center; font: italic 700 12px Georgia, serif; }
+details.nq[open] > summary { margin-bottom: 6px; }
+details.nq p.note-q { margin: 0; padding: 0 !important; font-size: 14px; color: var(--tx); opacity: .85; line-height: 1.5; }
+.sh-in details.nq, .alr-b details.nq { margin-left: 4px; margin-right: 4px; }
+/* retour visible sur le bouton touché */
+.fb-wait { position: relative; opacity: .7; animation: fbPulse 1s ease-in-out infinite; }
+@keyframes fbPulse { 50% { opacity: .45; } }
+.fb-ok, .fb-err { position: relative; }
+.fb-ok::after, .fb-err::after { position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font: 800 12px var(--f-ui); z-index: 3; box-shadow: 0 0 0 2px var(--bg); }
+.fb-ok::after { content: "✓"; background: var(--ok); color: #06210F; }
+.fb-err::after { content: "!"; background: var(--warn); color: #fff; }
+.row.fb-ok::after, .row.fb-err::after, .aopt.fb-ok::after { top: 8px; right: 8px; }
+/* Climat : les boutons Confort+ et le réglage restent dans l'écran sur les petits iPhone */
+.boostrow { flex-wrap: nowrap; min-width: 0; }
+.boostrow .act { min-width: 0; padding: 10px 4px; font-size: 13px; gap: 4px; }
+.boostrow .act svg.i { width: 15px; height: 15px; }
