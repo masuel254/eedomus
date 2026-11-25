@@ -1,7 +1,17 @@
 {
-  "version": "2.59.1",
-  "date": "2026-11-24",
+  "version": "2.60.0",
+  "date": "2026-11-25",
   "releases": [
+    {
+      "version": "2.60.0",
+      "date": "2026-11-25",
+      "time": "07:14",
+      "title": "Portes et piles",
+      "changes": [
+        "Alarme : toucher « Ouvertures » déplie les portes (ouverte / fermée et pile du détecteur) ; l'interrupteur active toujours la zone",
+        "Alerte piles : noms clairs (Détecteur Jardin, Porte cellier…), piles à changer et prochain changement à prévoir"
+      ]
+    },
     {
       "version": "2.59.1",
       "date": "2026-11-24",
@@ -1832,5 +1842,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "19:13"
+  "time": "07:14"
 }

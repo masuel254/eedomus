@@ -1172,3 +1172,13 @@ body.pfs { overflow: hidden; }
 .batt .bg i { display: block; height: 100%; background: currentColor; border-radius: 1px; }
 .batt.mid { color: var(--amber); }
 .batt.low { color: var(--warn); }
+/* Zone Ouvertures dépliable : portes, état et pile */
+.zrow .zx { display: grid; grid-template-columns: 1fr auto; column-gap: 8px; align-items: center; text-align: left; min-width: 0; }
+.zrow .zx b { grid-column: 1; } .zrow .zx small { grid-column: 1; display: block; color: var(--mu); font-size: 13px; }
+.zrow .zx .zchev { grid-column: 2; grid-row: 1 / span 2; color: var(--mu); transition: transform .2s; }
+.zrow .zx .zchev.up { transform: rotate(180deg); }
+.zrow .zx .zchev svg.i { width: 16px; height: 16px; }
+.zdoors { background: #111418; border-bottom: 1px solid #1F2329; }
+.zdoors .row.sub { padding-left: 30px; min-height: 54px; }
+.zdoors .row.sub .ic { width: 32px; height: 32px; }
+.zrow .zsw { flex: none; padding: 0; } .zrow .zsw .sw { display: block; }

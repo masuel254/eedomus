@@ -411,6 +411,7 @@
         "id": 1029080,
         "name": "Ouvertures",
         "sub": "Portes et fenêtres",
+        "doors": true,
         "type": "yesno",
         "group": "zones"
       },

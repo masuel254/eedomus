@@ -1287,6 +1287,23 @@
         '<span class="' + (on ? 'bad' : none ? 'mu2' : 'ok') + '">' + (on ? 'FUMÉE !' : none ? '—' : 'OK') + '</span></div>';
     }).join('') + '</div><p class="note-q">En cas de fumée, une notification part tout de suite sur les iPhone (et un rappel toutes les 3 minutes tant que l’alarme dure).</p>';
   }
+  // Zone « Ouvertures » : l'interrupteur active la zone ; toucher le nom déplie les portes (ouverte / fermée, pile)
+  var ZEXP = {};
+  function zoneDoorsHTML(it) {
+    var id = it.id, yes = num(id) === 1, open = ZEXP[id];
+    var doors = []; CFG.groups.forEach(function (g) { g.rooms.forEach(function (rm) { rm.items.forEach(function (d) { if (d.type === 'door') doors.push(d); }); }); });
+    var nOpen = doors.filter(function (d) { return doorOpen(d.id); }).length;
+    var h = '<div class="row zrow' + (yes ? ' is-on yes' : '') + (pending[id] ? ' busy' : '') + '"><span class="ic">' + icon('shield') + '</span>' +
+      '<button class="zx" data-zexp="' + id + '"><b>' + esc(it.name) + '</b><small>' + esc((yes ? 'Oui' : 'Non') + ' · ' + doors.length + ' portes' + (nOpen ? ', ' + nOpen + ' ouverte' + (nOpen > 1 ? 's' : '') : ', toutes fermées') + (since(id) ? ' · ' + since(id) : '')) + '</small>' +
+      '<span class="zchev' + (open ? ' up' : '') + '">' + icon('down') + '</span></button>' +
+      '<button class="zsw" data-yesno="' + id + '" aria-label="Activer la zone"><span class="sw"></span></button></div>';
+    if (open) h += '<div class="zdoors">' + doors.map(function (d) {
+      var o = doorOpen(d.id), st = STATES[d.id] || {}, ch = st.changed ? new Date(st.changed.replace(' ', 'T')).getTime() : null, old = ch && Date.now() - ch > 30 * 86400000;
+      return '<div class="row sub"><span class="ic">' + icon('door') + '</span><span><b>' + esc(d.name) + '</b><small>' + esc(old ? 'Dernier signal ' + since(d.id) + ' · détecteur muet ?' : (o ? 'Ouverte ' : 'Fermée ') + since(d.id)) + battHTML(d.id) + '</small></span>' +
+        '<span class="' + (old ? 'mu2' : o ? 'bad' : 'ok') + '">' + (old ? '?' : o ? 'Ouverte' : 'Fermée') + '</span></div>';
+    }).join('') + '</div>';
+    return h;
+  }
   function alarmHTML() {
     var A = CFG.alarm || { items: [] }, v = num(A.status), st = ALARM_STATE[v] || [(STATES[A.status] || {}).text || '—', ''], armed = v != null && v !== 0;
     var h = '<div class="acard ' + st[1] + '"><span class="aic">' + icon('shield') + '</span><span><b>Alarme ' + esc(st[0].toLowerCase()) + '</b><small>' + esc(since(A.status)) + '</small></span></div>';
@@ -1312,7 +1329,7 @@
         var mx = num(x.id) > 0, my = num(y.id) > 0; if (mx !== my) return mx ? -1 : 1;
         var cx = (STATES[x.id] || {}).changed || '', cy = (STATES[y.id] || {}).changed || ''; return cx < cy ? 1 : cx > cy ? -1 : 0;
       });
-      return '<div class="lbl">' + title + '</div><div class="card2 flat">' + items.map(rowHTML).join('') + '</div>';
+      return '<div class="lbl">' + title + '</div><div class="card2 flat">' + items.map(function (it) { return it.doors ? zoneDoorsHTML(it) : rowHTML(it); }).join('') + '</div>';
     };
     // mode Manuel / Automatique juste sous « Activer l'alarme »
     h += smokeHTML() + grp('zones', 'Zones surveillées') + grp('motion', 'Détecteurs de mouvement');
@@ -2941,6 +2958,7 @@
       'Chaque jour vers 10h, contrôle de la pile des modules sans fil d’eedomus utilisés dans l’appli (détecteurs, portes, sondes) et des sirènes.',
       'Les modules muets depuis plus de 6 mois (plus utilisés) sont ignorés.',
       'Pile à 20 % ou moins : alerte tout de suite la première fois, puis rappel une fois par semaine tant qu’elle n’est pas changée.',
+      'L’alerte cite aussi le prochain changement à prévoir (piles entre 20 et 40 %).',
       'Une pile remontée au-dessus de 50 % est considérée comme changée.'] },
     { k: 'smoke', ic: 'flame', t: 'Détecteur de fumée', w: 'Toujours', s: 'Alerte immédiate', c: [
       'Un détecteur de fumée passe en alarme : alerte immédiate (vérifié toutes les 30 s).',
@@ -2969,8 +2987,10 @@
   function battListHTML() {
     if (Date.now() - battAsk > 300000) { battAsk = Date.now(); api({ action: 'batt.state' }).then(function (j) { BATT = j; if (!sheet.hidden && sheet.dataset.view === 'settings') renderSettings(); }).catch(function () {}); }
     if (!BATT) return '<div class="alr-set"><span class="mu">Relevé des piles…</span></div>';
-    if (!BATT.low.length) return '<div class="alr-set"><span>Aucune pile faible en ce moment 👍</span></div>';
-    return '<div class="alr-set"><span>Piles faibles en ce moment :</span></div><ul class="rt-items">' + BATT.low.map(function (x) { return '<li>' + esc(x.name) + ' : <b>' + x.batt + ' %</b></li>'; }).join('') + '</ul>';
+    if (!BATT.low.length && !(BATT.next || []).length) return '<div class="alr-set"><span>Aucune pile faible en ce moment 👍</span></div>';
+    var li = function (x) { return '<li>' + esc(x.name) + ' : <b>' + x.batt + ' %</b></li>'; };
+    return '<div class="alr-set"><span>À changer :</span></div><ul class="rt-items">' + BATT.low.map(li).join('') + '</ul>' +
+      (BATT.next && BATT.next.length ? '<div class="alr-set"><span>Prochain changement :</span></div><ul class="rt-items">' + BATT.next.map(li).join('') + '</ul>' : '');
   }
   // ---------- Trajet vers le travail (TomTom) : clé collée ici, gardée aussi sur l'iPhone et renvoyée si le serveur l'a perdue ----------
   var ROUTE = null, routeAsk = 0, routeEdit = false;
@@ -3156,6 +3176,7 @@
         setTimeout(function () { if (LOGS.doors) LOGS.doors.at = 0; loadLogs('doors', true); }, 40000);
       }).catch(function () { gsay('Impossible d’enregistrer, réessaie.', true); });
     }
+    if ((b = e.target.closest('[data-zexp]'))) { ZEXP[b.dataset.zexp] = !ZEXP[b.dataset.zexp]; return render(); }
     if ((b = e.target.closest('[data-yesno]'))) { var yid = +b.dataset.yesno; return send(yid, num(yid) === 1 ? 0 : 1); }
     if ((b = e.target.closest('[data-choice]'))) { if (b.classList.contains('on')) return; var cp = b.dataset.choice.split(':'); return send(+cp[0], +cp[1]); }
     if ((b = e.target.closest('[data-graph]'))) return openGraph(b.dataset.graph);
