@@ -843,6 +843,27 @@ async function elecWatch() {
   W.day = today; W.yKwh = row.kwh;
   if (row.kwh < 1) await pushNotify({ tag: 'pool', title: '🔎 Électrolyseur à vérifier', body: 'Seulement ' + String(row.kwh).replace('.', ',') + ' kWh consommés hier (moins de 1 kWh) · vérifier qu’il fonctionne bien (prise, filtration, chloration)' });
 }
+// Eau de la piscine (sonde Ico, eedomus) : à 2° ou moins, risque de gel → faire tourner la pompe. Relevé toutes les 10 min,
+// rappel toutes les 3 h tant que ça dure, message de fin quand l'eau remonte à 3,5° ou plus (pour éviter les allers-retours).
+async function poolFrostWatch() {
+  const F = SD.poolFrost = SD.poolFrost || {};
+  if (F.at && F.at > Date.now() - 10 * 60000) return;
+  F.at = Date.now();
+  const r = await eedomus('get', 'action=periph.caract&periph_id=3557562');
+  if (r.success !== 1) return;
+  const b = [].concat(r.body)[0] || {}, t = Number(b.last_value);
+  if (!isFinite(t) || String(b.last_value) === '') return;
+  const age = new Date(localNow().replace(' ', 'T') + 'Z') - new Date(String(b.last_value_change).replace(' ', 'T') + 'Z');
+  if (!(age < 12 * 3600000)) return; // sonde muette : mesure trop vieille, on ne conclut rien
+  const fr = (v) => String(Math.round(v * 10) / 10).replace('.', ',');
+  if (t <= 2 && (!F.on || Date.now() - F.remind > 3 * 3600000)) {
+    await pushNotify({ tag: 'pool', title: '❄️ Eau de la piscine à ' + fr(t) + '°', body: (F.on ? 'Toujours froide · ' : '') + 'Risque de gel : faire tourner la pompe (filtration) pour éviter que l’eau gèle dans les tuyaux' });
+    Object.assign(F, { on: true, remind: Date.now() });
+  } else if (F.on && t >= 3.5) {
+    await pushNotify({ tag: 'pool', title: 'Piscine : fin du risque de gel', body: 'L’eau est remontée à ' + fr(t) + '°' });
+    F.on = false;
+  }
+}
 // Alarme de la maison : notification dès qu'elle sonne (sirène), rappel toutes les 3 min, puis message de fin
 async function alarmWatch() {
   const W = CFG.alarmW; if (!W) return;
@@ -1908,6 +1929,7 @@ try {
     try { await alarmWatch(); } catch (e) {}
     try { await battWatch(); } catch (e) {}
     try { await elecWatch(); } catch (e) {}
+    try { await poolFrostWatch(); } catch (e) {}
     try { await routeWatch(); } catch (e) {}
     let gu = null; try { gu = await garageCamDue(); } catch (e) {}
     return (gu ? [{ json: { garageUrl: gu } }] : []).concat(OUT_PUSH); // aucune réponse HTTP à envoyer
