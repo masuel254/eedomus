@@ -788,10 +788,11 @@ async function battScan() {
 // ce qu'il faut changer, en clair : « pile du détecteur de mouvement Jardin », « capteur de la porte cellier »…
 function battWhat(x) {
   const n = x.name, lo = n.charAt(0).toLowerCase() + n.slice(1);
-  if (x.kind === 'motion') return 'pile du détecteur de mouvement ' + n;
+  // références à racheter (données par le propriétaire)
+  if (x.kind === 'motion') return 'pile du détecteur de mouvement ' + n + ' (pile CR123A)';
   if (x.kind === 'smoke') return 'pile du détecteur de fumée ' + n;
   if (x.kind === 'siren') return 'pile de la ' + lo;
-  if (x.kind === 'door') return 'capteur de la ' + lo;
+  if (x.kind === 'door') return 'capteur de la ' + lo + ' (Sensative Strips Guard 800, Z-Wave)';
   return 'pile : ' + n;
 }
 // à changer : pile à 20 % ou moins, ou module muet ; prochain changement : pile entre 20 et 40 %
@@ -814,8 +815,8 @@ async function battWatch() {
   if (!due.length) return;
   const fresh = due.filter((x) => !B.sent[x.k]);
   due.forEach((x) => { B.sent[x.k] = Date.now(); });
-  const nx = (B.next || []).slice(0, 3).map((x) => x.name + ' (' + x.batt + ' %)');
-  await pushNotify({ tag: 'batt', title: '🔋 À changer : ' + B.low.map((x) => x.name).join(', '),
+  const nx = (B.next || []).slice(0, 3).map((x) => x.name.replace(/ [(].*$/, '') + ' (' + x.batt + ' %)');
+  await pushNotify({ tag: 'batt', title: '🔋 À changer : ' + B.low.map((x) => x.name.replace(/ [(].*$/, '')).join(', '),
     body: B.low.slice(0, 6).map((x) => 'Changer ' + (x.kind === 'door' ? 'le ' : 'la ') + x.name + (x.mute ? ' (plus de signal depuis le ' + x.mute + ')' : ' (' + x.batt + ' %)')).join(' · ') +
       (fresh.length ? '' : ' (rappel)') + (nx.length ? ' · Prochain changement : ' + nx.join(', ') : '') });
 }

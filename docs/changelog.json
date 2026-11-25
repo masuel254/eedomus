@@ -1,7 +1,16 @@
 {
-  "version": "2.60.3",
+  "version": "2.60.4",
   "date": "2026-11-25",
   "releases": [
+    {
+      "version": "2.60.4",
+      "date": "2026-11-25",
+      "time": "07:38",
+      "title": "Piles : références à racheter",
+      "changes": [
+        "Alerte piles : la référence à racheter est indiquée (pile CR123A pour les détecteurs de mouvement, capteur Sensative Strips Guard 800 pour les portes)"
+      ]
+    },
     {
       "version": "2.60.3",
       "date": "2026-11-25",
@@ -1869,5 +1878,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "07:37"
+  "time": "07:38"
 }
