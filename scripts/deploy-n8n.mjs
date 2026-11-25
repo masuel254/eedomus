@@ -667,7 +667,9 @@ async function routeStatus(rev) {
   });
   items.sort((u, v) => v.delay - u.delay);
   const travel = Math.round((s.travelTimeInSeconds || 0) / 60), delay = Math.round((s.trafficDelayInSeconds || 0) / 60);
-  const bad = delay >= RC.delay || items.some((i) => [1, 7, 8, 9, 14].indexOf(i.cat) >= 0 || i.delay >= 5);
+  // alerte seulement pour un vrai problème : 10 min de retard ou plus au total, ou une route fermée sur le trajet.
+  // Accidents, travaux, véhicules en panne sans gros retard sont seulement cités quand une alerte part.
+  const bad = delay >= RC.delay || items.some((i) => i.cat === 8 && i.on);
   return { at: Date.now(), travel, usual: travel - delay, delay, km: Math.round((s.lengthInMeters || 0) / 100) / 10, items: items.slice(0, 6), bad, nInc };
 }
 async function routeNotify(item) {

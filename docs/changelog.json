@@ -1,7 +1,16 @@
 {
-  "version": "2.60.1",
+  "version": "2.60.2",
   "date": "2026-11-25",
   "releases": [
+    {
+      "version": "2.60.2",
+      "date": "2026-11-25",
+      "time": "07:16",
+      "title": "Trajet : vrais bouchons seulement",
+      "changes": [
+        "L'alerte trajet ne part plus pour quelques minutes de ralentissement : 10 min de retard ou plus, ou route fermée"
+      ]
+    },
     {
       "version": "2.60.1",
       "date": "2026-11-25",

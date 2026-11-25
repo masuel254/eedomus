@@ -2979,7 +2979,7 @@
     { k: 'route', ic: 'car', t: 'Trajet vers le travail', w: 'Lun · Mar · Jeu', s: 'Bouchons et travaux, matin et soir', c: [
       'Lundi, mardi et jeudi : aller (maison → travail) contrôlé à 7h15, 7h30 et 7h50, retour (travail → maison) à 17h45, 18h et 18h10. Par l’A16 et la N42.',
       'Bouchon : 10 min de retard ou plus par rapport au temps habituel, avec le trafic du moment.',
-      'Accident, véhicule en panne, voie ou route fermée, travaux sur le trajet : alerte avec la route et l’endroit.',
+      'Route fermée sur le trajet : alerte même sans retard. Accidents, travaux et véhicules en panne sont cités dans l’alerte, sans en déclencher une à eux seuls.',
       'Nouvelle alerte seulement si ça s’aggrave (5 min de plus ou un nouvel incident), puis « trajet dégagé » quand c’est fini.',
       'Pas de notification si tout va bien. Seulement sur les iPhone où elle est activée ci-dessous.'] }
   ];
