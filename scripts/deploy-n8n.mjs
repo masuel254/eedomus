@@ -877,7 +877,11 @@ async function poolFrostWatch() {
 // ---- Services en panne : alerte quand un service ne répond plus depuis 1 h (rappel toutes les 6 h, message quand il revient) ----
 // eedomus, Netatmo, Tuya : dernier appel réussi / raté (on n'alerte que si les appels échouent, pas s'il n'y a eu aucun appel).
 // Relais caméras : dernier signal reçu. Caméras Imou : état envoyé par le relais (enregistrement arrêté).
-function svcMark(name, ok) { const S = SD.svc = SD.svc || {}; const x = S[name] = S[name] || {}; if (ok) x.ok = Date.now(); else x.fail = Date.now(); }
+// écrit au plus toutes les 5 min (chaque écriture des données du serveur augmente le risque d'écraser celle d'une autre exécution)
+function svcMark(name, ok) {
+  const S = SD.svc = SD.svc || {}, x = S[name] = S[name] || {}, now = Date.now(), k = ok ? 'ok' : 'fail';
+  if (!x[k] || now - x[k] > 5 * 60000 || (ok && x.fail && x.fail > x.ok)) x[k] = now;
+}
 async function healthWatch() {
   const H = SD.health = SD.health || { open: {} };
   if (H.at && H.at > Date.now() - 5 * 60000) return;
@@ -886,6 +890,7 @@ async function healthWatch() {
   const NAMES = { eedomus: 'Box eedomus', netatmo: 'Netatmo (chauffage, caméra Présence)', tuya: 'Tuya / Smart Life (sauna, prises)' };
   Object.keys(NAMES).forEach((k) => { const x = S[k]; if (x && x.fail && (!x.ok || x.fail > x.ok) && now - (x.ok || 0) > HOUR) down[k] = { name: NAMES[k], since: x.ok || null }; });
   const R = SD.relay || {};
+  if (R.url && R.seen && now - R.seen > 20 * 60000) await relayProbe();
   if (R.url && R.seen && now - R.seen > HOUR) down.relay = { name: 'Relais caméras (Freebox)', since: R.seen };
   const names = {}; try { (await imDevices()).forEach((d) => { names[d.id] = d.name; }); } catch (e) {}
   const camName = (id) => 'Caméra ' + (names[id] || String(id).slice(0, 6));
@@ -1169,6 +1174,7 @@ async function relay(b) {
   }
   if (b.action === 'relay.sign') {
     if (!R.url) return { ok: true, url: null };
+    if (!R.seen || Date.now() - R.seen > 20 * 60000) await relayProbe(); // signal perdu ? on va voir nous-mêmes
     const exp = (Math.floor(Date.now() / 3600000) + 25) * 3600; // change toutes les heures : les vidéos restent en cache sur l'iPhone
     return { ok: true, url: R.url, alt: R.alt && R.url.indexOf(R.alt) < 0 ? 'https://' + R.alt : null, t: exp + '.' + hmac256hex(CFG.relay.secret, 'relais|' + exp), exp, seen: R.seen || null, status: R.status || null };
   }
@@ -1192,6 +1198,21 @@ async function relayEvents(b) {
     } catch (e) {}
   }
   return reply(200, out);
+}
+// Le signal du relais (toutes les 15 min) peut être perdu côté serveur quand deux exécutions se chevauchent :
+// avant de le croire injoignable, le serveur l'interroge lui-même (état signé) et met à jour « vu » et l'état des caméras.
+async function relayProbe() {
+  const R = SD.relay || {};
+  if (!R.url) return false;
+  const exp = Math.floor(Date.now() / 1000) + 600, t = exp + '.' + hmac256hex(CFG.relay.secret, 'relais|' + exp);
+  try {
+    const j = await helpers.httpRequest({ method: 'GET', url: R.url + '/api/status?t=' + t, json: true, timeout: 8000 });
+    if (!j || !j.ok) return false;
+    R.seen = Date.now();
+    R.status = { disk: j.disk || null, retention: j.retention || null, presence: j.presence || null,
+      cams: (j.cams || []).slice(0, 12).map((c) => ({ id: String(c.id), ok: !!c.ok, gb: Number(c.gb) || 0, from: c.from || null })) };
+    return true;
+  } catch (e) { return false; }
 }
 async function relayHello(b) {
   const R = SD.relay = SD.relay || {};
