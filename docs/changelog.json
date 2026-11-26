@@ -1,7 +1,16 @@
 {
-  "version": "2.68.2",
+  "version": "2.68.3",
   "date": "2026-11-26",
   "releases": [
+    {
+      "version": "2.68.3",
+      "date": "2026-11-26",
+      "time": "22:01",
+      "title": "Remonter jusqu'à 30 jours",
+      "changes": [
+        "Résumé et enregistrements : une case « avant » ouvre le calendrier pour revenir jusqu'à 30 jours (vidéos gardées sur la Freebox)"
+      ]
+    },
     {
       "version": "2.68.2",
       "date": "2026-11-26",
@@ -2031,5 +2040,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "21:58"
+  "time": "22:01"
 }

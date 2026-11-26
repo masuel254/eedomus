@@ -820,6 +820,12 @@
   }
   // Glisser une notification vers la gauche : un peu = bouton « Supprimer », loin = supprimée
   var nfDrag = null;
+  // jour plus ancien choisi dans le calendrier (résumé ou enregistrements)
+  sheet.addEventListener('change', function (e) {
+    var inp = e.target; if (!inp || !inp.dataset || !inp.dataset.pickfor || !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(inp.value)) return;
+    if (inp.dataset.pickfor === 'data-sumday' && SUM) { SUM.date = inp.value; SUM.st = null; SUM.err = false; SUM.tries = 0; return loadSummary(false); }
+    if (inp.dataset.pickfor === 'data-recday' && REC) { REC.date = inp.value; REC.list = null; REC.segs = null; return loadRec(); }
+  });
   sheet.addEventListener('pointerdown', function (e) {
     var row = e.target.closest('.nf-sw'); if (!row || e.target.closest('.nf-del')) return;
     sheet.querySelectorAll('.nf-sw.open').forEach(function (r) { if (r !== row) { r.classList.remove('open'); r.querySelector('.lg').style.transform = ''; } });
@@ -2415,7 +2421,11 @@
   }
   // Choix du jour : les 7 derniers jours sur une seule ligne, du plus ancien à aujourd'hui (jour de la semaine + numéro)
   function weekStrip(sel, attr) {
-    var h = '<div class="wkdays">';
+    // 1re case : un jour plus ancien (vidéos gardées 30 jours sur la Freebox), avec le calendrier de l'iPhone ; puis les 7 derniers jours
+    var mn = new Date(); mn.setDate(mn.getDate() - 29); var mx = new Date(); mx.setDate(mx.getDate() - 7);
+    var old = !!sel && sel <= ymd(mx), sd = old ? new Date(sel + 'T12:00:00') : null;
+    var h = '<div class="wkdays"><label class="pick' + (old ? ' on' : '') + '"><small>' + (old ? esc(sd.toLocaleDateString('fr-FR', { month: 'short' }).replace('.', '')) : 'avant') + '</small><b>' + (old ? sd.getDate() : icon('cal')) + '</b>' +
+      '<input type="date" data-pickfor="' + attr + '" min="' + ymd(mn) + '" max="' + ymd(mx) + '" value="' + (old ? sel : ymd(mx)) + '" aria-label="Choisir un jour plus ancien"></label>';
     for (var i = 6; i >= 0; i--) {
       var d = new Date(); d.setDate(d.getDate() - i);
       var wd = i === 0 ? 'auj.' : i === 1 ? 'hier' : d.toLocaleDateString('fr-FR', { weekday: 'short' }).replace('.', '');

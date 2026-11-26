@@ -1265,3 +1265,12 @@ details.nq p.note-q { margin: 0; padding: 0 !important; font-size: 14px; color: 
 .wkdays button.today small { color: var(--tx); }
 .wkdays button.on { background: var(--sel); border-color: transparent; }
 .wkdays button.on small, .wkdays button.on b { color: var(--sel-tx); }
+.wkdays { grid-template-columns: repeat(8, 1fr); gap: 5px; }
+.wkdays .pick { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 8px 0 9px; border-radius: 14px;
+  background: var(--s2); border: 1px dashed #3A414C; color: var(--tx); min-width: 0; overflow: hidden; }
+.wkdays .pick small { font-size: 11.5px; font-weight: 600; color: var(--mu); }
+.wkdays .pick b { font-size: 17px; font-weight: 800; display: grid; place-items: center; min-height: 21px; }
+.wkdays .pick b svg.i { width: 18px; height: 18px; }
+.wkdays .pick.on { background: var(--sel); border: 1px solid transparent; }
+.wkdays .pick.on small, .wkdays .pick.on b { color: var(--sel-tx); }
+.wkdays .pick input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; font-size: 16px; -webkit-appearance: none; appearance: none; }
