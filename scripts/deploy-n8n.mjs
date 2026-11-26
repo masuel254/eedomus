@@ -867,10 +867,10 @@ async function poolFrostWatch() {
   if (!(age < 12 * 3600000)) return; // sonde muette : mesure trop vieille, on ne conclut rien
   const fr = (v) => String(Math.round(v * 10) / 10).replace('.', ',');
   if (t <= 2 && (!F.on || Date.now() - F.remind > 3 * 3600000)) {
-    await pushNotify({ tag: 'pool', title: '❄️ Eau de la piscine à ' + fr(t) + '°', body: (F.on ? 'Toujours froide · ' : '') + 'Risque de gel : faire tourner la pompe (filtration) pour éviter que l’eau gèle dans les tuyaux' });
+    await pushNotify({ tag: 'poolfrost', title: '❄️ Eau de la piscine à ' + fr(t) + '°', body: (F.on ? 'Toujours froide · ' : '') + 'Risque de gel : faire tourner la pompe (filtration) pour éviter que l’eau gèle dans les tuyaux' });
     Object.assign(F, { on: true, remind: Date.now() });
   } else if (F.on && t >= 3.5) {
-    await pushNotify({ tag: 'pool', title: 'Piscine : fin du risque de gel', body: 'L’eau est remontée à ' + fr(t) + '°' });
+    await pushNotify({ tag: 'poolfrost', title: 'Piscine : fin du risque de gel', body: 'L’eau est remontée à ' + fr(t) + '°' });
     F.on = false;
   }
 }
@@ -905,14 +905,18 @@ async function healthWatch() {
     ((R.status && R.status.cams) || []).filter((c) => !c.ok).forEach((c) => { H.open['cam:' + c.id] = { at: now, remind: now, name: camName(c.id) }; H.camOff = H.camOff || {}; H.camOff[c.id] = now; });
     return;
   }
+  H.mute = H.mute || {};
+  H.last = Object.keys(down).map((k) => ({ k, name: down[k].name, since: down[k].since || null, muted: !!H.mute[k] }));
   for (const k of Object.keys(down)) {
     const o = H.open[k], d = down[k];
+    if (H.mute[k]) { if (!o) H.open[k] = { at: now, remind: now, name: d.name }; continue; } // mise en pause : plus d'alerte jusqu'au retour
     if (!o || (!d.once && now - o.remind > 6 * HOUR)) {
       await pushNotify({ tag: 'health', title: '⚠️ ' + d.name + ' ne répond plus', body: (d.since ? 'Dernière réponse ' + hm(d.since) : 'Aucune réponse depuis plus d’une heure') + (o ? ' · toujours en panne' : '') });
       H.open[k] = { at: o ? o.at : now, remind: now, name: d.name };
     }
   }
   for (const k of Object.keys(H.open)) if (!down[k]) {
+    delete H.mute[k];
     const nm = k.indexOf('cam:') === 0 ? camName(k.slice(4)) + ' : enregistrement' : H.open[k].name;
     await pushNotify({ tag: 'health', title: '✅ ' + nm.replace(/ [(]enregistrement arrêté[)]$/, ' : enregistrement') + ' repart', body: 'Revenu ' + hm(now) });
     delete H.open[k];
@@ -1261,7 +1265,10 @@ async function pushNotify(item, onlyKey) {
   for (const k of Object.keys(SD.push.subs)) {
     if (onlyKey && k !== onlyKey) continue;
     const s = SD.push.subs[k];
+    if (s.off && s.off[item.tag] && item.tag !== 'test') continue; // alerte coupée sur cet iPhone
     const it = Object.assign({ at: Date.now() }, item);
+    // historique gardé ici aussi (30 dernières) : l'iPhone le relit si le sien s'est effacé
+    s.hist = (s.hist || []).concat([{ at: it.at, title: it.title, body: it.body || '', tag: it.tag || 'maison' }]).slice(-30);
     s.q = (s.q || []).filter((x) => x.at > Date.now() - 3600000 && x.tag !== item.tag).concat([it]).slice(-5);
     try {
       // Avec la clé de l'iPhone : le texte voyage chiffré DANS la notification (format « déclaratif » d'Apple, affiché même
@@ -2133,17 +2140,24 @@ try {
     }
     if (body.action === 'push.unsub' && k) delete SD.push.subs[k];
     if (body.action === 'push.route' && k && SD.push.subs[k]) SD.push.subs[k].route = !!body.on; // alerte trajet sur cet iPhone
+    // chaque alerte peut être coupée sur cet iPhone : { tag: true } = coupée
+    if (body.action === 'push.prefs' && k && SD.push.subs[k] && body.off && typeof body.off === 'object') {
+      const off = Object.assign({}, SD.push.subs[k].off || {});
+      Object.keys(body.off).slice(0, 30).forEach((t) => { if (/^[a-z]{2,12}$/.test(t)) { if (body.off[t]) off[t] = true; else delete off[t]; } });
+      SD.push.subs[k].off = off;
+    }
+    if (body.action === 'push.hist') return reply(200, { ok: true, hist: (k && SD.push.subs[k] && SD.push.subs[k].hist) || [] });
     if (body.action === 'push.cfg') { const d = Number(body.delay); if ([1, 2, 3, 5, 10, 15, 20, 30, 45, 60].includes(d)) SD.push.delay = d; }
     // Test lancé depuis le serveur (avec jeton) : une notification de test vers tous les iPhone inscrits
     if (body.action === 'push.testall') {
       if (!body.token || !CFG.tokens.includes(body.token)) return reply(401, { ok: false, error: 'unauthorized' });
       if (body.fmt === 'decl' || body.fmt === 'plain') SD.push.fmt = body.fmt === 'decl' ? 'decl' : null;
-      const tg = /^(test|garage|water|meteo|smoke|boiler|alarm|batt|pool|health)$/.test(String(body.tag || '')) ? body.tag : 'test';
+      const tg = /^(test|garage|water|meteo|smoke|boiler|alarm|batt|pool|poolfrost|health)$/.test(String(body.tag || '')) ? body.tag : 'test';
       const n = await pushNotify({ tag: tg, title: String(body.title || 'Maison').slice(0, 60), body: String(body.text || 'Test des notifications').slice(0, 120), badge: null });
       return reply(200, { ok: true, sent: n });
     }
     if (body.action === 'push.test') { const n = k && SD.push.subs[k] ? await pushNotify({ tag: 'test', title: 'Maison', body: 'Les notifications fonctionnent sur cet iPhone 👍', badge: null }, k) : 0; if (!n) return reply(200, { ok: false, error: (k && SD.push.subs[k] && SD.push.subs[k].lastErr) || 'not_subscribed' }); }
-    return reply(200, { ok: true, on: !!(k && SD.push.subs[k]), keys: !!(k && SD.push.subs[k] && SD.push.subs[k].keys), route: !!(k && SD.push.subs[k] && SD.push.subs[k].route), delay: SD.push.delay || 2, count: Object.keys(SD.push.subs).length });
+    return reply(200, { ok: true, on: !!(k && SD.push.subs[k]), keys: !!(k && SD.push.subs[k] && SD.push.subs[k].keys), route: !!(k && SD.push.subs[k] && SD.push.subs[k].route), off: (k && SD.push.subs[k] && SD.push.subs[k].off) || {}, delay: SD.push.delay || 2, count: Object.keys(SD.push.subs).length });
   }
 
   // Historique d'un capteur eedomus (liste blanche « readable »), mis en cache 10 min
@@ -2235,6 +2249,15 @@ try {
     return reply(200, out);
   }
   // Correction manuelle de l'état de la porte de garage (après vérification sur la caméra)
+  // Services en panne : liste actuelle et mise en pause d'une panne connue (ex. caméra débranchée exprès)
+  if (body.action === 'health.state' || body.action === 'health.mute') {
+    const H = SD.health = SD.health || { open: {} }; H.mute = H.mute || {};
+    if (body.action === 'health.mute' && /^[a-z]+(:[A-Za-z0-9:_-]+)?$/.test(String(body.key || ''))) {
+      if (body.on) H.mute[body.key] = Date.now(); else delete H.mute[body.key];
+      (H.last || []).forEach((x) => { if (x.k === body.key) x.muted = !!body.on; });
+    }
+    return reply(200, { ok: true, list: H.last || [], at: H.at || null });
+  }
   // « Reste à faire » : lignes marquées faites depuis l'appli (Claude les retire ensuite de docs/changelog.json)
   if (body.action === 'todo.done' || body.action === 'todo.list') {
     SD.todoDone = SD.todoDone || [];

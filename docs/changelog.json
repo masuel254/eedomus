@@ -1,7 +1,18 @@
 {
-  "version": "2.66.0",
-  "date": "2026-11-25",
+  "version": "2.67.0",
+  "date": "2026-11-26",
   "releases": [
+    {
+      "version": "2.67.0",
+      "date": "2026-11-26",
+      "time": "15:06",
+      "title": "Alertes à la carte",
+      "changes": [
+        "Chaque alerte a son interrupteur « Recevoir sur cet iPhone » : on coupe ce qu'on ne veut pas recevoir",
+        "Service en panne : liste des pannes en cours, avec « Mettre en pause » jusqu'à la réparation (ex. caméra débranchée exprès)",
+        "Historique des notifications gardé aussi sur le serveur : il revient même si l'iPhone l'a effacé"
+      ]
+    },
     {
       "version": "2.66.0",
       "date": "2026-11-25",
@@ -1956,5 +1967,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "23:44"
+  "time": "15:06"
 }

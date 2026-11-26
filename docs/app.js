@@ -764,9 +764,25 @@
   function loadNotifs() {
     if (!window.caches) return;
     caches.open('maison-notifs').then(function (c) { return c.match('./__notifs'); }).then(function (r) { return r ? r.json() : []; }).then(function (l) {
-      NOTIFS = l || [];
+      NOTIFS = nfClean(l || []);
+      nfServer();
       if (!sheet.hidden && sheet.dataset.view === 'notifs') { store.set('maison.notifs.seen', Date.now()); renderNotifs(); }
       else if (CFG && lastOk && !busy()) render();
+    }).catch(function () {});
+  }
+  // L'iPhone peut effacer son historique : le serveur garde aussi les 30 dernières de cet iPhone, on fusionne.
+  // Les notifications supprimées à la main (ou « Tout effacer ») ne reviennent pas.
+  function nfDel() { try { return JSON.parse(store.get('maison.notifs.del') || '[]'); } catch (e) { return []; } }
+  function nfClean(l) { var cut = +(store.get('maison.notifs.cut') || 0), del = nfDel(); return l.filter(function (n) { return n.at > cut && del.indexOf(n.at) < 0; }); }
+  var nfSrvAt = 0;
+  function nfServer() {
+    if (!CFG || !CFG.push || Date.now() - nfSrvAt < 60000 || !pushSupported()) return;
+    nfSrvAt = Date.now();
+    pushSub().then(function (s) { return s ? api({ action: 'push.hist', endpoint: s.endpoint }) : null; }).then(function (j) {
+      if (!j || !j.hist || !j.hist.length) return;
+      var have = {}; NOTIFS.forEach(function (n) { have[n.at] = 1; });
+      var add = nfClean(j.hist.filter(function (n) { return !have[n.at]; })); if (!add.length) return;
+      notifsWrite(NOTIFS.concat(add).sort(function (a, b) { return a.at - b.at; }).slice(-30));
     }).catch(function () {});
   }
   // NF_PREV : date de la visite précédente de la cloche ; les alertes plus récentes sont mises en avant (« Nouveau »)
@@ -796,6 +812,7 @@
   }
   function notifDelete(at) {
     var row = sheet.querySelector('.nf-sw[data-nfat="' + at + '"]');
+    var dl = nfDel(); dl.push(+at); store.set('maison.notifs.del', JSON.stringify(dl.slice(-100)));
     var go = function () { notifsWrite(NOTIFS.filter(function (n) { return String(n.at) !== String(at); })); };
     if (row) { row.classList.add('gone'); setTimeout(go, 220); } else go();
   }
@@ -2967,7 +2984,7 @@
     PUSH.loaded = true;
     var sub = null;
     pushSub().then(function (s) { sub = s; return api({ action: 'push.get', endpoint: s ? s.endpoint : '' }); }).then(function (j) {
-      PUSH.on = j.on; PUSH.delay = j.delay; PUSH.route = !!j.route; if (sheet.dataset.view === 'settings' && !sheet.hidden) renderSettings();
+      PUSH.on = j.on; PUSH.delay = j.delay; PUSH.route = !!j.route; PUSH.off = j.off || {}; if (sheet.dataset.view === 'settings' && !sheet.hidden) renderSettings();
       // inscription d'avant (sans clé) : on envoie la clé de l'iPhone pour que le texte voyage dans la notification
       if (j.on && sub && !j.keys) api(pushSubBody(sub)).catch(function () {});
     }).catch(function () { PUSH.loaded = false; });
@@ -3001,6 +3018,23 @@
     { id: 'maison', ic: 'home', t: 'Maison et piscine', k: ['water', 'boiler', 'pool', 'poolfrost'] },
     { id: 'dehors', ic: 'car', t: 'Météo et trajet', k: ['wind', 'morning', 'route'] }
   ];
+  // étiquettes des notifications de chaque alerte (pour la couper sur cet iPhone)
+  var ALR_TAGS = { garage: ['garage'], water: ['water', 'wateroff'], alarm: ['alarm'], batt: ['batt'], pool: ['pool'], poolfrost: ['poolfrost'], smoke: ['smoke'], boiler: ['boiler'], wind: ['meteo'], morning: ['morning'], health: ['health'] };
+  function alrOff(k) { var t = ALR_TAGS[k]; return !!(t && PUSH.off && PUSH.off[t[0]]); }
+  function alrSwitch(a) {
+    if (a.k === 'route' || !ALR_TAGS[a.k]) return '';
+    var on = !alrOff(a.k);
+    return '<div class="alr-set"><span>Recevoir sur cet iPhone' + (/smoke|alarm|water/.test(a.k) && !on ? ' <b class="bad">(sécurité coupée)</b>' : '') + '</span><button class="sw-b' + (on ? ' is-on' : '') + '" data-alrtog="' + a.k + '" aria-label="Recevoir cette alerte"><span class="sw"></span></button></div>';
+  }
+  var HEALTH = null, healthAsk = 0;
+  function healthListHTML() {
+    if (Date.now() - healthAsk > 120000) { healthAsk = Date.now(); api({ action: 'health.state' }).then(function (j) { HEALTH = j; if (!sheet.hidden && sheet.dataset.view === 'settings') renderSettings(); }).catch(function () {}); }
+    if (!HEALTH) return '';
+    if (!HEALTH.list.length) return '<div class="alr-set"><span>Tout répond normalement 👍</span></div>';
+    return '<div class="alr-set"><span>En panne en ce moment :</span></div>' + HEALTH.list.map(function (x) {
+      return '<div class="alr-set hl"><span>' + esc(x.name) + (x.muted ? ' · <i>en pause</i>' : '') + '</span><button class="lnk" data-hmute="' + esc(x.k) + '" data-on="' + (x.muted ? '0' : '1') + '">' + (x.muted ? 'Réactiver' : 'Mettre en pause') + '</button></div>';
+    }).join('') + '<p class="note-q">« Mettre en pause » : plus d’alerte pour cette panne jusqu’à ce qu’elle soit réparée (par exemple une caméra débranchée exprès). L’alerte reprend toute seule ensuite.</p>';
+  }
   var ALERTS = [
     { k: 'garage', ic: 'garage', t: 'Porte de garage ouverte', w: 'Toujours', s: function (d) { return 'Après ' + d + ' min ouverte'; }, c: [
       function (d) { return 'La porte de garage est ouverte depuis ' + d + ' min (réglable ci-dessous).'; },
@@ -3118,9 +3152,9 @@
         return '<details class="acc2 alrg" data-alr="g-' + g.id + '"' + (ALR_OPEN['g-' + g.id] ? ' open' : '') + '><summary><span class="ic">' + icon(g.ic) + '</span><span class="alr-t"><b>' + esc(g.t) + '</b><small>' +
           esc(list.map(function (a) { return a.t; }).join(' · ')) + '</small></span><span class="cnt">' + list.length + '</span>' + icon('down') + '</summary><div class="alrg-b">' + list.map(function (a) {
         return '<details class="acc2 alr" data-alr="' + a.k + '"' + (ALR_OPEN[a.k] ? ' open' : '') + '><summary><span class="ic">' + icon(a.ic) + '</span><span class="alr-t"><b>' + esc(a.t) + '</b><small>' + esc(typeof a.s === 'function' ? a.s(d) : a.s) + '</small></span>' +
-          '<span class="ok">' + esc(a.w) + '</span>' + icon('down') + '</summary><div class="alr-b"><ul>' +
+          '<span class="' + (alrOff(a.k) ? 'mu2' : 'ok') + '">' + esc(alrOff(a.k) ? 'Coupée' : a.w) + '</span>' + icon('down') + '</summary><div class="alr-b"><ul>' +
           a.c.map(function (x) { return '<li>' + esc(typeof x === 'function' ? x(d) : x) + '</li>'; }).join('') + '</ul>' +
-          (a.k === 'route' ? routeHTML() : '') + (a.k === 'batt' ? battListHTML() : '') +
+          alrSwitch(a) + (a.k === 'route' ? routeHTML() : '') + (a.k === 'batt' ? battListHTML() : '') + (a.k === 'health' ? healthListHTML() : '') +
           (a.k === 'garage' ? '<div class="alr-set"><span>Délai avant l’alerte : <b>' + d + ' min</b></span><span class="stp2"><button data-push-delay="' + (PUSH_DELAYS[i - 1] || d) + '" aria-label="Moins">−</button><button data-push-delay="' + (PUSH_DELAYS[i + 1] || d) + '" aria-label="Plus">+</button></span></div>' : '') +
           '</div></details>';
       }).join('') + '</div></details>';
@@ -3240,7 +3274,7 @@
     if ((b = e.target.closest('[data-nfdel]'))) return notifDelete(b.dataset.nfdel);
     if ((b = e.target.closest('[data-tododel]'))) return todoDelete(b.dataset.tododel);
     if (e.target.closest('[data-todoback]')) { store.set('maison.todohide', '[]'); return renderSettings(); }
-    if ((b = e.target.closest('[data-nfclear]'))) { if (!confirmed(b)) { var cl = b.querySelector('span'); if (cl) cl.textContent = 'Effacer les ' + NOTIFS.length + ' ?'; return; } return notifsWrite([]); }
+    if ((b = e.target.closest('[data-nfclear]'))) { if (!confirmed(b)) { var cl = b.querySelector('span'); if (cl) cl.textContent = 'Effacer les ' + NOTIFS.length + ' ?'; return; } store.set('maison.notifs.cut', Date.now()); return notifsWrite([]); }
     if ((b = e.target.closest('[data-notif]'))) {
       if (sheet._nfSwiped && Date.now() - sheet._nfSwiped < 400) return; // fin d'un glisser : pas d'ouverture
       var op = b.closest('.nf-sw.open'); if (op) { op.classList.remove('open'); b.style.transform = ''; return; }
@@ -3660,6 +3694,17 @@
       toast('Calcul du trajet avec le trafic…');
       return api({ action: 'route.test' }).then(function (j) { ROUTE = j; renderSettings(); toast(j.err ? 'TomTom ne répond pas (' + j.err + ')' : j.last ? 'Aller ' + j.last.travel + ' min, retour ' + (j.lastBack ? j.lastBack.travel : '?') + ' min maintenant' + (j.last.bad || (j.lastBack && j.lastBack.bad) ? ', problème détecté' : ', rien à signaler') : 'Adresses à renseigner', !!j.err); })
         .catch(function () { toast('Essai impossible, réessaie', true); });
+    }
+    if ((b = e.target.closest('[data-alrtog]'))) {
+      if (!PUSH.on) return toast('Active d’abord les alertes sur cet iPhone (en haut)', true);
+      var ak = b.dataset.alrtog, tags = ALR_TAGS[ak] || [], cut = !alrOff(ak), offs = {};
+      PUSH.off = PUSH.off || {};
+      tags.forEach(function (t) { offs[t] = cut; if (cut) PUSH.off[t] = true; else delete PUSH.off[t]; }); renderSettings();
+      return pushSub().then(function (s) { return api({ action: 'push.prefs', endpoint: s ? s.endpoint : '', off: offs }); })
+        .then(function (j) { PUSH.off = j.off || {}; renderSettings(); }).catch(function () { toast('Réglage non enregistré, réessaie', true); });
+    }
+    if ((b = e.target.closest('[data-hmute]'))) {
+      return api({ action: 'health.mute', key: b.dataset.hmute, on: b.dataset.on === '1' }).then(function (j) { HEALTH = j; renderSettings(); }).catch(function () { toast('Réglage non enregistré, réessaie', true); });
     }
     if (e.target.closest('[data-route-me]')) {
       if (!PUSH.on) return toast('Active d’abord les alertes sur cet iPhone (en haut)', true);
