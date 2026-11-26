@@ -2644,8 +2644,15 @@
     Object.keys(L).forEach(function (d) { r += Math.max(0, L[d][0] - measDay(D, d)); e += applElecDay(D, d); });
     return (D._ec = e > 0 && r > 0 ? r / e : 1);
   }
+  // tarifs datés : avant un changement de contrat, les jours gardent leurs anciens prix (cfg.prev = { until: AAAAMMJJ, prix… })
+  function tariffAt(c, day) {
+    var p = c.prev; if (!p || !p.until || String(day) > p.until) return c;
+    var o = {}; Object.keys(c).forEach(function (k) { o[k] = c[k]; });
+    ['gasPrice', 'gasFixed', 'elecPrice', 'elecFixed'].forEach(function (k) { if (p[k] != null) o[k] = p[k]; });
+    return o;
+  }
   function costDay(D, k) {
-    var c = D.cfg, out = { kwh: 0, eur: 0, h: 0, any: false }, est = false, LK = linkyOf(D, COST_CUR);
+    var c = tariffAt(D.cfg, COST_CUR), out = { kwh: 0, eur: 0, h: 0, any: false }, est = false, LK = linkyOf(D, COST_CUR);
     if (k === 'elecfix') { var fx = LK ? LK[2] : (c.elecFixed || 0) * 12 / 365; if (fx) { out.eur = fx; out.any = true; out.est = !LK; } return out; }
     if (k === 'other') {
       if (LK) {
@@ -2757,8 +2764,9 @@
       if (it.k === 'gasx') sub = '≈ ' + kwh(s.kwh) + ' kWh de gaz · non vus par Netatmo';
       if (it.k === 'water') sub = (s.any ? fmt(s.l, 0) + ' litres · ' + fmt(s.l / 1000, 2) + ' m³' : 'pas encore de relevé') + ' · compteur Quandify';
       if (it.k === 'water') tag = 'div';
-      if (it.k === 'gasfix') { sub = fmt(c.gasFixed, 2) + ' € par mois (d’après tes factures)'; tag = 'div'; }
+      if (it.k === 'gasfix') { sub = fmt(c.gasFixed, 2) + ' € par mois'; tag = 'div'; }
       if (it.k === 'elecfix') { sub = fmt(c.elecFixed || 0, 2) + ' € par mois' + (c.elecContract ? ' · ' + c.elecContract : ''); tag = 'div'; }
+      if ((it.k === 'gasfix' || it.k === 'elecfix') && c.prev) sub += ' (avant le ' + c.prev.until.slice(6, 8) + '/' + c.prev.until.slice(4, 6) + ' : ' + fmt(it.k === 'gasfix' ? c.prev.gasFixed : c.prev.elecFixed, 2) + ' €)';
       var tag = it.k === 'gas' || it.k === 'water' || it.k === 'gasfix' || it.k === 'elecfix' ? 'div' : 'button';
       return '<' + tag + ' class="row"' + (tag === 'div' ? '' : it.k === 'other' || it.k === 'gasx' ? ' data-costappl' : ' data-energy="' + it.k + '" data-ename="' + esc(it.name) + '"') + '><span class="ic" style="color:' + it.color + '">' + icon(it.icon) + '</span>' +
         '<span><b>' + esc(it.name) + '</b><small>' + esc(sub) + '</small><span class="cbar"><i style="width:' + (s.eur / mx * 100).toFixed(0) + '%;background:' + it.color + '"></i></span></span>' +
@@ -2780,7 +2788,7 @@
     h += '<div class="lbl">Réglages du calcul</div><div class="card2 flat cost-list">' +
       st('gasPrice', 'Prix du gaz', 'TTC, en €/kWh' + (c.gasBills && c.gasBills.length ? ' (d’après tes factures ✓)' : ''), fmt(c.gasPrice, 3), 0.005) +
       st('gasFixed', 'Abonnement gaz + taxes fixes', 'en € par mois', fmt(c.gasFixed || 0, 2) + ' €', 1) +
-      st('kw', 'Puissance de la chaudière', c.kwSrc === 'compteur' ? 'calculée avec ton compteur ✓' : c.kwSrc === 'factures' ? 'calculée avec tes factures ✓' : 'moyenne quand elle chauffe', fmt(c.kw, 1) + ' kW', 0.5) +
+      st('kw', 'Puissance de la chaudière', 'Vaillant ecoTEC pro 286 (5 à 24 kW) · moyenne réelle ' + (c.kwSrc === 'compteur' ? 'calculée avec ton compteur ✓' : c.kwSrc === 'factures' ? 'calculée avec tes factures ✓' : 'quand elle chauffe'), fmt(c.kw, 1) + ' kW', 0.5) +
       st('elecPrice', 'Prix de l’électricité', 'TTC, en €/kWh' + (c.elecDays && Object.keys(c.elecDays).length ? ' (moyenne heures pleines/creuses d’après EDF ✓)' : ''), fmt(c.elecPrice, 3), 0.005) +
       st('elecFixed', 'Abonnement électricité', 'en € par mois', fmt(c.elecFixed || 0, 2) + ' €', 1) +
       (D.water ? st('waterPrice', 'Prix de l’eau', 'en €/m³ (abonnement et taxes compris)', fmt(c.waterPrice, 2) + ' €', 0.05) : '') +

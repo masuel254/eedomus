@@ -2107,6 +2107,12 @@ try {
         C.elecDays = ed; C.elecAt = Date.now();
         if (body.elecContract && typeof body.elecContract === 'string') C.elecContract = body.elecContract.slice(0, 80);
       }
+      // anciens tarifs, appliqués jusqu'au jour indiqué (changement de contrat)
+      if (body.prev && typeof body.prev === 'object' && /^[0-9]{8}$/.test(String(body.prev.until || ''))) {
+        const pv = { until: String(body.prev.until) };
+        ['gasPrice', 'gasFixed', 'elecPrice', 'elecFixed'].forEach((k) => { const v = Number(body.prev[k]); if (isFinite(v) && v >= 0 && v < 500) pv[k] = v; });
+        C.prev = pv;
+      }
       if (Array.isArray(body.gasBills)) C.billsAt = Date.now();
       if (Array.isArray(body.gasBills)) C.gasBills = body.gasBills.filter((x) => x && /^[0-9]{8}$/.test(x.s) && /^[0-9]{8}$/.test(x.e) && isFinite(x.kwh) && isFinite(x.ttc)).slice(0, 36).map((x) => ({ s: x.s, e: x.e, kwh: Number(x.kwh), ttc: Number(x.ttc) }));
       // nombre de chaque appareil non mesuré (estimation de l'électricité)
@@ -2130,7 +2136,7 @@ try {
     const calib = costCalibrate();
     const elec = {};
     if (CFG.tu) Object.keys(CFG.tu.devices).forEach((k) => { const s = enSeries(k); const o = {}; s.days.forEach((x) => { o[x.k] = x.kwh; }); elec[k] = { days: o, since: s.since }; });
-    return reply(200, { ok: true, cfg: { gasPrice: C.gasPrice, kw: C.kw, kwSrc: C.kwSrc, elecPrice: C.elecPrice, waterPrice: C.waterPrice, budget: C.budget, meters: C.meters, appl: C.appl || {}, gasFixed: C.gasFixed || 0, ecsKwh: C.ecsKwh || null, gasBills: C.gasBills || [], billsAt: C.billsAt || null, elecFixed: C.elecFixed || 0, elecDays: C.elecDays || {}, elecAt: C.elecAt || null, elecContract: C.elecContract || null },
+    return reply(200, { ok: true, cfg: { gasPrice: C.gasPrice, kw: C.kw, kwSrc: C.kwSrc, elecPrice: C.elecPrice, waterPrice: C.waterPrice, budget: C.budget, meters: C.meters, appl: C.appl || {}, gasFixed: C.gasFixed || 0, ecsKwh: C.ecsKwh || null, gasBills: C.gasBills || [], billsAt: C.billsAt || null, elecFixed: C.elecFixed || 0, elecDays: C.elecDays || {}, elecAt: C.elecAt || null, elecContract: C.elecContract || null, prev: C.prev || null },
       water: CFG.qd ? { days: SD.water ? SD.water.d : {}, err: waterErr } : null, calib, gas: { days: SD.gas ? SD.gas.d : {}, err: gasErr }, elec });
   }
   // ---- Notifications ----

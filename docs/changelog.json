@@ -1,7 +1,17 @@
 {
-  "version": "2.67.4",
+  "version": "2.68.0",
   "date": "2026-11-26",
   "releases": [
+    {
+      "version": "2.68.0",
+      "date": "2026-11-26",
+      "time": "20:34",
+      "title": "Coûts au bon tarif",
+      "changes": [
+        "Énergie : chaque jour est compté au tarif de son contrat (TotalEnergies et ancien EDF jusqu'au 25/11, nouveau contrat EDF à partir du 26/11)",
+        "Chaudière Vaillant ecoTEC pro 286 indiquée dans les réglages de l'énergie"
+      ]
+    },
     {
       "version": "2.67.4",
       "date": "2026-11-26",
@@ -2003,5 +2013,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "20:22"
+  "time": "20:34"
 }
