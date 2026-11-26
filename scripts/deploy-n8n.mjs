@@ -2097,7 +2097,7 @@ try {
     const C = costCfg();
     if (body.action === 'cost.cfg') {
       const lim = { gasPrice: [0.03, 0.5], kw: [2, 40], elecPrice: [0.05, 0.6], waterPrice: [0.5, 20], budget: [10, 2000], gasFixed: [0, 200], ecsKwh: [0, 10000], elecFixed: [0, 200] };
-      Object.keys(lim).forEach((k) => { const v = Number(body[k]); if (body[k] != null && isFinite(v) && v >= lim[k][0] && v <= lim[k][1]) { C[k] = Math.round(v * 1000) / 1000; if (k === 'kw') C.kwSrc = body.kwSrc === 'factures' ? 'factures' : 'manuel'; } });
+      Object.keys(lim).forEach((k) => { const v = Number(body[k]); if (body[k] != null && isFinite(v) && v >= lim[k][0] && v <= lim[k][1]) { C[k] = Math.round(v * 10000) / 10000; if (k === 'kw') C.kwSrc = body.kwSrc === 'factures' ? 'factures' : 'manuel'; } });
       // factures de gaz réelles (relevées sur l'espace client du fournisseur) : [{ s: AAAAMMJJ, e: AAAAMMJJ, kwh, ttc }]
       // électricité réelle du compteur Linky (relevée sur l'espace client EDF) : { AAAAMMJJ: [kWh, € TTC, € abonnement] }
       if (body.elecDays && typeof body.elecDays === 'object') {

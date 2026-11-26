@@ -3472,7 +3472,7 @@
     if ((b = e.target.closest('[data-costtab]'))) { COST.tab = b.dataset.costtab; COST.off = 0; return renderCost(); }
     if ((b = e.target.closest('[data-coststep]'))) { var nv2 = COST.off + +b.dataset.coststep; if (nv2 > 0) return; COST.off = nv2; return renderCost(); }
     if ((b = e.target.closest('[data-costset]'))) {
-      var fs = b.dataset.costset.split(':'), cf = COST.data.cfg, nvv = Math.round((cf[fs[0]] + +fs[1]) * 1000) / 1000, q = { action: 'cost.cfg' };
+      var fs = b.dataset.costset.split(':'), cf = COST.data.cfg, nvv = Math.round((cf[fs[0]] + +fs[1]) * 10000) / 10000, q = { action: 'cost.cfg' };
       q[fs[0]] = nvv; cf[fs[0]] = nvv; if (fs[0] === 'kw') cf.kwSrc = 'manuel'; renderCost();
       return costLoad(q).catch(function () { toast('Réglage non enregistré, réessaie', true); costLoad().catch(function () {}); });
     }
