@@ -2382,7 +2382,7 @@
   }
   // Plein écran maison : le plein écran de l'iPhone ne permet que ×0,5 à ×2 ; celui-ci garde les boutons ×1 à ×8
   var PFS = false;
-  function fsBtn() { return '<button class="fsb" data-pfs aria-label="' + (PFS ? 'Quitter le plein écran' : 'Plein écran') + '">' + (PFS ? '✕' : '⛶') + '</button>'; }
+  function fsBtn() { return '<button class="fsb" data-pfs aria-label="' + (PFS ? 'Quitter le plein écran' : 'Plein écran') + '">' + icon(PFS ? 'x' : 'expand') + '</button>'; }
   function setPfs(on) {
     PFS = on; var card = sheet.querySelector('.camcard.player'); if (!card) return;
     card.classList.toggle('fs', on); var b = card.querySelector('[data-pfs]'); if (b) b.outerHTML = fsBtn();

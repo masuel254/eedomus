@@ -1,7 +1,16 @@
 {
-  "version": "2.68.0",
+  "version": "2.68.1",
   "date": "2026-11-26",
   "releases": [
+    {
+      "version": "2.68.1",
+      "date": "2026-11-26",
+      "time": "21:48",
+      "title": "Lecteur vidéo plus propre",
+      "changes": [
+        "Plein écran : bouton de fermeture rond en haut à droite, vitesses ×1 à ×8 centrées, vitesse choisie en clair"
+      ]
+    },
     {
       "version": "2.68.0",
       "date": "2026-11-26",
@@ -2013,5 +2022,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "20:34"
+  "time": "21:48"
 }
