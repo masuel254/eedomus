@@ -1,7 +1,16 @@
 {
-  "version": "2.67.0",
+  "version": "2.67.1",
   "date": "2026-11-26",
   "releases": [
+    {
+      "version": "2.67.1",
+      "date": "2026-11-26",
+      "time": "15:52",
+      "title": "Notifications : historique réparé",
+      "changes": [
+        "La cloche relit l'historique gardé par le serveur à chaque ouverture : les notifications reçues s'affichent même si l'iPhone a perdu les siennes"
+      ]
+    },
     {
       "version": "2.67.0",
       "date": "2026-11-26",
@@ -1967,5 +1976,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "15:06"
+  "time": "15:52"
 }

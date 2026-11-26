@@ -762,10 +762,11 @@
   function notifSeen() { return +(store.get('maison.notifs.seen') || 0); }
   function notifUnread() { var s = notifSeen(); return NOTIFS.filter(function (n) { return n.at > s; }).length; }
   function loadNotifs() {
+    nfServer(); // l'historique du serveur, même si celui de l'iPhone est illisible ou vide
     if (!window.caches) return;
     caches.open('maison-notifs').then(function (c) { return c.match('./__notifs'); }).then(function (r) { return r ? r.json() : []; }).then(function (l) {
-      NOTIFS = nfClean(l || []);
-      nfServer();
+      var mine = nfClean(l || []), have = {}; mine.forEach(function (n) { have[n.at] = 1; });
+      NOTIFS = mine.concat(NOTIFS.filter(function (n) { return !have[n.at]; })).sort(function (a, b) { return a.at - b.at; }).slice(-30);
       if (!sheet.hidden && sheet.dataset.view === 'notifs') { store.set('maison.notifs.seen', Date.now()); renderNotifs(); }
       else if (CFG && lastOk && !busy()) render();
     }).catch(function () {});
@@ -776,18 +777,19 @@
   function nfClean(l) { var cut = +(store.get('maison.notifs.cut') || 0), del = nfDel(); return l.filter(function (n) { return n.at > cut && del.indexOf(n.at) < 0; }); }
   var nfSrvAt = 0;
   function nfServer() {
-    if (!CFG || !CFG.push || Date.now() - nfSrvAt < 60000 || !pushSupported()) return;
+    if (!CFG || !CFG.push || Date.now() - nfSrvAt < 30000 || !pushSupported()) return;
     nfSrvAt = Date.now();
     pushSub().then(function (s) { return s ? api({ action: 'push.hist', endpoint: s.endpoint }) : null; }).then(function (j) {
       if (!j || !j.hist || !j.hist.length) return;
       var have = {}; NOTIFS.forEach(function (n) { have[n.at] = 1; });
       var add = nfClean(j.hist.filter(function (n) { return !have[n.at]; })); if (!add.length) return;
       notifsWrite(NOTIFS.concat(add).sort(function (a, b) { return a.at - b.at; }).slice(-30));
+      if (!sheet.hidden && sheet.dataset.view === 'notifs') renderNotifs();
     }).catch(function () {});
   }
   // NF_PREV : date de la visite précédente de la cloche ; les alertes plus récentes sont mises en avant (« Nouveau »)
   var NF_PREV = 0;
-  function openNotifs() { sheet.scrollTop = 0; NF_PREV = notifSeen(); store.set('maison.notifs.seen', Date.now()); openSheet('notifs'); loadNotifs(); if (CFG) render(); }
+  function openNotifs() { nfSrvAt = 0; sheet.scrollTop = 0; NF_PREV = notifSeen(); store.set('maison.notifs.seen', Date.now()); openSheet('notifs'); loadNotifs(); if (CFG) render(); }
   function goNotif(tag) {
     closeSheet();
     if (tag === 'garage') return openLogs('doors');
