@@ -192,6 +192,14 @@ function serve() {
     if (!okToken(u.searchParams.get('t'))) return json(res, 401, { ok: false, error: 'unauthorized' });
     try {
       if (u.pathname === '/api/status') return json(res, 200, status());
+      // diagnostic (avec jeton) : journal des tâches du relais, mémoire, durée de marche ; pour comprendre un blocage à distance
+      if (u.pathname === '/api/diag') {
+        const run = (cmd, args) => { const r = spawnSync(cmd, args, { encoding: 'utf8', timeout: 20000 }); return String(r.stdout || '') + String(r.stderr || ''); };
+        return json(res, 200, { ok: true, uptime: run('uptime', []).trim(), mem: run('free', ['-m']), boots: run('journalctl', ['--list-boots', '--no-pager']).split('\n').slice(-4),
+          clean: run('systemctl', ['status', 'relais-clean.service', 'relais-clean.timer', '--no-pager', '-n', '0']),
+          journal: run('journalctl', ['-u', 'relais-clean', '-u', 'relais-web', '-n', String(Math.min(400, Number(u.searchParams.get('n')) || 120)), '--no-pager', '-o', 'short-iso']),
+          oom: run('journalctl', ['-k', '-g', 'oom|Out of memory|killed process', '-n', '20', '--no-pager']) });
+      }
       if (u.pathname === '/api/imou') {
         const cam = u.searchParams.get('cam') || '', date = u.searchParams.get('date') || '';
         if (!cams().some((c) => c.id === cam) || !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(date)) return json(res, 403, { ok: false, error: 'not_allowed' });
@@ -238,7 +246,8 @@ function serve() {
   setInterval(() => {
     let last = 0; try { last = fs.statSync('/var/lib/relais/hello-ok').mtimeMs; } catch (e) {}
     if (Date.now() - last < 30 * 60000) return;
-    hello().catch(() => {});
+    console.log('Filet de sécurité : pas de signal au serveur depuis 30 min, relance');
+    hello().catch((e) => console.error('Signal au serveur impossible : ' + (e && e.message || e)));
     spawnSync('systemctl', ['kill', '--signal=KILL', 'relais-clean.service'], { timeout: 20000 });
     spawnSync('systemctl', ['start', '--no-block', 'relais-clean.service'], { timeout: 20000 });
   }, 10 * 60000);

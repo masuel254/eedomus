@@ -1,7 +1,16 @@
 {
-  "version": "2.67.1",
+  "version": "2.67.2",
   "date": "2026-11-26",
   "releases": [
+    {
+      "version": "2.67.2",
+      "date": "2026-11-26",
+      "time": "19:21",
+      "title": "Relais : diagnostic à distance",
+      "changes": [
+        "Relais caméras : son journal est gardé après un redémarrage et lisible à distance (protégé), pour comprendre ses blocages sans console"
+      ]
+    },
     {
       "version": "2.67.1",
       "date": "2026-11-26",
@@ -1976,5 +1985,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "15:52"
+  "time": "19:21"
 }

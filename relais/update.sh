@@ -23,6 +23,8 @@ ExecStart=-/usr/bin/timeout 600 /usr/bin/node $OPT/relais.js clean
 ExecStart=-/usr/bin/timeout 120 /usr/bin/node $OPT/relais.js hello
 ExecStart=-/usr/bin/timeout 900 $OPT/update.sh"
 if [ "$(cat $F 2>/dev/null)" != "$W" ]; then mkdir -p $D; printf '%s\n' "$W" > $F; systemctl daemon-reload; fi
+# journal gardé après un redémarrage (pour comprendre un blocage)
+[ -d /var/log/journal ] || { mkdir -p /var/log/journal; systemd-tmpfiles --create --prefix /var/log/journal >/dev/null 2>&1; systemctl restart systemd-journald; }
 cmp -s "$T/detect.py" $OPT/detect.py || install -m 755 "$T/detect.py" $OPT/detect.py
 WEB=0; CAM=0
 cmp -s "$T/relais.js" $OPT/relais.js || { install -m 644 "$T/relais.js" $OPT/relais.js; WEB=1; }
