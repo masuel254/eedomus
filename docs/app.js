@@ -2311,13 +2311,7 @@
       '<div class="cammeta"><b>' + esc(REC.play.label) + ' <span class="src-tag' + (REC.play.relay ? ' fb' : '') + '">' + (REC.play.relay ? 'Freebox' : c && c.src === 'imou' ? 'Carte SD' : 'Caméra') + '</span></b>' + (REC.play.hdOk ? '<button class="hdbtn' + (REC.play.hd ? ' on' : '') + '" data-rechd>' + (REC.play.hd ? 'HD' : 'Passer en HD') + '</button>' : '') + '</div></div>'
       : '<div class="camcard player empty"><span>' + icon('play') + 'Choisis un enregistrement ci-dessous</span></div>';
     if (c && c.src === 'imou') {
-      var days = '';
-      for (var i = 0; i < 7; i++) {
-        var d = new Date(); d.setDate(d.getDate() - i);
-        var lbl = i === 0 ? "Aujourd'hui" : i === 1 ? 'Hier' : d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' });
-        days += '<button class="' + (ymd(d) === REC.date ? 'on' : '') + '" data-recday="' + ymd(d) + '">' + esc(lbl) + '</button>';
-      }
-      h += '<div class="days">' + days + '</div>';
+      h += weekStrip(REC.date, 'data-recday');
       if (REC.loading && !REC.list) h += '<p class="muted">Lecture de la carte SD…</p>';
       else if (REC.error) h += '<p class="muted">La caméra ne répond pas. Réessaie dans un instant.</p>';
       var L = REC.all ? REC.segs : REC.list;
@@ -2334,12 +2328,7 @@
         : '<p class="note-q">Enregistrements de la carte SD de la caméra. La lecture consomme le forfait vidéo Imou (2 Go gratuits).</p>';
     } else if (c) {
       if (REC.clips || (RELAY && RELAY.url)) {
-        var pd = '';
-        for (var j = 0; j < 7; j++) {
-          var dd = new Date(); dd.setDate(dd.getDate() - j);
-          pd += '<button class="' + (ymd(dd) === REC.date ? 'on' : '') + '" data-recday="' + ymd(dd) + '">' + esc(j === 0 ? "Aujourd'hui" : j === 1 ? 'Hier' : dd.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' })) + '</button>';
-        }
-        h += '<h3>Vidéos gardées sur la Freebox</h3><div class="days">' + pd + '</div>';
+        h += '<h3>Vidéos gardées sur la Freebox</h3>' + weekStrip(REC.date, 'data-recday');
         if (!REC.clips) h += '<p class="muted">' + (REC.relay === false ? 'La Freebox ne répond pas pour le moment.' : 'Lecture de la Freebox…') + '</p>';
         else if (!REC.clips.length) h += '<p class="muted">Aucune vidéo ce jour-là.</p>';
         else h += '<div class="evlist">' + REC.clips.map(function (cl, i) {
@@ -2424,18 +2413,27 @@
     return '<div class="sumprog"><div class="sp-t"><b>' + esc(lab) + '</b><span>' + (rest ? 'encore ≈ ' + (rest < 60 ? rest + ' s' : Math.round(rest / 60) + ' min') : '') + '</span></div><div class="sp-bar"><i style="width:' + pct + '%"></i></div></div>' +
       (st.url ? '<p class="note-q">Le film ci-dessus est le montage précédent : il sera remplacé à la fin.</p>' : '');
   }
+  // Choix du jour : les 7 derniers jours sur une seule ligne, du plus ancien à aujourd'hui (jour de la semaine + numéro)
+  function weekStrip(sel, attr) {
+    var h = '<div class="wkdays">';
+    for (var i = 6; i >= 0; i--) {
+      var d = new Date(); d.setDate(d.getDate() - i);
+      var wd = i === 0 ? 'auj.' : i === 1 ? 'hier' : d.toLocaleDateString('fr-FR', { weekday: 'short' }).replace('.', '');
+      h += '<button class="' + (ymd(d) === sel ? 'on' : '') + (i === 0 ? ' today' : '') + '" ' + attr + '="' + ymd(d) + '"><small>' + esc(wd) + '</small><b>' + d.getDate() + '</b></button>';
+    }
+    return h + '</div>';
+  }
   function renderSummary() {
     if (!SUM) return;
     var st = SUM.st, h = '<div class="sh-hd"><button class="back2" data-recback>' + icon('down') + 'Caméras</button><button class="close" data-close aria-label="Fermer">×</button></div>' +
       '<h2 class="rec-title">Résumé de la journée</h2>';
-    var days = '';
-    for (var i = 0; i < 7; i++) { var d = new Date(); d.setDate(d.getDate() - i); days += '<button class="' + (ymd(d) === SUM.date ? 'on' : '') + '" data-sumday="' + ymd(d) + '">' + esc(i === 0 ? "Aujourd'hui" : i === 1 ? 'Hier' : d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' })) + '</button>'; }
+    var days = weekStrip(SUM.date, 'data-sumday');
     var ready = st && (st.state === 'ready' || st.state === 'building') && st.url && RELAY && RELAY.url; // pendant un nouveau montage, le film précédent reste visible
     h += ready ? '<div class="camcard player' + (PFS ? ' fs' : '') + '"><video id="sumv" src="' + esc(relayUrl(st.url)) + '" playsinline controls></video>' +
       '<div class="rates">' + [1, 2, 4, 8].map(function (x) { return '<button class="' + ((SUM.rate || 4) === x ? 'on' : '') + '" data-sumrate="' + x + '">×' + x + '</button>'; }).join('') + fsBtn() + '</div>' +
       '<div class="cammeta"><b>' + st.parts.length + ' passage' + (st.parts.length > 1 ? 's' : '') + ' · ' + Math.floor(st.duration / 60) + ' min ' + String(st.duration % 60).padStart(2, '0') + ' en temps réel</b><span class="src-tag fb">Freebox</span></div></div>'
       : '<div class="camcard player empty"><span>' + icon('play') + (st && st.state === 'building' ? 'Montage en cours… (voir ci-dessous)' : 'Pas encore de résumé') + '</span></div>';
-    h += '<div class="days">' + days + '</div>';
+    h += days;
     // heure du dernier montage (refait tout seul chaque heure pour aujourd'hui)
     if (st && st.builtAt && st.state !== 'building') {
       var bt = new Date(st.builtAt), isToday = SUM.date === ymd(new Date());

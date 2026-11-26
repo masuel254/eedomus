@@ -1256,3 +1256,12 @@ details.nq p.note-q { margin: 0; padding: 0 !important; font-size: 14px; color: 
 .camcard.player.fs .rates .fsb { position: fixed; top: calc(var(--top) + 12px); right: 14px; z-index: 2001; width: 44px; height: 44px; padding: 0; flex: none;
   border-radius: 50%; background: rgba(20,22,26,.7); border: 1px solid rgba(255,255,255,.22); color: #fff; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
 .camcard.player.fs .rates .fsb svg.i { width: 20px; height: 20px; }
+/* Choix du jour : 7 jours sur une ligne, toujours dans le cadre */
+.wkdays { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin: 6px 0 12px; }
+.wkdays button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 8px 0 9px; border-radius: 14px;
+  background: var(--s2); border: 1px solid var(--ln); color: var(--tx); min-width: 0; text-align: center; }
+.wkdays button small { font-size: 11.5px; font-weight: 600; color: var(--mu); text-transform: capitalize; }
+.wkdays button b { font-size: 17px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.wkdays button.today small { color: var(--tx); }
+.wkdays button.on { background: var(--sel); border-color: transparent; }
+.wkdays button.on small, .wkdays button.on b { color: var(--sel-tx); }

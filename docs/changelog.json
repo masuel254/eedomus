@@ -1,7 +1,16 @@
 {
-  "version": "2.68.1",
+  "version": "2.68.2",
   "date": "2026-11-26",
   "releases": [
+    {
+      "version": "2.68.2",
+      "date": "2026-11-26",
+      "time": "21:58",
+      "title": "Choix du jour plus clair",
+      "changes": [
+        "Résumé et enregistrements : les 7 derniers jours tiennent sur une seule ligne (jour de la semaine + numéro), du plus ancien à aujourd'hui, sans défilement"
+      ]
+    },
     {
       "version": "2.68.1",
       "date": "2026-11-26",
@@ -2022,5 +2031,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "21:48"
+  "time": "21:58"
 }
