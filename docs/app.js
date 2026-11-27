@@ -1736,7 +1736,8 @@
     // marge en haut et en bas : la courbe et le point ne touchent jamais les bords (ni ne passent sous l'axe)
     var pad = Math.max(0.4, (mx - mn) * 0.1), lo = Math.floor(mn - pad), hi = Math.ceil(mx + pad); if (hi - lo < 2) { lo = Math.floor((mn + mx) / 2) - 1; hi = lo + 2; }
     var X = function (t) { return L + (Math.max(x0, Math.min(x1, t)) - x0) / (x1 - x0) * (W - L - R); }, Y = function (v) { return T + (1 - (v - lo) / (hi - lo)) * (H - T - B); };
-    s += '<text x="' + (W - R) + '" y="13" class="g-om" text-anchor="end">min ' + fmt(mn, 1) + '° · max ' + fmt(mx, 1) + '°</text>';
+    var inP = pts.filter(function (p) { return p[0] >= x0 && p[0] <= x1; }), av = 0; (inP.length ? inP : pts).forEach(function (p) { av += p[1]; }); av /= (inP.length || pts.length);
+    s += '<text x="' + (W - R) + '" y="13" class="g-om" text-anchor="end">min ' + fmt(mn, 1) + '° · moy ' + fmt(av, 1) + '° · max ' + fmt(mx, 1) + '°</text>';
     [lo, hi].forEach(function (v) { s += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + Y(v).toFixed(1) + '" y2="' + Y(v).toFixed(1) + '" class="g-grid"/><text x="' + (L - 6) + '" y="' + (Y(v) + 3).toFixed(1) + '" class="g-yl" text-anchor="end">' + v + '</text>'; });
     var dp = pts.map(function (p, i) { return (i ? 'L' : 'M') + X(p[0]).toFixed(1) + ' ' + Y(p[1]).toFixed(1); }).join(' ');
     s += '<path d="' + dp + ' L' + X(pts[pts.length - 1][0]).toFixed(1) + ' ' + (H - B) + ' L' + X(pts[0][0]).toFixed(1) + ' ' + (H - B) + ' Z" class="g-oa"/><path d="' + dp + '" class="g-o"/>';

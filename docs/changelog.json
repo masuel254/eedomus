@@ -1,7 +1,16 @@
 {
-  "version": "2.77.0",
+  "version": "2.77.1",
   "date": "2026-11-27",
   "releases": [
+    {
+      "version": "2.77.1",
+      "date": "2026-11-27",
+      "time": "22:52",
+      "title": "Moyenne dehors",
+      "changes": [
+        "Graphiques : la bande « Dehors » affiche aussi la moyenne (min · moy · max)"
+      ]
+    },
     {
       "version": "2.77.0",
       "date": "2026-11-27",
@@ -2259,5 +2268,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "22:45"
+  "time": "22:52"
 }
