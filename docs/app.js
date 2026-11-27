@@ -760,7 +760,8 @@
       var sat = L.layerGroup([L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Images © Esri' }),
         L.tileLayer('https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=ORTHOIMAGERY.ORTHOPHOTOS&STYLE=normal&TILEMATRIXSET=PM&FORMAT=image/jpeg&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}', { maxZoom: 19, attribution: '© IGN' }),
         L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 })]);
-      var cur = store.get('maison.mapsat') === '0' ? plan : sat; // satellite par défaut cur.addTo(m);
+      var cur = store.get('maison.mapsat') === '0' ? plan : sat; // satellite par défaut
+      cur.addTo(m);
       var Tg = L.Control.extend({ options: { position: 'topright' }, onAdd: function () {
         var bt = L.DomUtil.create('button', 'mapsw'); bt.type = 'button'; bt.textContent = cur === sat ? 'Plan' : 'Satellite';
         L.DomEvent.disableClickPropagation(bt);
