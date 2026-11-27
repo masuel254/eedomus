@@ -1,7 +1,16 @@
 {
-  "version": "2.77.2",
+  "version": "2.77.3",
   "date": "2026-11-27",
   "releases": [
+    {
+      "version": "2.77.3",
+      "date": "2026-11-27",
+      "time": "23:23",
+      "title": "Relais : transcription ménagée",
+      "changes": [
+        "Relais : l'installation et la transcription prennent moins de ressources (mémoire de secours, un seul cœur, priorité minimale) pour ne plus gêner les vidéos"
+      ]
+    },
     {
       "version": "2.77.2",
       "date": "2026-11-27",
@@ -2277,5 +2286,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "22:57"
+  "time": "23:23"
 }

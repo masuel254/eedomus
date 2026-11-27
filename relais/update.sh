@@ -30,11 +30,15 @@ cmp -s "$T/transcribe.sh" $OPT/transcribe.sh || install -m 755 "$T/transcribe.sh
 WH=$OPT/whisper
 if [ ! -x $WH/whisper-cli ] && ! systemctl is-active --quiet relais-whisper-build 2>/dev/null && [ ! -f $WH/.echec ]; then
   mkdir -p $WH
-  systemd-run --quiet --collect --unit relais-whisper-build -p Nice=15 /bin/bash -c "
+  # la VM n'a qu'1 Go de mémoire : mémoire de secours (swap) de 2 Go, compilation sur un seul cœur, priorité minimale,
+  # mémoire du compilateur plafonnée (la VM reste disponible pour les vidéos pendant ce temps)
+  [ -f /var/swap-relais ] || { fallocate -l 2G /var/swap-relais 2>/dev/null || dd if=/dev/zero of=/var/swap-relais bs=1M count=2048 status=none; chmod 600 /var/swap-relais; mkswap /var/swap-relais >/dev/null; }
+  swapon --show=NAME --noheadings | grep -q /var/swap-relais || swapon /var/swap-relais
+  systemd-run --quiet --collect --unit relais-whisper-build -p Nice=19 -p IOSchedulingClass=idle -p MemoryMax=600M -p CPUQuota=60% /bin/bash -c "
     DEBIAN_FRONTEND=noninteractive apt-get install -y -qq build-essential cmake git >/dev/null 2>&1
     rm -rf $WH/src && git clone -q --depth 1 -b v1.7.4 https://github.com/ggml-org/whisper.cpp $WH/src &&
     cd $WH/src && cmake -B build -DCMAKE_BUILD_TYPE=Release -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_SERVER=OFF -DBUILD_SHARED_LIBS=OFF >/dev/null &&
-    cmake --build build -j2 --target whisper-cli >/dev/null && install -m 755 build/bin/whisper-cli $WH/whisper-cli && rm -rf $WH/src || touch $WH/.echec"
+    cmake --build build -j1 --target whisper-cli >/dev/null && install -m 755 build/bin/whisper-cli $WH/whisper-cli && rm -rf $WH/src || touch $WH/.echec"
 fi
 [ -s $WH/ggml-small-q5_1.bin ] || { mkdir -p $WH; curl -fsSL --max-time 900 https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small-q5_1.bin -o $WH/m.tmp && mv -f $WH/m.tmp $WH/ggml-small-q5_1.bin; }
 cmp -s "$T/detect.py" $OPT/detect.py || install -m 755 "$T/detect.py" $OPT/detect.py

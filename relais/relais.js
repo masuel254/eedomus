@@ -242,7 +242,7 @@ function serve() {
         const age = cur ? Date.now() - fs.statSync(out).mtimeMs : 0, stale = cur && cur.state === 'building' && (age > 40 * 60000 || (cur.step === 'démarrage' && age > 3 * 60000)); // tâche jamais partie
         if (u.searchParams.get('go') && (!cur || cur.state === 'error' || stale)) {
           fs.writeFileSync(out, JSON.stringify({ state: 'building', step: 'démarrage', done: 0, total: 0 }));
-          spawnSync('systemd-run', ['--quiet', '--collect', '--unit', 'relais-tr-' + path.basename(out, '.json') + '-' + Date.now(), '-p', 'Nice=12', '/opt/relais/transcribe.sh', file, out], { timeout: 20000 });
+          spawnSync('systemd-run', ['--quiet', '--collect', '--unit', 'relais-tr-' + path.basename(out, '.json') + '-' + Date.now(), '-p', 'Nice=15', '-p', 'MemoryMax=700M', '-p', 'CPUQuota=70%', '/opt/relais/transcribe.sh', file, out], { timeout: 20000 });
           cur = { state: 'building', step: 'démarrage' };
         }
         return json(res, 200, Object.assign({ ok: true }, cur || { state: 'none' }));

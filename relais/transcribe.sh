@@ -41,7 +41,7 @@ N=$(wc -l < "$T/parts.txt"); I=0
 while read -r A B; do
   I=$((I + 1)); step transcription $I $N
   ffmpeg -v error -y -ss "$A" -to "$B" -i "$T/a.wav" -ac 1 -ar 16000 "$T/p.wav" || continue
-  nice -n 10 "$BIN" -m "$MODEL" -l fr -t 2 -nt -np -f "$T/p.wav" -oj -of "$T/p" >/dev/null 2>&1 || continue
+  nice -n 15 "$BIN" -m "$MODEL" -l fr -t 1 -nt -np -f "$T/p.wav" -oj -of "$T/p" >/dev/null 2>&1 || continue
   python3 - "$T/p.json" "$A" >> "$T/lines.txt" <<'PY'
 import json, sys
 try: d = json.load(open(sys.argv[1]))
