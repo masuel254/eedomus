@@ -284,9 +284,12 @@ async function nt(method, path, params, retry) {
     const out = parse(await helpers.httpRequest(opts)); svcMark('netatmo', true); return out;
   } catch (e) {
     const st = e.httpCode || (e.response && e.response.status) || (e.cause && e.cause.status);
-    if (!retry && (String(st) === '403' || String(st) === '401')) { SD.nt.access = null; await ntToken(true); return nt(method, path, params, true); }
+    // jeton refusé (une autre exécution a pu le renouveler entre-temps, ce qui l'invalide) : nouveau jeton, jusqu'à 2 fois
+    if ((retry || 0) < 2 && (String(st) === '403' || String(st) === '401')) { SD.nt.access = null; SD.nt.exp = 0; if (retry) await new Promise((ok) => setTimeout(ok, 1200)); await ntToken(true); return nt(method, path, params, (retry || 0) + 1); }
     svcMark('netatmo', false);
-    throw fail(502, 'netatmo', String(e.message || e));
+    let bd = ''; try { bd = JSON.stringify((e.response && e.response.body) || e.description || e.cause && e.cause.response && e.cause.response.body || '').slice(0, 200); } catch (x) {}
+    SD.ntErr = { at: Date.now(), st: String(st || ''), path, bd };
+    throw fail(502, 'netatmo', String(e.message || e) + (bd ? ' ' + bd : ''));
   }
 }
 // POST avec un corps JSON (plannings : zones et timetable sont des tableaux)
@@ -1870,6 +1873,11 @@ async function tuya(b) {
 async function netatmo(b) {
   if (b.action === 'nt.heating') return ntHeating(false);
   if (b.action === 'nt.cameras') return ntCameras(!!b.fresh);
+  if (b.action === 'nt.diag') { // diagnostic : réponse brute de Netatmo
+    const tok = await ntToken(!!b.force);
+    const r = await helpers.httpRequest({ method: 'GET', url: 'https://api.netatmo.com/api/homesdata', headers: { Authorization: 'Bearer ' + tok }, json: false, returnFullResponse: true, ignoreHttpStatusErrors: true, timeout: 15000 });
+    return { ok: true, status: r.statusCode, body: String(typeof r.body === 'string' ? r.body : JSON.stringify(r.body)).slice(0, 300), sameRefresh: SD.nt.refresh === CFG.nt.refresh, exp: SD.nt.exp };
+  }
   // Détections Netatmo d'une journée (personne, véhicule, animal…) : pour légender les vidéos de la Présence gardées sur la Freebox.
   // Pages de 50 événements en remontant le temps ; journées passées gardées en mémoire, aujourd'hui relu au plus toutes les 2 min.
   if (b.action === 'nt.dayevents') {
