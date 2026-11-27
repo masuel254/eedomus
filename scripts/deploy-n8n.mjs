@@ -92,6 +92,8 @@ const CODE_CFG = {
   user: env.EEDOMUS_API_USER,
   secret: env.EEDOMUS_API_SECRET,
   tokens: tokens.map((t) => t.v),
+  // modules « présence » d'eedomus (un par personne) : reliés à OwnTracks par le prénom, lu dans eedomus (jamais écrit ici)
+  people: ((cfg.status && cfg.status.people) || []).map(String),
   settable,
   readable: [...readable],
   // Modules suivis dans les journaux (3 jours) de l'accueil
@@ -1222,6 +1224,35 @@ async function placeOf(lat, lon) {
   SD.geo[key] = { t, at: Date.now() };
   return t;
 }
+// ---- Cohérence présence : OwnTracks voit la personne loin de la maison, eedomus la croit encore présente → on passe eedomus à « absent » ----
+// Prudence : position récente (moins de 15 min), précise (moins de 200 m), à plus de 500 m de la maison,
+// et eedomus « présent » depuis au moins 10 min (pas juste après une arrivée). Une seule correction par départ, avec une notification.
+async function presWatch() {
+  const L = SD.loc || {}, home = (SD.route && SD.route.from) || CFG.meteoPos || null;
+  if (!home || !Object.keys(L).length) return;
+  const PW = SD.presW = SD.presW || {};
+  if (PW.at && PW.at > Date.now() - 60000) return;
+  PW.at = Date.now();
+  const away = Object.keys(L).map((k) => ({ k, x: L[k] })).filter((c) => Date.now() - c.x.at < 15 * 60000 && (c.x.acc || 0) <= 200 && geoDist(c.x, home) > 500);
+  if (!away.length || !CFG.people.length) return;
+  const r = await eedomus('get', 'action=periph.caract&periph_id=' + CFG.people.join(','));
+  if (r.success !== 1) return;
+  // prénom OwnTracks (sans accent) retrouvé dans le nom du module eedomus (« Présence <prénom> … »)
+  const fold = (t) => String(t || '').normalize('NFD').replace(/[^A-Za-z]/g, '').toLowerCase();
+  const by = {}, mods = [].concat(r.body);
+  mods.forEach((b) => { by[String(b.periph_id)] = b; });
+  const cand = away.map((c) => { const n = fold(c.x.name); const m = n.length >= 3 && mods.find((b) => fold(b.name).indexOf(n) >= 0); return m ? Object.assign(c, { id: String(m.periph_id) }) : null; }).filter(Boolean);
+  for (const c of cand) {
+    const b = by[c.id]; if (!b || String(b.last_value) !== '100') continue;
+    const since = parisEpoch(b.last_value_change) * 1000; // heure de Paris
+    if (Date.now() - since < 10 * 60000) continue;
+    if (PW[c.id] && PW[c.id] > c.x.at - 60000) continue; // déjà corrigé pour ce départ
+    await eedomus('set', 'action=periph.value&periph_id=' + c.id + '&value=0');
+    PW[c.id] = Date.now();
+    const km = geoDist(c.x, home) / 1000, nm = String(b.last_value_text || '').replace(/ +Pr[ée]sente?$/i, '') || c.x.name;
+    await pushNotify({ tag: 'presence', title: '🔄 ' + nm + ' passé(e) en absent dans eedomus', body: 'eedomus le/la voyait encore à la maison, mais sa position est à ' + (km < 10 ? String(Math.round(km * 10) / 10).replace('.', ',') : Math.round(km)) + ' km (OwnTracks)' });
+  }
+}
 // « AAAA-MM-JJ HH:MM:SS » à l'heure de Paris → secondes depuis 1970
 function parisEpoch(str) {
   const m = /^([0-9]{4})-([0-9]{2})-([0-9]{2})[ T]([0-9]{2}):([0-9]{2}):([0-9]{2})/.exec(String(str || '')); if (!m) return 0;
@@ -2071,6 +2102,7 @@ try {
     try { await battWatch(); } catch (e) {}
     try { await elecWatch(); } catch (e) {}
     try { await poolFrostWatch(); } catch (e) {}
+    try { await presWatch(); } catch (e) {}
     try { await routeWatch(); } catch (e) {}
     let gu = null; try { gu = await garageCamDue(); } catch (e) {}
     return (gu ? [{ json: { garageUrl: gu } }] : []).concat(OUT_PUSH); // aucune réponse HTTP à envoyer
@@ -2240,7 +2272,7 @@ try {
     if (body.action === 'push.testall') {
       if (!body.token || !CFG.tokens.includes(body.token)) return reply(401, { ok: false, error: 'unauthorized' });
       if (body.fmt === 'decl' || body.fmt === 'plain') SD.push.fmt = body.fmt === 'decl' ? 'decl' : null;
-      const tg = /^(test|garage|water|meteo|smoke|boiler|alarm|batt|pool|poolfrost|health)$/.test(String(body.tag || '')) ? body.tag : 'test';
+      const tg = /^(test|garage|water|meteo|smoke|boiler|alarm|batt|pool|poolfrost|health|presence)$/.test(String(body.tag || '')) ? body.tag : 'test';
       const n = await pushNotify({ tag: tg, title: String(body.title || 'Maison').slice(0, 60), body: String(body.text || 'Test des notifications').slice(0, 120), badge: null });
       return reply(200, { ok: true, sent: n });
     }

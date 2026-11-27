@@ -3128,12 +3128,12 @@
   var ALR_OPEN = {}; // alertes dépliées (gardées quand les Réglages se redessinent)
   sheet.addEventListener('toggle', function (e) { var t = e.target; if (t && t.dataset && t.dataset.alr) ALR_OPEN[t.dataset.alr] = t.open; }, true);
   var ALR_GROUPS = [
-    { id: 'secu', ic: 'shield', t: 'Sécurité', k: ['alarm', 'smoke', 'garage', 'batt', 'health'] },
+    { id: 'secu', ic: 'shield', t: 'Sécurité', k: ['alarm', 'smoke', 'garage', 'batt', 'health', 'presence'] },
     { id: 'maison', ic: 'home', t: 'Maison et piscine', k: ['water', 'boiler', 'pool', 'poolfrost'] },
     { id: 'dehors', ic: 'car', t: 'Météo et trajet', k: ['wind', 'morning', 'route'] }
   ];
   // étiquettes des notifications de chaque alerte (pour la couper sur cet iPhone)
-  var ALR_TAGS = { garage: ['garage'], water: ['water', 'wateroff'], alarm: ['alarm'], batt: ['batt'], pool: ['pool'], poolfrost: ['poolfrost'], smoke: ['smoke'], boiler: ['boiler'], wind: ['meteo'], morning: ['morning'], health: ['health'] };
+  var ALR_TAGS = { garage: ['garage'], water: ['water', 'wateroff'], alarm: ['alarm'], batt: ['batt'], pool: ['pool'], poolfrost: ['poolfrost'], smoke: ['smoke'], boiler: ['boiler'], wind: ['meteo'], morning: ['morning'], health: ['health'], presence: ['presence'] };
   function alrOff(k) { var t = ALR_TAGS[k]; return !!(t && PUSH.off && PUSH.off[t[0]]); }
   function alrSwitch(a) {
     if (a.k === 'route' || !ALR_TAGS[a.k]) return '';
@@ -3183,6 +3183,10 @@
       'Relais caméras de la Freebox : alerte s’il n’a pas donné de nouvelles depuis plus d’une heure.',
       'Caméra Imou dont l’enregistrement est arrêté depuis plus d’une heure : une seule alerte (pas de rappel).',
       'Rappel toutes les 6 h tant que la panne dure, puis message « répond à nouveau ».'] },
+    { k: 'presence', ic: 'home', t: 'Présence corrigée', w: 'Toujours', s: 'eedomus remis à « absent »', c: [
+      'Si OwnTracks voit une personne à plus de 500 m de la maison (position de moins de 15 min) alors qu’eedomus la croit encore présente, le serveur la passe à « absent » dans eedomus.',
+      'Seulement si eedomus la voit présente depuis au moins 10 min ; une seule correction par départ.',
+      'Une notification indique chaque correction. Le retour à « présent » reste fait par eedomus (Wi-Fi).'] },
     { k: 'smoke', ic: 'flame', t: 'Détecteur de fumée', w: 'Toujours', s: 'Alerte immédiate', c: [
       'Un détecteur de fumée passe en alarme : alerte immédiate (vérifié toutes les 30 s).',
       'Rappel toutes les 3 min tant qu’il est en alarme, puis message de fin d’alerte.'] },
