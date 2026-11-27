@@ -1375,9 +1375,35 @@
           '<div class="gsm"><span>' + (days >= 2 ? durTxt(ht.sec / days) + ' par jour' : perS) + '</span></div></div>' +
         '<div class="gs t"><div class="gsh"><svg class="i"><use href="#thermo"/></svg>Température moy.</div><b>' + (tm ? fmt(tm.avg, 1) + '°' : '—') + '</b><small>' + (tm && tm.sp != null ? 'consigne moyenne ' + fmt(tm.sp, 1) + '°' : perS) + '</small>' +
           '<div class="gsm"><span>' + (tm ? 'min ' + fmt(tm.min, 1) + '°' : '') + '</span><span>' + (tm ? 'max ' + fmt(tm.max, 1) + '°' : '') + '</span></div></div></div>';
+      if (rm && rm.therm && ht && tm) h += heatIndexHTML(d, ht, tm);
     }
     if (NT && NT.rooms) h += '<div class="rchips gch">' + NT.rooms.map(function (x) { return '<button class="rchip' + (String(x.id) === GR.room ? ' on' : '') + '" data-groom="' + esc(x.id) + '">' + esc(x.name) + '</button>'; }).join('') + '</div>';
     var keep = sheet.scrollTop; sheet.innerHTML = '<div class="sh-in">' + h + '</div>'; sheet.scrollTop = keep;
+  }
+  // Indice chauffage : coût du gaz de la période ramené à l'écart de température dedans / dehors et au nombre de jours
+  // (un jour froid coûte forcément plus cher : l'indice permet de comparer des jours et des réglages différents)
+  var IDX_OPEN = false, costCfgAsk = 0;
+  function heatIndexHTML(d, ht, tm) {
+    var C = null; try { C = (JSON.parse(localStorage.getItem('maison-cost') || 'null') || {}).cfg; } catch (e) {}
+    if (!C && Date.now() - costCfgAsk > 60000) { costCfgAsk = Date.now(); api({ action: 'cost' }).then(function (j) { try { localStorage.setItem('maison-cost', JSON.stringify(j)); } catch (e) {} if (GR) renderGraph(); }).catch(function () {}); }
+    // même source que la bande « Dehors » du graphique
+    var x0 = d.begin, x1 = grEnd(d), so = 0;
+    var op = ((x1 - x0 > 40 * 86400 ? outGet(outRange(x0, x1)) : outsGet(x0, x1)) || []).filter(function (p) { return p[0] >= x0 && p[0] <= x1; });
+    op.forEach(function (p) { so += p[1]; });
+    var out = op.length ? so / op.length : null, days = ht.span / 86400;
+    if (!C || out == null || days <= 0) return '';
+    var kwh = ht.sec / 3600 * (C.kw || 12.9), eur = kwh * (C.gasPrice || 0.13), gap = Math.max(1, tm.avg - out), idx = eur / days / gap;
+    var flow = FLOW && FLOW.log && FLOW.log.length ? FLOW.log[FLOW.log.length - 1].t : null;
+    return '<div class="card2 hidx"><div class="gsh">' + icon('bolt') + 'Indice chauffage</div>' +
+      '<b class="mono">' + fmt(idx, 2) + ' €</b><small>par degré d’écart et par jour</small>' +
+      '<div class="gsm"><span>Gaz estimé ' + fmt(eur, 2) + ' €' + (days >= 2 ? ' (' + fmt(eur / days, 2) + ' €/jour)' : '') + '</span><span>écart ' + fmt(gap, 1) + '°</span></div>' +
+      (flow ? '<div class="gsm"><span>Eau chaudière ' + flow + '°</span><span>' + fmt(kwh, 0) + ' kWh</span></div>' : '') +
+      '<details class="nq"' + (IDX_OPEN ? ' open' : '') + ' data-idxinfo><summary><span class="nq-i">i</span>Ce que représente l’indice</summary><p class="note-q nq-in">' +
+      'C’est le coût du gaz pour chauffer d’un degré l’écart entre la maison et l’extérieur, pendant une journée. ' +
+      'Exemple : un indice de 0,90 € avec 20° d’écart (20° dedans, 0° dehors) donne 18 € de gaz ce jour-là. ' +
+      'Comme il tient compte du froid dehors, on peut comparer des jours différents : plus l’indice est bas, plus le chauffage est économe. ' +
+      'Il sert à trouver le meilleur réglage (température de l’eau de la chaudière, consignes) : change un réglage, attends quelques jours, compare l’indice. ' +
+      'Pour l’instant le gaz est estimé (heures de chauffe × ' + fmt(C.kw || 12.9, 1) + ' kW × ' + fmt(C.gasPrice, 4) + ' €/kWh) ; il sera exact quand le compteur Gazpar sera relié.</p></details></div>';
   }
   function graphPick(e) {
     var svg = e.target.closest('[data-gsvg]'); if (!svg || !GR || !GR.data) return;

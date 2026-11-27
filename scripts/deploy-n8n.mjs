@@ -430,7 +430,7 @@ async function ntHeating(fresh) {
       return { id: r.id, name: r.name, temp: s.therm_measured_temperature ?? null, setpoint: s.therm_setpoint_temperature ?? null,
         mode: s.therm_setpoint_mode || null, end: s.therm_setpoint_end_time || null, power,
         // une vanne ouverte ne chauffe que si la chaudière tourne (c'est le thermostat du séjour qui la commande)
-        heating: boilerKnown ? boiler && ((power || 0) > 0 || thermRooms.includes(String(r.id))) : (power || 0) > 0, valve: power, open_window: !!s.open_window };
+        heating: boilerKnown ? boiler && ((power || 0) > 0 || thermRooms.includes(String(r.id))) : (power || 0) > 0, valve: power, open_window: !!s.open_window, therm: thermRooms.includes(String(r.id)) };
     }),
     boiler, boilerKnown,
     at: new Date().toISOString(),
