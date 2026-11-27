@@ -1527,7 +1527,20 @@
           '<span class="mono">' + fmt(x.temp, 1) + '° <small>→ ' + fmt(x.setpoint, 1) + '°</small></span></button>' + (man ? '<button class="r2-x" data-nt-homeroom="' + esc(x.id) + '" aria-label="Retirer la consigne manuelle">' + icon('x') + '</button>' : '') + '</div>';
       }).join('') + '</div>';
     }
-    return h;
+    return h + flowHTML();
+  }
+  // ---------- Température de l'eau de la chaudière (réglée à la main sur la chaudière) : notée ici, au degré près, avec la date ----------
+  // Sert à comparer coût du gaz et confort selon le réglage (essais d'une semaine).
+  var FLOW = null, flowAsk = 0, flowEdit = null;
+  function flowHTML() {
+    if (Date.now() - flowAsk > 120000) { flowAsk = Date.now(); api({ action: 'flow.state' }).then(function (j) { FLOW = j; if (TAB === 'climate' && !busy()) render(); }).catch(function () {}); }
+    var cur = FLOW && FLOW.log && FLOW.log.length ? FLOW.log[FLOW.log.length - 1] : null, v = flowEdit != null ? flowEdit : cur ? cur.t : 60;
+    var h = '<div class="lbl">Chaudière · température de l’eau</div><div class="card2 flow">' +
+      '<div class="flow-top"><span><b class="mono">' + v + '°</b><small>' + (flowEdit != null && (!cur || flowEdit !== cur.t) ? 'Nouveau réglage, à enregistrer' : cur ? 'Réglée depuis le ' + new Date(cur.at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) + ' à ' + new Date(cur.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : 'Indique le réglage de la molette') + '</small></span>' +
+      '<span class="stp2"><button data-flow="-1" aria-label="Moins un degré">−</button><button data-flow="1" aria-label="Plus un degré">+</button></span></div>';
+    if (flowEdit != null && (!cur || flowEdit !== cur.t)) h += '<button class="act flow-save" data-flowsave>Enregistrer ' + v + '° (réglé maintenant sur la chaudière)</button>';
+    if (FLOW && FLOW.log && FLOW.log.length > 1) h += '<div class="flow-hist">' + FLOW.log.slice(-5).reverse().map(function (x) { return '<span>' + new Date(x.at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) + ' · <b>' + x.t + '°</b></span>'; }).join('') + '</div>';
+    return h + '</div><p class="note-q">Le thermostat ne peut pas lire la molette de la chaudière : note ici chaque changement, au degré près. L’appli pourra ainsi comparer le coût du gaz et le confort selon le réglage.</p>';
   }
 
   // ---------- Onglet Caméras ----------
@@ -3453,6 +3466,8 @@
         setTimeout(function () { if (LOGS.doors) LOGS.doors.at = 0; loadLogs('doors', true); }, 40000);
       }).catch(function () { gsay('Impossible d’enregistrer, réessaie.', true); });
     }
+    if ((b = e.target.closest('[data-flow]'))) { var fc = FLOW && FLOW.log && FLOW.log.length ? FLOW.log[FLOW.log.length - 1].t : 60; flowEdit = Math.max(30, Math.min(80, (flowEdit != null ? flowEdit : fc) + +b.dataset.flow)); return render(); }
+    if (e.target.closest('[data-flowsave]')) { var nv = flowEdit; return api({ action: 'flow.set', t: nv }).then(function (j) { FLOW = j; flowEdit = null; render(); }).catch(function () { toast('Réglage non enregistré, réessaie', true); }); }
     if (e.target.closest('[data-motall]')) { MOT_ALL = !MOT_ALL; return render(); }
     if ((b = e.target.closest('[data-zexp]'))) { ZEXP[b.dataset.zexp] = !ZEXP[b.dataset.zexp]; return render(); }
     if ((b = e.target.closest('[data-yesno]'))) { var yid = +b.dataset.yesno; return send(yid, num(yid) === 1 ? 0 : 1); }

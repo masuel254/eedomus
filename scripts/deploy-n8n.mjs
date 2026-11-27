@@ -2432,6 +2432,16 @@ try {
     }
     return reply(200, { ok: true, fail: SD.otFail || null, list: out.sort((a, b) => (b.me - a.me) || (a.name < b.name ? -1 : 1)), pass: otPass(body.token) });
   }
+  // Température de l'eau de la chaudière (réglée à la main) : historique des réglages, au degré près
+  if (body.action === 'flow.state' || body.action === 'flow.set') {
+    SD.flowLog = SD.flowLog || [];
+    if (body.action === 'flow.set') {
+      const t = Math.round(Number(body.t));
+      if (!(t >= 30 && t <= 80)) return reply(400, { ok: false, error: 'bad_value' });
+      SD.flowLog = SD.flowLog.concat([{ at: Date.now(), t }]).slice(-200);
+    }
+    return reply(200, { ok: true, log: SD.flowLog });
+  }
   // « Reste à faire » : lignes marquées faites depuis l'appli (Claude les retire ensuite de docs/changelog.json)
   if (body.action === 'todo.done' || body.action === 'todo.list') {
     SD.todoDone = SD.todoDone || [];

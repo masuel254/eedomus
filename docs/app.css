@@ -1292,3 +1292,10 @@ a.row { color: inherit; text-decoration: none; }
 .trl { margin-top: 8px; display: flex; flex-direction: column; }
 .trline { display: grid; grid-template-columns: 44px 1fr; gap: 8px; text-align: left; padding: 7px 0; border-top: 1px solid #1F2329; font-size: 15px; line-height: 1.4; }
 .trline .mono { color: var(--mu); font-size: 13px; padding-top: 2px; }
+/* Température de l'eau de la chaudière */
+.card2.flow .flow-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.card2.flow .flow-top b { display: block; font-size: 30px; font-weight: 700; }
+.card2.flow .flow-top small { color: var(--mu); font-size: 13px; }
+.card2.flow .flow-save { width: 100%; margin-top: 12px; text-align: center; padding: 11px; }
+.flow-hist { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 10px; font-size: 13px; color: var(--mu); }
+.flow-hist b { color: var(--tx); }
