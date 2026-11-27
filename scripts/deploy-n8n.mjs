@@ -1192,7 +1192,7 @@ async function otIn() {
   let user = '', pass = '';
   try { const raw = Buffer.from(au.replace(/^Basic +/i, ''), 'base64').toString('utf8'), i = raw.indexOf(':'); user = raw.slice(0, i); pass = raw.slice(i + 1); } catch (e) {}
   const idx = CFG.tokens.findIndex((t) => otPass(t) === pass);
-  if (idx < 0) return reply(401, []);
+  if (idx < 0) { SD.otFail = { at: Date.now(), user: user.slice(0, 20), plen: pass.length, hasAuth: !!au, p4: pass.slice(0, 4) }; return reply(401, []); }
   if (body._type === 'location' && isFinite(body.lat) && isFinite(body.lon)) {
     SD.loc = SD.loc || {};
     SD.loc['p' + idx] = { name: String(user || 'Moi').slice(0, 20), lat: Number(body.lat), lon: Number(body.lon), acc: Number(body.acc) || null,
@@ -2386,7 +2386,7 @@ try {
       const atHome = d != null && d <= Math.max(150, Math.min(400, x.acc || 0));
       out.push({ k, me: k === me, name: x.name, at: x.at, batt: x.batt, acc: x.acc, dist: d, home: atHome, lat: x.lat, lon: x.lon, place: atHome ? null : await placeOf(x.lat, x.lon) });
     }
-    return reply(200, { ok: true, list: out.sort((a, b) => (b.me - a.me) || (a.name < b.name ? -1 : 1)), pass: otPass(body.token) });
+    return reply(200, { ok: true, fail: SD.otFail || null, list: out.sort((a, b) => (b.me - a.me) || (a.name < b.name ? -1 : 1)), pass: otPass(body.token) });
   }
   // « Reste à faire » : lignes marquées faites depuis l'appli (Claude les retire ensuite de docs/changelog.json)
   if (body.action === 'todo.done' || body.action === 'todo.list') {
