@@ -2360,8 +2360,10 @@ try {
       let j = i; const c = { lat: P[i][1], lon: P[i][2] };
       while (j + 1 < P.length && geoDist({ lat: P[j + 1][1], lon: P[j + 1][2] }, c) <= 200) j++;
       // arrêt : plusieurs positions au même endroit pendant 5 min ou plus (ou début / fin de journée) ; un point isolé en route n'en est pas un
-      const last = j === P.length - 1, end = last ? Math.min(Date.now(), t1) : P[j][0];
-      if ((j > i && P[j][0] - P[i][0] >= 5 * 60000) || i === 0 || last) segs.push({ type: 'stop', from: P[i][0], to: end, lat: c.lat, lon: c.lon, i0: i, i1: j });
+      // un point seul compte aussi comme arrêt si le suivant arrive 10 min plus tard ou plus (OwnTracks n'envoie rien tant qu'on ne bouge pas)
+      const last = j === P.length - 1, next = last ? Math.min(Date.now(), t1) : P[j + 1][0];
+      const stayed = (j > i && P[j][0] - P[i][0] >= 5 * 60000) || next - P[j][0] >= 10 * 60000;
+      if (stayed || i === 0 || last) segs.push({ type: 'stop', from: P[i][0], to: last ? next : Math.max(P[j][0], next - (next - P[j][0] >= 10 * 60000 ? 60000 : next - P[j][0])), lat: c.lat, lon: c.lon, i0: i, i1: j });
       i = j + 1;
     }
     // trajets entre deux arrêts : distance parcourue

@@ -747,10 +747,10 @@
       }).join('') + '</div>';
     }
     var keep = sheet.scrollTop; sheet.innerHTML = '<div class="sh-in">' + h + '</div>'; sheet.scrollTop = keep;
-    if (d && d.pts && d.pts.length) drawLocMap(d.pts);
+    if (d && d.pts && d.pts.length) drawLocMap(d.pts, d.items);
   }
   // carte : Leaflet chargé à la demande, fond OpenStreetMap
-  function drawLocMap(pts) {
+  function drawLocMap(pts, items) {
     var go = function () {
       var el = document.getElementById('locmap'); if (!el || !window.L) return;
       var m = L.map(el, { zoomControl: false, attributionControl: true });
@@ -769,7 +769,13 @@
         return bt; } });
       m.addControl(new Tg());
       var line = L.polyline(pts, { color: '#FF8A5B', weight: 4, opacity: .9 }).addTo(m);
-      L.circleMarker(pts[pts.length - 1], { radius: 7, color: '#fff', weight: 2, fillColor: '#FF8A5B', fillOpacity: 1 }).addTo(m);
+      // arrêts : un rond par lieu (vert = maison), touché = nom, heures et lien vers Google Maps
+      var hm = function (t) { var x = new Date(t); return ('0' + x.getHours()).slice(-2) + 'h' + ('0' + x.getMinutes()).slice(-2); };
+      (items || []).filter(function (g) { return g.type === 'stop'; }).forEach(function (g) {
+        L.circleMarker([g.lat, g.lon], { radius: 9, color: '#fff', weight: 2, fillColor: g.home ? '#4ADE80' : '#38BDF8', fillOpacity: 1 }).addTo(m)
+          .bindPopup('<b>' + esc(g.home ? 'Maison' : g.place || 'Lieu') + '</b><br>' + hm(g.from) + ' → ' + hm(g.to) + '<br><a href="https://www.google.com/maps/search/?api=1&query=' + g.lat + ',' + g.lon + '" target="_blank" rel="noopener">Ouvrir dans Google Maps</a>');
+      });
+      L.circleMarker(pts[pts.length - 1], { radius: 6, color: '#fff', weight: 2, fillColor: '#FF8A5B', fillOpacity: 1 }).addTo(m);
       var fit = function () { m.invalidateSize(); if (pts.length > 1) m.fitBounds(line.getBounds(), { padding: [24, 24], maxZoom: 18 }); else m.setView(pts[0], 18); };
       fit();
       // la fiche s'ouvre avec une animation : la carte reprend sa vraie taille une fois affichée (sinon elle reste grise)
