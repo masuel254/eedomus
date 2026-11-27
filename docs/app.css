@@ -1275,3 +1275,8 @@ details.nq p.note-q { margin: 0; padding: 0 !important; font-size: 14px; color: 
 .wkdays .pick.on small, .wkdays .pick.on b { color: var(--sel-tx); }
 .wkdays .pick input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; font-size: 16px; -webkit-appearance: none; appearance: none; }
 a.row { color: inherit; text-decoration: none; }
+/* Journée d'une personne */
+.wkdays.w7 { grid-template-columns: repeat(7, 1fr); }
+.locmap { height: 260px; border-radius: 18px; overflow: hidden; margin: 0 0 12px; background: var(--s2); border: 1px solid var(--ln); }
+.tl .row.trip { min-height: 46px; opacity: .85; }
+.tl .row.trip .ic { width: 32px; height: 32px; margin-left: 3px; }

@@ -713,13 +713,52 @@
     if (L.length) h += '<div class="card2 flat rs-list">' + L.map(function (x) {
       var m = Math.round((Date.now() - x.at) / 60000), ago = m < 2 ? 'à l’instant' : m < 60 ? 'il y a ' + m + ' min' : m < 1440 ? 'il y a ' + Math.round(m / 60) + ' h' : 'il y a ' + Math.round(m / 1440) + ' j';
       var where = x.home ? 'À la maison' : (x.place || 'Dehors') + (x.dist != null ? ' · ' + (x.dist < 1000 ? x.dist + ' m' : fmt(x.dist / 1000, x.dist < 10000 ? 1 : 0) + ' km') : '');
-      return '<a class="row" href="https://maps.apple.com/?ll=' + x.lat + ',' + x.lon + '&q=' + encodeURIComponent(x.name) + '" target="_blank" rel="noopener"><span class="ic' + (x.home ? ' okc' : '') + '">' + icon(x.home ? 'home' : 'walk') + '</span><span><b>' + esc(x.name) + (x.me ? ' (moi)' : '') + '</b><small>' + esc(where + ' · ' + ago + (x.batt != null ? ' · batterie ' + x.batt + ' %' : '')) + '</small></span><span class="val">›</span></a>';
+      return '<button class="row" data-locday="' + esc(x.k) + '" data-locname="' + esc(x.name) + '"><span class="ic' + (x.home ? ' okc' : '') + '">' + icon(x.home ? 'home' : 'walk') + '</span><span><b>' + esc(x.name) + (x.me ? ' (moi)' : '') + '</b><small>' + esc(where + ' · ' + ago + (x.batt != null ? ' · batterie ' + x.batt + ' %' : '')) + '</small></span><span class="val">›</span></button>';
     }).join('') + '</div>';
     else if (LOC) h += '<p class="muted" style="margin:0 4px 10px">Personne ne partage encore sa position.</p>';
     if (!mine) h += '<div class="card2 flat rs-list"><button class="row" data-otsetup><span class="ic">' + icon('walk') + '</span><span><b>Partager la position de cet iPhone</b><small>Avec l’appli gratuite OwnTracks, réglée en un appui</small></span><span class="val">›</span></button></div>';
     else h += '<div class="card2 flat rs-list"><button class="row" data-otsetup><span class="ic">' + icon('gear') + '</span><span><b>Régler à nouveau OwnTracks</b><small>Si la position ne se met plus à jour</small></span><span class="val">›</span></button>' +
       '<button class="row" data-otstop data-confirm><span class="ic">' + icon('x') + '</span><span><b>Ne plus partager ma position</b><small>Efface ma position du serveur (désinstalle aussi OwnTracks)</small></span><span class="val">›</span></button></div>';
-    return h + '<p class="note-q">Chaque personne choisit de partager sa position depuis son iPhone. Seule la dernière position est gardée, sur le serveur de la maison uniquement (aucun historique, aucune autre société). Touche une personne pour la voir dans Plans.</p>';
+    return h + '<p class="note-q">Chaque personne choisit de partager sa position depuis son iPhone. Seule la dernière position est gardée, sur le serveur de la maison uniquement (aucun historique, aucune autre société). Les déplacements des 7 derniers jours sont gardés puis effacés automatiquement ; toute la famille peut les voir. Touche une personne pour voir sa journée.</p>';
+  }
+  // Journée d'une personne : arrêts et trajets, carte du parcours (OpenStreetMap)
+  var LOCD = null;
+  function openLocDay(k, name) { LOCD = { k: k, name: name, date: ymd(new Date()), data: null }; sheet.scrollTop = 0; openSheet('locday'); loadLocDay(); }
+  function loadLocDay() {
+    var want = LOCD.date; LOCD.data = null; renderLocDay();
+    api({ action: 'loc.day', who: LOCD.k, date: want }).then(function (j) { if (LOCD && LOCD.date === want) { LOCD.data = j; renderLocDay(); } }).catch(function () { if (LOCD) { LOCD.data = { err: true }; renderLocDay(); } });
+  }
+  function renderLocDay() {
+    if (!LOCD) return;
+    var d = LOCD.data, hm = function (t) { var x = new Date(t); return ('0' + x.getHours()).slice(-2) + 'h' + ('0' + x.getMinutes()).slice(-2); };
+    var h = '<div class="sh-hd"><button class="back2" data-locback>' + icon('down') + 'Présence</button><button class="close" data-close aria-label="Fermer">×</button></div>' +
+      '<h2 class="rec-title">' + esc(LOCD.name) + '</h2>' + weekStrip(LOCD.date, 'data-locdate', 7);
+    if (!d) h += '<p class="muted">Lecture des déplacements…</p>';
+    else if (d.err) h += '<p class="muted">Le serveur ne répond pas, réessaie dans un instant.</p>';
+    else if (!d.items.length) h += '<p class="muted">Aucune position reçue ce jour-là.</p>';
+    else {
+      h += '<div id="locmap" class="locmap"></div><div class="card2 flat rs-list tl">' + d.items.map(function (g) {
+        if (g.type === 'trip') return '<div class="row trip"><span class="ic">' + icon('car') + '</span><span><b>Trajet</b><small>' + hm(g.from) + ' → ' + hm(g.to) + (g.km ? ' · ' + fmt(g.km, 1) + ' km' : '') + '</small></span></div>';
+        var dur = Math.round((g.to - g.from) / 60000), ds = dur < 60 ? dur + ' min' : Math.floor(dur / 60) + ' h ' + ('0' + dur % 60).slice(-2);
+        return '<a class="row" href="https://maps.apple.com/?ll=' + g.lat + ',' + g.lon + '" target="_blank" rel="noopener"><span class="ic' + (g.home ? ' okc' : '') + '">' + icon(g.home ? 'home' : 'walk') + '</span><span><b>' + esc(g.home ? 'Maison' : g.place || 'Lieu') + '</b><small>' + hm(g.from) + ' → ' + hm(g.to) + ' · ' + ds + '</small></span><span class="val">›</span></a>';
+      }).join('') + '</div>';
+    }
+    var keep = sheet.scrollTop; sheet.innerHTML = '<div class="sh-in">' + h + '</div>'; sheet.scrollTop = keep;
+    if (d && d.pts && d.pts.length) drawLocMap(d.pts);
+  }
+  // carte : Leaflet chargé à la demande, fond OpenStreetMap
+  function drawLocMap(pts) {
+    var go = function () {
+      var el = document.getElementById('locmap'); if (!el || !window.L) return;
+      var m = L.map(el, { zoomControl: false, attributionControl: true });
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '© OpenStreetMap' }).addTo(m);
+      var line = L.polyline(pts, { color: '#FF8A5B', weight: 4, opacity: .9 }).addTo(m);
+      L.circleMarker(pts[pts.length - 1], { radius: 7, color: '#fff', weight: 2, fillColor: '#FF8A5B', fillOpacity: 1 }).addTo(m);
+      if (pts.length > 1) m.fitBounds(line.getBounds(), { padding: [24, 24] }); else m.setView(pts[0], 15);
+    };
+    if (window.L) return go();
+    if (!document.getElementById('leafcss')) { var c = document.createElement('link'); c.id = 'leafcss'; c.rel = 'stylesheet'; c.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'; document.head.appendChild(c); }
+    var sc = document.createElement('script'); sc.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'; sc.onload = go; document.head.appendChild(sc);
   }
   function otSetup() {
     if (!LOC || !LOC.pass) { locLoad(true); return toast('Un instant, réessaie', true); }
@@ -2448,12 +2487,13 @@
       (st.url ? '<p class="note-q">Le film ci-dessus est le montage précédent : il sera remplacé à la fin.</p>' : '');
   }
   // Choix du jour : les 7 derniers jours sur une seule ligne, du plus ancien à aujourd'hui (jour de la semaine + numéro)
-  function weekStrip(sel, attr) {
+  function weekStrip(sel, attr, only7) {
     // 1re case : un jour plus ancien (vidéos gardées 30 jours sur la Freebox), avec le calendrier de l'iPhone ; puis les 7 derniers jours
     var mn = new Date(); mn.setDate(mn.getDate() - 29); var mx = new Date(); mx.setDate(mx.getDate() - 7);
     var old = !!sel && sel <= ymd(mx), sd = old ? new Date(sel + 'T12:00:00') : null;
-    var h = '<div class="wkdays"><label class="pick' + (old ? ' on' : '') + '"><small>' + (old ? esc(sd.toLocaleDateString('fr-FR', { month: 'short' }).replace('.', '')) : 'avant') + '</small><b>' + (old ? sd.getDate() : icon('cal')) + '</b>' +
+    var h = only7 ? '<div class="wkdays w7">' : '<div class="wkdays"><label class="pick' + (old ? ' on' : '') + '"><small>' + (old ? esc(sd.toLocaleDateString('fr-FR', { month: 'short' }).replace('.', '')) : 'avant') + '</small><b>' + (old ? sd.getDate() : icon('cal')) + '</b>' +
       '<input type="date" data-pickfor="' + attr + '" min="' + ymd(mn) + '" max="' + ymd(mx) + '" value="' + (old ? sel : ymd(mx)) + '" aria-label="Choisir un jour plus ancien"></label>';
+    if (only7) h = h.split('<label class="pick')[0];
     for (var i = 6; i >= 0; i--) {
       var d = new Date(); d.setDate(d.getDate() - i);
       var wd = i === 0 ? 'auj.' : i === 1 ? 'hier' : d.toLocaleDateString('fr-FR', { weekday: 'short' }).replace('.', '');
@@ -3319,6 +3359,9 @@
     if (e.target.closest('[data-notifs]')) return openNotifs();
     if ((b = e.target.closest('[data-nfdel]'))) return notifDelete(b.dataset.nfdel);
     if (e.target.closest('[data-otsetup]')) return otSetup();
+    if ((b = e.target.closest('[data-locday]'))) return openLocDay(b.dataset.locday, b.dataset.locname);
+    if ((b = e.target.closest('[data-locdate]'))) { LOCD.date = b.dataset.locdate; return loadLocDay(); }
+    if (e.target.closest('[data-locback]')) { LOCD = null; return openLogs('people'); }
     if (e.target.closest('[data-otstop]')) { if (!confirmed(e.target.closest('[data-otstop]'))) return; return api({ action: 'loc.forget' }).then(function (j) { LOC = j; renderLogs(); toast('Position effacée. Désinstalle OwnTracks pour arrêter l’envoi.'); }).catch(function () { toast('Impossible pour le moment', true); }); }
     if ((b = e.target.closest('[data-tododel]'))) return todoDelete(b.dataset.tododel);
     if (e.target.closest('[data-todoback]')) { store.set('maison.todohide', '[]'); return renderSettings(); }

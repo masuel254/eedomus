@@ -464,7 +464,8 @@ async function buildSummary(date) {
     }
     if (sc !== null) det2[k] = sc; // un échec (null) sera retenté au prochain montage
     checks.push({ name: j.name, time: Math.floor(j.t0), score: sc });
-    if ((sc !== null && sc !== undefined && sc < 0.45) || (j.need && !(sc >= 0.45))) { jobs.splice(i, 1); dropped++; } // personne invisible : faux passage
+    // caméra sans alerte (garage, intérieur, souvent peu éclairé) : seuil un peu plus bas, mais une personne doit être vue
+    if ((!j.need && sc !== null && sc !== undefined && sc < 0.45) || (j.need && !(sc >= 0.35))) { jobs.splice(i, 1); dropped++; } // personne invisible : faux passage
   }
   try { fs.mkdirSync(SUMDIR(), { recursive: true }); fs.writeFileSync(P.det, JSON.stringify(det2)); } catch (e) {}
   // extraits gardés d'un montage à l'autre : seuls les nouveaux passages (ou ceux qui ont changé) sont montés

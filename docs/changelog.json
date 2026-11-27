@@ -1,7 +1,17 @@
 {
-  "version": "2.70.0",
+  "version": "2.71.0",
   "date": "2026-11-27",
   "releases": [
+    {
+      "version": "2.71.0",
+      "date": "2026-11-27",
+      "time": "08:19",
+      "title": "Déplacements de la journée",
+      "changes": [
+        "Présence › Où est chacun : toucher une personne affiche sa journée (arrêts, trajets avec distance, carte du parcours), sur les 7 derniers jours, visible par toute la famille",
+        "Résumé : les passages du garage sont mieux reconnus (pièce peu éclairée)"
+      ]
+    },
     {
       "version": "2.70.0",
       "date": "2026-11-27",
@@ -2069,5 +2079,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "08:15"
+  "time": "08:19"
 }

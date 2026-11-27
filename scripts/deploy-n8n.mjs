@@ -1197,6 +1197,10 @@ async function otIn() {
     SD.loc = SD.loc || {};
     SD.loc['p' + idx] = { name: String(user || 'Moi').slice(0, 20), lat: Number(body.lat), lon: Number(body.lon), acc: Number(body.acc) || null,
       at: (Number(body.tst) || Math.floor(Date.now() / 1000)) * 1000, batt: isFinite(body.batt) ? Number(body.batt) : null, vel: isFinite(body.vel) ? Number(body.vel) : null };
+    // déplacements des 7 derniers jours (choix de la famille) : [heure, lat, lon, précision], effacés au-delà de 7 jours
+    SD.locHist = SD.locHist || {};
+    const lim = Date.now() - 7 * 86400000, x = SD.loc['p' + idx];
+    SD.locHist['p' + idx] = (SD.locHist['p' + idx] || []).filter((q) => q[0] > lim).concat([[x.at, Math.round(x.lat * 1e5) / 1e5, Math.round(x.lon * 1e5) / 1e5, x.acc]]).sort((a, b) => a[0] - b[0]).slice(-4000);
   }
   return reply(200, []);
 }
@@ -2342,16 +2346,45 @@ try {
     }
     return reply(200, { ok: true, list: H.last || [], at: H.at || null });
   }
+  // Déplacements d'une journée : arrêts (5 min ou plus au même endroit) et trajets entre eux, avec les points pour la carte
+  if (body.action === 'loc.day') {
+    const k = String(body.who || ''), day = String(body.date || '');
+    if (!/^p[0-9]+$/.test(k) || !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(day)) return reply(400, { ok: false });
+    const t0 = parisEpoch(day + ' 00:00:00') * 1000, t1 = t0 + 86400000;
+    const all = ((SD.locHist || {})[k] || []), pts = all.filter((q) => q[0] >= t0 && q[0] < t1);
+    const before = all.filter((q) => q[0] < t0).pop(); // où la personne était en début de journée
+    const P = (before ? [[t0, before[1], before[2], before[3]]] : []).concat(pts);
+    const home = (SD.route && SD.route.from) || CFG.meteoPos || null, segs = [];
+    let i = 0;
+    while (i < P.length) {
+      let j = i; const c = { lat: P[i][1], lon: P[i][2] };
+      while (j + 1 < P.length && geoDist({ lat: P[j + 1][1], lon: P[j + 1][2] }, c) <= 200) j++;
+      // arrêt : plusieurs positions au même endroit pendant 5 min ou plus (ou début / fin de journée) ; un point isolé en route n'en est pas un
+      const last = j === P.length - 1, end = last ? Math.min(Date.now(), t1) : P[j][0];
+      if ((j > i && P[j][0] - P[i][0] >= 5 * 60000) || i === 0 || last) segs.push({ type: 'stop', from: P[i][0], to: end, lat: c.lat, lon: c.lon, i0: i, i1: j });
+      i = j + 1;
+    }
+    // trajets entre deux arrêts : distance parcourue
+    const out = [];
+    segs.forEach((g, n) => {
+      if (n) { const a = segs[n - 1]; let km = 0; for (let q = a.i1; q < g.i0; q++) km += geoDist({ lat: P[q][1], lon: P[q][2] }, { lat: P[q + 1][1], lon: P[q + 1][2] }); out.push({ type: 'trip', from: a.to, to: g.from, km: Math.round(km / 100) / 10 }); }
+      const atHome = home && geoDist(g, home) <= 200;
+      out.push({ type: 'stop', from: g.from, to: g.to, lat: g.lat, lon: g.lon, home: !!atHome });
+    });
+    for (const g of out) if (g.type === 'stop' && !g.home) g.place = await placeOf(g.lat, g.lon);
+    return reply(200, { ok: true, who: k, date: day, items: out, pts: P.map((q) => [q[1], q[2]]) });
+  }
   // Localisation : dernière position de chaque personne (OwnTracks), distance à la maison, lieu approximatif
   if (body.action === 'loc.state' || body.action === 'loc.forget') {
     SD.loc = SD.loc || {};
     const me = 'p' + CFG.tokens.indexOf(body.token);
-    if (body.action === 'loc.forget') delete SD.loc[me]; // la personne arrête de partager sa position
-    const home = (SD.route && SD.route.from) || CFG.meteoPos || null, out = [];
+    if (body.action === 'loc.forget') { delete SD.loc[me]; if (SD.locHist) delete SD.locHist[me]; } // la personne arrête de partager : tout est effacé
+    const home = (SD.route && SD.route.from) || CFG.meteoPos || null, out = [], lim7 = Date.now() - 7 * 86400000;
+    Object.keys(SD.locHist || {}).forEach((k) => { SD.locHist[k] = SD.locHist[k].filter((q) => q[0] > lim7); if (!SD.locHist[k].length) delete SD.locHist[k]; });
     for (const k of Object.keys(SD.loc)) {
       const x = SD.loc[k], d = home ? Math.round(geoDist(x, home)) : null;
       const atHome = d != null && d <= Math.max(150, Math.min(400, x.acc || 0));
-      out.push({ me: k === me, name: x.name, at: x.at, batt: x.batt, acc: x.acc, dist: d, home: atHome, lat: x.lat, lon: x.lon, place: atHome ? null : await placeOf(x.lat, x.lon) });
+      out.push({ k, me: k === me, name: x.name, at: x.at, batt: x.batt, acc: x.acc, dist: d, home: atHome, lat: x.lat, lon: x.lon, place: atHome ? null : await placeOf(x.lat, x.lon) });
     }
     return reply(200, { ok: true, list: out.sort((a, b) => (b.me - a.me) || (a.name < b.name ? -1 : 1)), pass: otPass(body.token) });
   }
