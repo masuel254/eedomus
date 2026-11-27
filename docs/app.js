@@ -2478,22 +2478,28 @@
   var TR = {}, trT = null;
   function trHTML() {
     var P = REC && REC.play; if (!P || !P.vpath || !RELAY || !RELAY.url) return '';
-    var t = TR[P.vpath];
-    if (!t) { trGet(P.vpath, false); return ''; }
-    var h = '<div class="trbox"><div class="tr-hd"><b>Ce qui se dit</b>';
+    // la transcription demandée reste affichée même si la vidéo passe à la tranche suivante
+    var vp = REC.trv && TR[REC.trv] && TR[REC.trv].state !== 'none' ? REC.trv : P.vpath, t = TR[vp];
+    if (!t) { trGet(vp, false); return ''; }
+    var hm = /([0-9]{2})([0-9]{2})[0-9]{2}\.mp4$/.exec(vp), other = vp !== P.vpath;
+    var h = '<div class="trbox"><div class="tr-hd"><b>Ce qui se dit' + (hm ? ' · ' + hm[1] + 'h' + hm[2] : '') + '</b>' + (other ? '<button class="lnk" data-trclose>Fermer</button>' : '');
     if (t.state === 'none' || t.state === 'error') h += '<button class="act" data-trgo>' + (t.state === 'error' ? 'Réessayer' : 'Transcrire') + '</button></div>' + (t.error ? '<p class="muted">' + esc(t.error) + '</p>' : '<p class="muted">La Freebox écoute le son de cette vidéo et écrit ce qui se dit (quelques minutes, rien ne sort de la maison).</p>');
-    else if (t.state === 'building') h += '</div><p class="muted">' + (t.step === 'transcription' && t.total ? 'Écoute en cours : passage ' + t.done + ' / ' + t.total + '…' : 'Préparation du son…') + '</p>';
+    else if (t.state === 'building') h += '</div><p class="muted">' + (t.step === 'transcription' && t.total ? 'Écoute en cours : passage ' + t.done + ' / ' + t.total + ' (environ ' + Math.max(1, Math.round((t.total - t.done + 1) * 0.6)) + ' min)…' : 'Préparation du son…') + '</p>' + trLines(t.lines, vp === P.vpath);
     else if (!t.lines.length) h += '</div><p class="muted">Personne ne parle de façon audible dans cette vidéo.</p>';
-    else h += '</div><div class="trl">' + t.lines.map(function (l) {
-      var m = Math.floor(l.t / 60), sec = Math.floor(l.t % 60);
-      return '<button class="trline" data-trseek="' + l.t + '"><span class="mono">' + m + ':' + ('0' + sec).slice(-2) + '</span>' + esc(l.text) + '</button>';
-    }).join('') + '</div>';
+    else h += '</div>' + trLines(t.lines, vp === P.vpath);
     return h + '</div>';
+  }
+  function trLines(lines, seek) {
+    if (!lines || !lines.length) return '';
+    return '<div class="trl">' + lines.map(function (l) {
+      var m = Math.floor(l.t / 60), sec = Math.floor(l.t % 60);
+      return '<button class="trline"' + (seek ? ' data-trseek="' + l.t + '"' : '') + '><span class="mono">' + m + ':' + ('0' + sec).slice(-2) + '</span>' + esc(l.text) + '</button>';
+    }).join('') + '</div>';
   }
   function trGet(vp, go) {
     relayJson('/api/tr?v=' + encodeURIComponent(vp) + (go ? '&go=1' : '')).then(function (j) {
-      TR[vp] = j; if (REC && REC.play && REC.play.vpath === vp) { var bx = sheet.querySelector('.trbox'); if (bx) bx.outerHTML = trHTML(); else renderRec(); }
-      clearTimeout(trT); if (j.state === 'building') trT = setTimeout(function () { if (REC && REC.play && REC.play.vpath === vp) trGet(vp, false); }, 5000);
+      TR[vp] = j; if (REC && REC.play && (REC.play.vpath === vp || REC.trv === vp)) { var bx = sheet.querySelector('.trbox'); if (bx) bx.outerHTML = trHTML(); else renderRec(); }
+      clearTimeout(trT); if (j.state === 'building') trT = setTimeout(function () { if (REC && REC.play && (REC.play.vpath === vp || REC.trv === vp)) trGet(vp, false); }, 5000);
     }).catch(function () { TR[vp] = { state: 'error', error: 'La Freebox ne répond pas pour le moment.' }; });
   }
   var RT = { videomotion: 'Mouvement', alarm: 'Alarme', human: 'Personne', manual: 'Manuel', regular: 'Continu', all: 'Enregistrement' };
@@ -3862,7 +3868,8 @@
     // fiche des enregistrements
     if ((b = e.target.closest('[data-evplay]'))) return playEvent(b.dataset.evplay);
     if ((b = e.target.closest('[data-recall]'))) { REC.all = b.dataset.recall === '1'; return renderRec(); }
-    if (e.target.closest('[data-trgo]')) { var vp0 = REC.play.vpath; TR[vp0] = { state: 'building', step: 'démarrage' }; renderRec(); return trGet(vp0, true); }
+    if (e.target.closest('[data-trclose]')) { REC.trv = null; return renderRec(); }
+    if (e.target.closest('[data-trgo]')) { var vp0 = REC.play.vpath; REC.trv = vp0; TR[vp0] = { state: 'building', step: 'démarrage' }; renderRec(); return trGet(vp0, true); }
     if ((b = e.target.closest('[data-trseek]'))) { var tv = document.getElementById('recv'); if (tv) { try { tv.currentTime = +b.dataset.trseek; tv.play(); } catch (er) {} } return; }
     if ((b = e.target.closest('[data-presplay]'))) {
       var cl = REC && REC.clips && REC.clips[+b.dataset.presplay]; if (!cl || !RELAY || !RELAY.url) return;

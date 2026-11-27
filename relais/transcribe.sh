@@ -5,12 +5,19 @@
 # 3. chaque passage est transcrit par Whisper (whisper.cpp, modèle « small » compressé) ; 4. résultat : phrases avec leur heure.
 IN="$1"; OUT="$2"
 W=/opt/relais/whisper; BIN=$W/whisper-cli; MODEL=$W/ggml-small-q5_1.bin
-T=$(mktemp -d /var/tmp/tr-XXXXXX); trap 'rm -rf "$T"' EXIT
-step() { printf '{"state":"building","step":"%s","done":%s,"total":%s}\n' "$1" "${2:-0}" "${3:-0}" > "$OUT.tmp" && mv -f "$OUT.tmp" "$OUT"; }
+T=$(mktemp -d /var/tmp/tr-XXXXXX); trap 'rm -rf "$T"' EXIT; : > "$T/lines.txt"
+# avancement, avec les phrases déjà trouvées (affichées au fur et à mesure)
+step() { python3 - "$1" "${2:-0}" "${3:-0}" "$T/lines.txt" "$OUT.tmp" <<'PY'
+import json, sys
+try: lines = [json.loads(l) for l in open(sys.argv[4]) if l.strip()]
+except Exception: lines = []
+json.dump({'state': 'building', 'step': sys.argv[1], 'done': int(sys.argv[2]), 'total': int(sys.argv[3]), 'lines': lines}, open(sys.argv[5], 'w'), ensure_ascii=False)
+PY
+mv -f "$OUT.tmp" "$OUT"; }
 fail() { printf '{"state":"error","error":"%s"}\n' "$1" > "$OUT.tmp" && mv -f "$OUT.tmp" "$OUT"; exit 0; }
 [ -x "$BIN" ] && [ -s "$MODEL" ] || fail "reconnaissance vocale pas encore installée (quelques minutes après la mise à jour)"
 step son
-ffmpeg -v error -y -i "$IN" -vn -ac 1 -ar 16000 -af "highpass=f=120,lowpass=f=7000" "$T/a.wav" || fail "pas de son dans cette vidéo"
+ffmpeg -v error -y -i "$IN" -vn -ac 1 -ar 16000 -af "highpass=f=120,lowpass=f=7000,dynaudnorm" "$T/a.wav" || fail "pas de son dans cette vidéo"
 [ -s "$T/a.wav" ] || fail "pas de son dans cette vidéo"
 DUR=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$T/a.wav" | cut -d. -f1)
 # passages de parole : tout ce qui n'est pas du silence pendant au moins 0,6 s (seuil adapté au niveau sonore de la vidéo)
@@ -37,11 +44,12 @@ for a, b in out:
     if b - a >= 0.8: print('%.2f %.2f' % (a, b))
 PY
 N=$(wc -l < "$T/parts.txt"); I=0
-: > "$T/lines.txt"
 while read -r A B; do
   I=$((I + 1)); step transcription $I $N
-  ffmpeg -v error -y -ss "$A" -to "$B" -i "$T/a.wav" -ac 1 -ar 16000 "$T/p.wav" || continue
-  nice -n 15 "$BIN" -m "$MODEL" -l fr -t 1 -nt -np -f "$T/p.wav" -oj -of "$T/p" >/dev/null 2>&1 || continue
+  # -nostdin et < /dev/null : sinon ffmpeg et whisper « mangent » la liste des passages lue par la boucle
+  rm -f "$T/p.json"
+  ffmpeg -nostdin -v error -y -ss "$A" -to "$B" -i "$T/a.wav" -ac 1 -ar 16000 "$T/p.wav" < /dev/null || continue
+  nice -n 15 "$BIN" -m "$MODEL" -l fr -t "$(nproc)" -nt -np -f "$T/p.wav" -oj -of "$T/p" < /dev/null >/dev/null 2>&1 || continue
   python3 - "$T/p.json" "$A" >> "$T/lines.txt" <<'PY'
 import json, sys
 try: d = json.load(open(sys.argv[1]))
@@ -50,7 +58,9 @@ a = float(sys.argv[2])
 for s in d.get('transcription', []):
     t = (s.get('text') or '').strip()
     # phrases parasites fréquentes sur du bruit (Whisper « invente » parfois ces formules)
-    if not t or t.startswith('[') or t.startswith('(') or t.lower().strip('. !') in ('sous-titrage st\' 501', 'merci', 'sous-titres réalisés par la communauté d\'amara.org', '...'): continue
+    import re
+    if not t or t.startswith('[') or t.startswith('(') or not re.search(r'[A-Za-zÀ-ÿ]{2}', t): continue
+    if re.search(r'amara|sous-titr|merci d.avoir regard|abonnez-vous', t, re.I): continue
     print(json.dumps({'t': round(a + s['offsets']['from'] / 1000, 1), 'text': t}, ensure_ascii=False))
 PY
 done < "$T/parts.txt"
