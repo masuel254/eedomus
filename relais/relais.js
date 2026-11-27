@@ -490,6 +490,8 @@ async function buildSummary(date) {
     if (!parts.length) {
       // des passages connus mais aucun extrait réussi : on garde le film précédent plutôt que de l'effacer
       if (jobs.length) throw new Error('aucun extrait lisible');
+      // une source (Netatmo, Imou) n'a pas répondu : on ne conclut pas « personne », on garde l'état et on réessaiera
+      if (ev.partial) throw new Error('détections indisponibles, nouvel essai bientôt');
       if (fs.existsSync(P.mp4) && sumState(date).parts.length) return;
       fs.writeFileSync(P.json, JSON.stringify({ date, builtAt: Date.now(), parts: [], duration: 0, empty: true }));
       try { fs.unlinkSync(P.mp4); } catch (e) {}

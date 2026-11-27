@@ -1124,7 +1124,8 @@ async function imou(b) {
     if (!d || !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(String(b.date))) throw fail(403, 'not_allowed');
     SD.imAl = SD.imAl || {};
     const P = parisParts(), today = P.year + '-' + P.month + '-' + P.day, key = d.id + '|' + b.date, c = SD.imAl[key];
-    if (c && (b.date < today ? true : c.at > Date.now() - 120000)) return c.data;
+    const dayEnd = new Date(b.date + 'T23:59:59+01:00').getTime() + 15 * 60000;
+    if (c && (b.date < today && c.at > dayEnd ? true : c.at > Date.now() - 120000)) return c.data;
     const out = []; let next = '-1';
     for (let page = 0; page < 10; page++) {
       const r = await im('getAlarmMessage', { deviceId: d.deviceId, channelId: d.channelId, beginTime: b.date + ' 00:00:00', endTime: b.date + ' 23:59:59', count: '100', nextAlarmId: next });
@@ -1188,14 +1189,14 @@ async function relayEvents(b) {
   const out = { ok: true, date: day, imou: {}, presence: [] };
   // résumé : seulement les caméras extérieures (et la Présence), seulement les personnes
   if (CFG.im) for (const d of (await imDevices()).filter((x) => CFG.relay.sumCams.includes(String(x.name).toLowerCase()))) {
-    try { const r = await imou({ action: 'im.alarms', cam: d.id, date: day }); out.imou[d.id] = r.alarms.filter((a) => /human|person/i.test(a.kind)).map((a) => a.time); } catch (e) { out.imou[d.id] = []; }
+    try { const r = await imou({ action: 'im.alarms', cam: d.id, date: day }); out.imou[d.id] = r.alarms.filter((a) => /human|person/i.test(a.kind)).map((a) => a.time); } catch (e) { out.imou[d.id] = []; out.partial = true; }
   }
   if (CFG.nt) {
     try {
       const H = await ntHomes(), outdoor = H.cams.filter((c) => c.type === 'NOC').map((c) => c.id);
       const r = await netatmo({ action: 'nt.dayevents', date: day });
       out.presence = r.events.filter((e) => outdoor.includes(e.cam) && (e.types || []).includes('human')).map((e) => e.time);
-    } catch (e) {}
+    } catch (e) { out.partial = true; } // source indisponible : le relais ne conclura pas « personne », il réessaiera
   }
   return reply(200, out);
 }
@@ -1787,7 +1788,8 @@ async function netatmo(b) {
     if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(day)) throw fail(403, 'not_allowed');
     SD.ntDay = SD.ntDay || {};
     const P = parisParts(), today = P.year + '-' + P.month + '-' + P.day, c = SD.ntDay[day];
-    if (c && (day < today ? true : c.at > Date.now() - 120000)) return c.data;
+    const dayEnd = new Date(day + 'T23:59:59+01:00').getTime() + 15 * 60000; // un jour passé n'est complet que relu après sa fin
+    if (c && (day < today && c.at > dayEnd ? true : c.at > Date.now() - 120000)) return c.data;
     const H = await ntHomes(), out = [];
     const t0 = Math.floor(new Date(day + 'T00:00:00+01:00').getTime() / 1000) - 3600, t1 = t0 + 26 * 3600; // marge pour l'heure d'été
     for (const hid of [...new Set(H.cams.map((x) => x.home))]) {

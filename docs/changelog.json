@@ -1,7 +1,17 @@
 {
-  "version": "2.68.3",
-  "date": "2026-11-26",
+  "version": "2.68.4",
+  "date": "2026-11-27",
   "releases": [
+    {
+      "version": "2.68.4",
+      "date": "2026-11-27",
+      "time": "08:01",
+      "title": "Résumé : plus de faux « personne »",
+      "changes": [
+        "Résumé de la journée : si Netatmo ou Imou ne répond pas au moment du montage, le résumé n'affiche plus « personne n'a été détecté » ; il réessaie",
+        "Les jours passés relisent bien les détections de toute la journée (fin de soirée comprise)"
+      ]
+    },
     {
       "version": "2.68.3",
       "date": "2026-11-26",
@@ -2040,5 +2050,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "22:01"
+  "time": "08:01"
 }
