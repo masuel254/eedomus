@@ -161,7 +161,9 @@ const reply = (status, data) => [{ json: { status, data } }].concat(OUT_PUSH);
 // Déclenchement par la minuterie (relevés d'énergie) : pas de requête HTTP, donc ni corps ni en-têtes.
 const isCron = req.body === undefined && req.headers === undefined;
 // relay.hello : appel du relais caméras de la Freebox, authentifié par sa propre signature (voir relayHello)
-if (!isCron && body.action !== 'push.pending' && body.action !== 'relay.hello' && body.action !== 'relay.events' && (!body.token || !CFG.tokens.includes(body.token))) return reply(401, { ok: false, error: 'unauthorized' });
+// OwnTracks (position envoyée par l'appli OwnTracks de chaque iPhone) : authentifié plus bas, par un mot de passe dérivé du jeton
+const isOT = !isCron && !!(body && body._type && req.headers);
+if (!isOT && !isCron && body.action !== 'push.pending' && body.action !== 'relay.hello' && body.action !== 'relay.events' && (!body.token || !CFG.tokens.includes(body.token))) return reply(401, { ok: false, error: 'unauthorized' });
 
 const auth = 'api_user=' + encodeURIComponent(CFG.user) + '&api_secret=' + encodeURIComponent(CFG.secret);
 async function eedomus(kind, query, attempt) {
@@ -245,6 +247,7 @@ async function garageCamDue() {
 
 // ---------------- Netatmo ----------------
 const SD = $getWorkflowStaticData('global');
+if (isOT) return await otIn();
 // Nouveau déploiement : on vide les données en cache (formats changés), on garde les jetons d'accès.
 if (SD.deployedAt !== CFG.deployedAt) {
   ['ntHomes', 'ntHeat', 'ntCams', 'imDev', 'imLive', 'imSnap', 'imRec', 'tuState', 'tuSpec', 'iqState', 'ntHist', 'ntGraph', 'hist'].forEach((k) => { delete SD[k]; });
@@ -1182,6 +1185,39 @@ async function relay(b) {
   throw fail(400, 'unknown_action');
 }
 // Détections « personne » d'une journée, pour le résumé vidéo fabriqué par le relais (authentifié par sa signature)
+// ---- Localisation (OwnTracks) : on ne garde que la dernière position de chaque personne, jamais d'historique ----
+function otPass(tok) { return sha256hex('owntracks|' + tok).slice(0, 24); }
+async function otIn() {
+  const au = String((req.headers && (req.headers.authorization || req.headers.Authorization)) || '');
+  let user = '', pass = '';
+  try { const raw = Buffer.from(au.replace(/^Basic +/i, ''), 'base64').toString('utf8'), i = raw.indexOf(':'); user = raw.slice(0, i); pass = raw.slice(i + 1); } catch (e) {}
+  const idx = CFG.tokens.findIndex((t) => otPass(t) === pass);
+  if (idx < 0) return reply(401, []);
+  if (body._type === 'location' && isFinite(body.lat) && isFinite(body.lon)) {
+    SD.loc = SD.loc || {};
+    SD.loc['p' + idx] = { name: String(user || 'Moi').slice(0, 20), lat: Number(body.lat), lon: Number(body.lon), acc: Number(body.acc) || null,
+      at: (Number(body.tst) || Math.floor(Date.now() / 1000)) * 1000, batt: isFinite(body.batt) ? Number(body.batt) : null, vel: isFinite(body.vel) ? Number(body.vel) : null };
+  }
+  return reply(200, []);
+}
+function geoDist(a, b) { const k = Math.cos(a.lat * Math.PI / 180); return Math.hypot((a.lon - b.lon) * 111320 * k, (a.lat - b.lat) * 110540); }
+async function placeOf(lat, lon) {
+  SD.geo = SD.geo || {};
+  const key = lat.toFixed(3) + ',' + lon.toFixed(3);
+  if (SD.geo[key]) return SD.geo[key].t;
+  let t = null;
+  const R = SD.route || {};
+  if (R.key) {
+    try {
+      const g = await helpers.httpRequest({ method: 'GET', url: 'https://api.tomtom.com/search/2/reverseGeocode/' + lat + ',' + lon + '.json?key=' + encodeURIComponent(R.key) + '&language=fr-FR', json: true, timeout: 10000 });
+      const a = ((g.addresses || [])[0] || {}).address || {};
+      t = [a.municipality || a.municipalitySubdivision, a.streetName].filter(Boolean).join(', ') || null;
+    } catch (e) {}
+  }
+  const ks = Object.keys(SD.geo); if (ks.length > 200) ks.slice(0, 50).forEach((k) => { delete SD.geo[k]; });
+  SD.geo[key] = { t, at: Date.now() };
+  return t;
+}
 // « AAAA-MM-JJ HH:MM:SS » à l'heure de Paris → secondes depuis 1970
 function parisEpoch(str) {
   const m = /^([0-9]{4})-([0-9]{2})-([0-9]{2})[ T]([0-9]{2}):([0-9]{2}):([0-9]{2})/.exec(String(str || '')); if (!m) return 0;
@@ -2305,6 +2341,19 @@ try {
       (H.last || []).forEach((x) => { if (x.k === body.key) x.muted = !!body.on; });
     }
     return reply(200, { ok: true, list: H.last || [], at: H.at || null });
+  }
+  // Localisation : dernière position de chaque personne (OwnTracks), distance à la maison, lieu approximatif
+  if (body.action === 'loc.state' || body.action === 'loc.forget') {
+    SD.loc = SD.loc || {};
+    const me = 'p' + CFG.tokens.indexOf(body.token);
+    if (body.action === 'loc.forget') delete SD.loc[me]; // la personne arrête de partager sa position
+    const home = (SD.route && SD.route.from) || CFG.meteoPos || null, out = [];
+    for (const k of Object.keys(SD.loc)) {
+      const x = SD.loc[k], d = home ? Math.round(geoDist(x, home)) : null;
+      const atHome = d != null && d <= Math.max(150, Math.min(400, x.acc || 0));
+      out.push({ me: k === me, name: x.name, at: x.at, batt: x.batt, acc: x.acc, dist: d, home: atHome, lat: x.lat, lon: x.lon, place: atHome ? null : await placeOf(x.lat, x.lon) });
+    }
+    return reply(200, { ok: true, list: out.sort((a, b) => (b.me - a.me) || (a.name < b.name ? -1 : 1)), pass: otPass(body.token) });
   }
   // « Reste à faire » : lignes marquées faites depuis l'appli (Claude les retire ensuite de docs/changelog.json)
   if (body.action === 'todo.done' || body.action === 'todo.list') {

@@ -701,6 +701,34 @@
     var open = /ouvert|ouverture/i.test(e.text), isGar = /garage/i.test(e.name);
     return { cls: open ? 'warnc' : 'mu', ic: isGar ? 'garage' : /portail/i.test(e.name) ? 'gate' : 'door', txt: isGar ? 'Garage : commande ' + e.text.toLowerCase() : e.name + ' ' + e.text.toLowerCase() };
   }
+  // ---------- Localisation (OwnTracks) : chaque iPhone envoie sa position au serveur de la maison, seulement la dernière est gardée ----------
+  var LOC = null, locAsk = 0;
+  function locLoad(force) {
+    if (!force && Date.now() - locAsk < 30000) return; locAsk = Date.now();
+    api({ action: 'loc.state' }).then(function (j) { LOC = j; if (!sheet.hidden && sheet.dataset.view === 'logs' && logsView === 'people') renderLogs(); }).catch(function () {});
+  }
+  function locHTML() {
+    locLoad();
+    var h = '<h3>Où est chacun</h3>', L = LOC && LOC.list || [], mine = L.filter(function (x) { return x.me; })[0];
+    if (L.length) h += '<div class="card2 flat rs-list">' + L.map(function (x) {
+      var m = Math.round((Date.now() - x.at) / 60000), ago = m < 2 ? 'à l’instant' : m < 60 ? 'il y a ' + m + ' min' : m < 1440 ? 'il y a ' + Math.round(m / 60) + ' h' : 'il y a ' + Math.round(m / 1440) + ' j';
+      var where = x.home ? 'À la maison' : (x.place || 'Dehors') + (x.dist != null ? ' · ' + (x.dist < 1000 ? x.dist + ' m' : fmt(x.dist / 1000, x.dist < 10000 ? 1 : 0) + ' km') : '');
+      return '<a class="row" href="https://maps.apple.com/?ll=' + x.lat + ',' + x.lon + '&q=' + encodeURIComponent(x.name) + '" target="_blank" rel="noopener"><span class="ic' + (x.home ? ' okc' : '') + '">' + icon(x.home ? 'home' : 'walk') + '</span><span><b>' + esc(x.name) + (x.me ? ' (moi)' : '') + '</b><small>' + esc(where + ' · ' + ago + (x.batt != null ? ' · batterie ' + x.batt + ' %' : '')) + '</small></span><span class="val">›</span></a>';
+    }).join('') + '</div>';
+    else if (LOC) h += '<p class="muted" style="margin:0 4px 10px">Personne ne partage encore sa position.</p>';
+    if (!mine) h += '<div class="card2 flat rs-list"><button class="row" data-otsetup><span class="ic">' + icon('walk') + '</span><span><b>Partager la position de cet iPhone</b><small>Avec l’appli gratuite OwnTracks, réglée en un appui</small></span><span class="val">›</span></button></div>';
+    else h += '<div class="card2 flat rs-list"><button class="row" data-otsetup><span class="ic">' + icon('gear') + '</span><span><b>Régler à nouveau OwnTracks</b><small>Si la position ne se met plus à jour</small></span><span class="val">›</span></button>' +
+      '<button class="row" data-otstop data-confirm><span class="ic">' + icon('x') + '</span><span><b>Ne plus partager ma position</b><small>Efface ma position du serveur (désinstalle aussi OwnTracks)</small></span><span class="val">›</span></button></div>';
+    return h + '<p class="note-q">Chaque personne choisit de partager sa position depuis son iPhone. Seule la dernière position est gardée, sur le serveur de la maison uniquement (aucun historique, aucune autre société). Touche une personne pour la voir dans Plans.</p>';
+  }
+  function otSetup() {
+    if (!LOC || !LOC.pass) { locLoad(true); return toast('Un instant, réessaie', true); }
+    var nm = (userName || 'Moi').trim(), tid = nm.replace(/[^A-Za-zÀ-ÿ]/g, '').slice(0, 2).toUpperCase() || 'ME';
+    var conf = { _type: 'configuration', mode: 3, url: CFG.api, auth: true, username: nm, password: LOC.pass, tid: tid, monitoring: 1, extendedData: true, cmd: false, allowRemoteLocation: false, ranging: false };
+    var b64 = btoa(unescape(encodeURIComponent(JSON.stringify(conf))));
+    location.href = 'owntracks:///config?inline=' + encodeURIComponent(b64);
+    setTimeout(function () { if (!document.hidden) toast('Installe d’abord OwnTracks (App Store), puis touche à nouveau ce bouton'); }, 1800);
+  }
   var garMsg = null, garMsgT = null; // retour visible après « Elle est ouverte / fermée »
   function renderLogs() {
     var kind = logsView, L = LOGS[kind], d = L && L.data;
@@ -711,7 +739,7 @@
       h += '<div class="card2 flat rs-list">' + CFG.status.people.map(function (id) {
         var st = STATES[id] || {}, here = st.value !== undefined && st.value !== '0';
         return '<div class="row"><span class="ic' + (here ? ' okc' : '') + '">' + icon(here ? 'home' : 'leave') + '</span><span><b>' + esc(personOf(st.text) || '—') + '</b><small>' + esc(since(id)) + '</small></span><span class="' + (here ? 'ok' : 'mu2') + '">' + (here ? 'Présent' : 'Absent') + '</span></div>';
-      }).join('') + '</div>';
+      }).join('') + '</div>' + locHTML();
     } else if (kind === 'alarm') {
       var av = num(CFG.status.alarm), ast = (STATES[CFG.status.alarm] || {}).text || '—';
       h += '<div class="acard ' + (av ? 'ok' : '') + '"><span class="aic">' + icon('shield') + '</span><span><b>Alarme ' + esc(ast.toLowerCase()) + '</b><small>' + esc(since(CFG.status.alarm)) + '</small></span></div>';
@@ -3290,6 +3318,8 @@
     if ((b = e.target.closest('[data-settings]'))) return openSheet('settings');
     if (e.target.closest('[data-notifs]')) return openNotifs();
     if ((b = e.target.closest('[data-nfdel]'))) return notifDelete(b.dataset.nfdel);
+    if (e.target.closest('[data-otsetup]')) return otSetup();
+    if (e.target.closest('[data-otstop]')) { if (!confirmed(e.target.closest('[data-otstop]'))) return; return api({ action: 'loc.forget' }).then(function (j) { LOC = j; renderLogs(); toast('Position effacée. Désinstalle OwnTracks pour arrêter l’envoi.'); }).catch(function () { toast('Impossible pour le moment', true); }); }
     if ((b = e.target.closest('[data-tododel]'))) return todoDelete(b.dataset.tododel);
     if (e.target.closest('[data-todoback]')) { store.set('maison.todohide', '[]'); return renderSettings(); }
     if ((b = e.target.closest('[data-nfclear]'))) { if (!confirmed(b)) { var cl = b.querySelector('span'); if (cl) cl.textContent = 'Effacer les ' + NOTIFS.length + ' ?'; return; } store.set('maison.notifs.cut', Date.now()); return notifsWrite([]); }
