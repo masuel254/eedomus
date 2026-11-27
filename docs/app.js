@@ -1728,7 +1728,7 @@
     if (!d) return '';
     var x0 = d.begin, x1 = grEnd(d), reGr = function () { if (GR && sheet.dataset.view === 'graph' && !sheet.hidden) renderGraph(); };
     var pts = x1 - x0 > 40 * 86400 ? outGet(outRange(x0, x1), reGr) : outsGet(x0, x1, reGr);
-    var W = 340, H = 64, L = 30, R = 8, T = 19, B = 5;
+    var W = 340, H = 96, L = 30, R = 8, T = 24, B = 6; // bande plus haute : la courbe dehors se lit mieux
     var s = '<svg class="gsvg" viewBox="0 0 ' + W + ' ' + H + '" data-gsvg><line x1="' + L + '" x2="' + (W - R) + '" y1="1" y2="1" class="g-sep"/><text x="' + L + '" y="13" class="g-ot">Dehors</text>';
     pts = (pts || []).filter(function (p) { return p[0] >= x0 - 3600 && p[0] <= x1 + 60; });
     if (pts.length < 2) return s + '<text x="' + ((L + W - R) / 2) + '" y="42" class="g-om" text-anchor="middle">' + ((x1 - x0 > 40 * 86400 ? (OUTH[outRange(x0, x1).from + '|' + outRange(x0, x1).to] && !OUTH[outRange(x0, x1).from + '|' + outRange(x0, x1).to].busy) : !outsBusy) ? 'Pas de mesure extérieure sur cette période' : 'Chargement…') + '</text></svg>';
@@ -1737,8 +1737,8 @@
     var pad = Math.max(0.4, (mx - mn) * 0.1), lo = Math.floor(mn - pad), hi = Math.ceil(mx + pad); if (hi - lo < 2) { lo = Math.floor((mn + mx) / 2) - 1; hi = lo + 2; }
     var X = function (t) { return L + (Math.max(x0, Math.min(x1, t)) - x0) / (x1 - x0) * (W - L - R); }, Y = function (v) { return T + (1 - (v - lo) / (hi - lo)) * (H - T - B); };
     var inP = pts.filter(function (p) { return p[0] >= x0 && p[0] <= x1; }), av = 0; (inP.length ? inP : pts).forEach(function (p) { av += p[1]; }); av /= (inP.length || pts.length);
-    s += '<text x="' + (W - R) + '" y="13" class="g-om" text-anchor="end">min ' + fmt(mn, 1) + '° · moy ' + fmt(av, 1) + '° · max ' + fmt(mx, 1) + '°</text>';
-    [lo, hi].forEach(function (v) { s += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + Y(v).toFixed(1) + '" y2="' + Y(v).toFixed(1) + '" class="g-grid"/><text x="' + (L - 6) + '" y="' + (Y(v) + 3).toFixed(1) + '" class="g-yl" text-anchor="end">' + v + '</text>'; });
+    s += '<text x="' + (W - R) + '" y="13" class="g-om" text-anchor="end"><tspan class="g-k">min</tspan> ' + fmt(mn, 1) + '°  <tspan class="g-k">moy</tspan> ' + fmt(av, 1) + '°  <tspan class="g-k">max</tspan> ' + fmt(mx, 1) + '°</text>';
+    [lo, hi].concat(lo < 0 && hi > 0 ? [0] : [Math.round((lo + hi) / 2)]).forEach(function (v) { s += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + Y(v).toFixed(1) + '" y2="' + Y(v).toFixed(1) + '" class="g-grid"/><text x="' + (L - 6) + '" y="' + (Y(v) + 3).toFixed(1) + '" class="g-yl" text-anchor="end">' + v + '</text>'; });
     var dp = pts.map(function (p, i) { return (i ? 'L' : 'M') + X(p[0]).toFixed(1) + ' ' + Y(p[1]).toFixed(1); }).join(' ');
     s += '<path d="' + dp + ' L' + X(pts[pts.length - 1][0]).toFixed(1) + ' ' + (H - B) + ' L' + X(pts[0][0]).toFixed(1) + ' ' + (H - B) + ' Z" class="g-oa"/><path d="' + dp + '" class="g-o"/>';
     var rows = grRows(d), c = rows[idx == null ? rows.length - 1 : idx], o = c ? outAt(pts, c[0]) : null;
