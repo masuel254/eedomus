@@ -717,8 +717,7 @@
     }).join('') + '</div>';
     else if (LOC) h += '<p class="muted" style="margin:0 4px 10px">Personne ne partage encore sa position.</p>';
     if (!mine) h += '<div class="card2 flat rs-list"><button class="row" data-otsetup><span class="ic">' + icon('walk') + '</span><span><b>Partager la position de cet iPhone</b><small>Avec l’appli gratuite OwnTracks, réglée en un appui</small></span><span class="val">›</span></button></div>';
-    else h += '<div class="card2 flat rs-list"><button class="row" data-otsetup><span class="ic">' + icon('gear') + '</span><span><b>Régler à nouveau OwnTracks</b><small>Si la position ne se met plus à jour</small></span><span class="val">›</span></button>' +
-      '<button class="row" data-otstop data-confirm><span class="ic">' + icon('x') + '</span><span><b>Ne plus partager ma position</b><small>Efface ma position du serveur (désinstalle aussi OwnTracks)</small></span><span class="val">›</span></button></div>';
+    else h += '<div class="card2 flat rs-list"><button class="row" data-otsetup><span class="ic">' + icon('gear') + '</span><span><b>Régler à nouveau OwnTracks</b><small>Si la position ne se met plus à jour</small></span><span class="val">›</span></button></div>';
     if (LOC && LOC.pass) h += '<details class="acc2 otman"><summary><span>Réglage à la main dans OwnTracks</span>' + icon('down') + '</summary><div class="alr-b">' +
       '<ul><li>OwnTracks › <b>i</b> › <b>Paramètres</b> › <b>Mode</b> : choisir <b>HTTP</b></li><li>Recopier les trois valeurs ci-dessous (toucher pour copier), activer <b>Authentification</b></li><li>Revenir à la carte et toucher la flèche d’envoi</li></ul>' +
       [['URL', CFG.api], ['Identifiant (UserID)', (userName || 'Moi').trim()], ['Mot de passe', LOC.pass]].map(function (x) { return '<button class="otc" data-copy="' + esc(x[1]) + '"><small>' + esc(x[0]) + '</small><b>' + esc(x[1]) + '</b></button>'; }).join('') +
