@@ -744,7 +744,7 @@
       h += '<div id="locmap" class="locmap"></div><div class="card2 flat rs-list tl">' + d.items.map(function (g) {
         if (g.type === 'trip') return '<div class="row trip"><span class="ic">' + icon('car') + '</span><span><b>Trajet</b><small>' + hm(g.from) + ' → ' + hm(g.to) + (g.km ? ' · ' + fmt(g.km, 1) + ' km' : '') + '</small></span></div>';
         var dur = Math.round((g.to - g.from) / 60000), ds = dur < 60 ? dur + ' min' : Math.floor(dur / 60) + ' h ' + ('0' + dur % 60).slice(-2);
-        return '<a class="row" href="https://maps.apple.com/?ll=' + g.lat + ',' + g.lon + '" target="_blank" rel="noopener"><span class="ic' + (g.home ? ' okc' : '') + '">' + icon(g.home ? 'home' : 'walk') + '</span><span><b>' + esc(g.home ? 'Maison' : g.place || 'Lieu') + '</b><small>' + hm(g.from) + ' → ' + hm(g.to) + ' · ' + ds + '</small></span><span class="val">›</span></a>';
+        return '<a class="row" href="https://www.google.com/maps/search/?api=1&query=' + g.lat + ',' + g.lon + '" target="_blank" rel="noopener"><span class="ic' + (g.home ? ' okc' : '') + '">' + icon(g.home ? 'home' : 'walk') + '</span><span><b>' + esc(g.home ? 'Maison' : g.place || 'Lieu') + '</b><small>' + hm(g.from) + ' → ' + hm(g.to) + ' · ' + ds + '</small></span><span class="val">›</span></a>';
       }).join('') + '</div>';
     }
     var keep = sheet.scrollTop; sheet.innerHTML = '<div class="sh-in">' + h + '</div>'; sheet.scrollTop = keep;
