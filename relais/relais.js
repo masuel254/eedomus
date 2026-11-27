@@ -239,7 +239,7 @@ function serve() {
         const dir = '/var/lib/relais/tr'; fs.mkdirSync(dir, { recursive: true });
         const out = path.join(dir, crypto.createHash('sha1').update(file).digest('hex').slice(0, 20) + '.json');
         let cur = null; try { cur = JSON.parse(fs.readFileSync(out, 'utf8')); } catch (e) {}
-        const stale = cur && cur.state === 'building' && Date.now() - fs.statSync(out).mtimeMs > 40 * 60000;
+        const age = cur ? Date.now() - fs.statSync(out).mtimeMs : 0, stale = cur && cur.state === 'building' && (age > 40 * 60000 || (cur.step === 'démarrage' && age > 3 * 60000)); // tâche jamais partie
         if (u.searchParams.get('go') && (!cur || cur.state === 'error' || stale)) {
           fs.writeFileSync(out, JSON.stringify({ state: 'building', step: 'démarrage', done: 0, total: 0 }));
           spawnSync('systemd-run', ['--quiet', '--collect', '--unit', 'relais-tr-' + path.basename(out, '.json') + '-' + Date.now(), '-p', 'Nice=12', '/opt/relais/transcribe.sh', file, out], { timeout: 20000 });
