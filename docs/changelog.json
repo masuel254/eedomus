@@ -1,7 +1,16 @@
 {
-  "version": "2.77.3",
+  "version": "2.78.0",
   "date": "2026-11-27",
   "releases": [
+    {
+      "version": "2.78.0",
+      "date": "2026-11-27",
+      "time": "23:28",
+      "title": "Jardin et Pergola sur le graphique",
+      "changes": [
+        "Graphiques : la bande « Dehors » montre aussi les sondes du Jardin (vert) et de la Pergola (bleu) en courbes fines ; toucher leur nom les affiche ou les cache ; le curseur donne les trois valeurs"
+      ]
+    },
     {
       "version": "2.77.3",
       "date": "2026-11-27",
@@ -2286,5 +2295,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "23:23"
+  "time": "23:28"
 }

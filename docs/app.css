@@ -1310,3 +1310,9 @@ a.row { color: inherit; text-decoration: none; }
 .g-ot { font-size: 12.5px; }
 .g-om { font-size: 11.5px; fill: var(--tx); font-weight: 600; }
 .g-om .g-k { fill: var(--mu); font-weight: 400; }
+/* Bande Dehors : légende des sondes (Météo, Jardin, Pergola) */
+.olg { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0 2px; }
+.olg button { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; padding: 5px 9px; border-radius: 999px; background: var(--s2); border: 1px solid var(--ln); color: var(--mu); }
+.olg button i { width: 9px; height: 9px; border-radius: 50%; opacity: .35; }
+.olg button.on { color: var(--tx); } .olg button.on i { opacity: 1; }
+.olv { display: flex; gap: 10px; flex-wrap: wrap; font-size: 12.5px; font-weight: 700; margin: 2px 0 4px; }

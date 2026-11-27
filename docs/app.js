@@ -1724,6 +1724,9 @@
   }
   // Bandeau « Dehors » sous le graphique d'une pièce : même axe des heures (W 340, marges 30 et 8), échelle propre
   function outAt(pts, t) { var b = null, bd = Infinity; (pts || []).forEach(function (p) { var d = Math.abs(p[0] - t); if (d < bd) { bd = d; b = p; } }); return b; }
+  // sondes extérieures de la maison affichées avec la météo (choix gardé sur l'iPhone)
+  var OUT_SENS = [{ k: 'jardin', id: 2999507, name: 'Jardin', col: '#22C55E' }, { k: 'pergola', id: 3227865, name: 'Pergola', col: '#38BDF8' }];
+  var OUT_SEL = { jardin: true, pergola: true }; try { var os0 = JSON.parse(store.get('maison.outsel') || 'null'); if (os0) OUT_SEL = os0; } catch (e) {}
   function outBandSVG(d, idx) {
     if (!d) return '';
     var x0 = d.begin, x1 = grEnd(d), reGr = function () { if (GR && sheet.dataset.view === 'graph' && !sheet.hidden) renderGraph(); };
@@ -1733,18 +1736,35 @@
     pts = (pts || []).filter(function (p) { return p[0] >= x0 - 3600 && p[0] <= x1 + 60; });
     if (pts.length < 2) return s + '<text x="' + ((L + W - R) / 2) + '" y="42" class="g-om" text-anchor="middle">' + ((x1 - x0 > 40 * 86400 ? (OUTH[outRange(x0, x1).from + '|' + outRange(x0, x1).to] && !OUTH[outRange(x0, x1).from + '|' + outRange(x0, x1).to].busy) : !outsBusy) ? 'Pas de mesure extérieure sur cette période' : 'Chargement…') + '</text></svg>';
     var mn = Infinity, mx = -Infinity; pts.forEach(function (p) { if (p[1] < mn) mn = p[1]; if (p[1] > mx) mx = p[1]; });
+    // sondes de la maison (Jardin, Pergola) en courbes fines : jusqu'à 35 jours en arrière
+    var ext = [], hrs = Math.ceil((Date.now() / 1000 - x0) / 3600) + 1;
+    if (hrs <= 24 * 35) OUT_SENS.forEach(function (sn) {
+      if (!OUT_SEL[sn.k]) return;
+      var hk = hrs <= 26 ? 24 : hrs <= 24 * 8 ? 168 : 24 * 35; loadHistE(sn.id, hk);
+      var hc = HISTE[sn.id + '|' + hk], sp = ((hc && hc.points) || []).map(function (q) { return [new Date(String(q[0]).replace(' ', 'T')).getTime() / 1000, q[1]]; })
+        .filter(function (q) { return q[1] != null && q[0] >= x0 - 3600 && q[0] <= x1 + 60; });
+      if (sp.length > 1) { ext.push({ sn: sn, pts: sp }); sp.forEach(function (q) { if (q[1] < mn) mn = q[1]; if (q[1] > mx) mx = q[1]; }); }
+    });
+    var omn = Infinity, omx = -Infinity; pts.forEach(function (p) { if (p[1] < omn) omn = p[1]; if (p[1] > omx) omx = p[1]; });
     // marge en haut et en bas : la courbe et le point ne touchent jamais les bords (ni ne passent sous l'axe)
     var pad = Math.max(0.4, (mx - mn) * 0.1), lo = Math.floor(mn - pad), hi = Math.ceil(mx + pad); if (hi - lo < 2) { lo = Math.floor((mn + mx) / 2) - 1; hi = lo + 2; }
     var X = function (t) { return L + (Math.max(x0, Math.min(x1, t)) - x0) / (x1 - x0) * (W - L - R); }, Y = function (v) { return T + (1 - (v - lo) / (hi - lo)) * (H - T - B); };
     var inP = pts.filter(function (p) { return p[0] >= x0 && p[0] <= x1; }), av = 0; (inP.length ? inP : pts).forEach(function (p) { av += p[1]; }); av /= (inP.length || pts.length);
-    s += '<text x="' + (W - R) + '" y="13" class="g-om" text-anchor="end"><tspan class="g-k">min</tspan> ' + fmt(mn, 1) + '°  <tspan class="g-k">moy</tspan> ' + fmt(av, 1) + '°  <tspan class="g-k">max</tspan> ' + fmt(mx, 1) + '°</text>';
+    s += '<text x="' + (W - R) + '" y="13" class="g-om" text-anchor="end"><tspan class="g-k">min</tspan> ' + fmt(omn, 1) + '°  <tspan class="g-k">moy</tspan> ' + fmt(av, 1) + '°  <tspan class="g-k">max</tspan> ' + fmt(omx, 1) + '°</text>';
     [lo, hi].concat(lo < 0 && hi > 0 ? [0] : [Math.round((lo + hi) / 2)]).forEach(function (v) { s += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + Y(v).toFixed(1) + '" y2="' + Y(v).toFixed(1) + '" class="g-grid"/><text x="' + (L - 6) + '" y="' + (Y(v) + 3).toFixed(1) + '" class="g-yl" text-anchor="end">' + v + '</text>'; });
     var dp = pts.map(function (p, i) { return (i ? 'L' : 'M') + X(p[0]).toFixed(1) + ' ' + Y(p[1]).toFixed(1); }).join(' ');
     s += '<path d="' + dp + ' L' + X(pts[pts.length - 1][0]).toFixed(1) + ' ' + (H - B) + ' L' + X(pts[0][0]).toFixed(1) + ' ' + (H - B) + ' Z" class="g-oa"/><path d="' + dp + '" class="g-o"/>';
+    ext.forEach(function (e) { s += '<path d="' + e.pts.map(function (q, i) { return (i ? 'L' : 'M') + X(q[0]).toFixed(1) + ' ' + Y(q[1]).toFixed(1); }).join(' ') + '" fill="none" stroke="' + e.sn.col + '" stroke-width="1.6" stroke-linejoin="round" opacity=".95"/>'; });
     var rows = grRows(d), c = rows[idx == null ? rows.length - 1 : idx], o = c ? outAt(pts, c[0]) : null;
     if (c) s += '<line x1="' + X(c[0]).toFixed(1) + '" x2="' + X(c[0]).toFixed(1) + '" y1="' + T + '" y2="' + (H - B) + '" class="g-cur"/>';
     if (o && Math.abs(o[0] - c[0]) < (x1 - x0) / 20 + 3600) s += '<circle cx="' + X(c[0]).toFixed(1) + '" cy="' + Y(o[1]).toFixed(1) + '" r="4.5" class="g-do"/>';
-    return s + '</svg>';
+    // valeurs au curseur pour chaque sonde
+    var vals = [];
+    if (o) vals.push('<span style="color:#F4B860">Météo ' + fmt(o[1], 1) + '°</span>');
+    ext.forEach(function (e) { var q = c ? outAt(e.pts, c[0]) : null; if (q && Math.abs(q[0] - c[0]) < (x1 - x0) / 20 + 3600) { s += '<circle cx="' + X(c[0]).toFixed(1) + '" cy="' + Y(q[1]).toFixed(1) + '" r="3.5" fill="' + e.sn.col + '" stroke="#fff" stroke-width="1.2"/>'; vals.push('<span style="color:' + e.sn.col + '">' + e.sn.name + ' ' + fmt(q[1], 1) + '°</span>'); } });
+    var leg = '<div class="olg">' + [{ k: 'meteo', name: 'Météo', col: '#F4B860', fixed: true }].concat(OUT_SENS).map(function (sn) {
+      return '<button class="' + (sn.fixed || OUT_SEL[sn.k] ? 'on' : '') + '"' + (sn.fixed ? '' : ' data-outsel="' + sn.k + '"') + '><i style="background:' + sn.col + '"></i>' + sn.name + '</button>'; }).join('') + '</div>';
+    return leg + s + '</svg>' + (vals.length > 1 ? '<div class="olv">' + vals.join('') + '</div>' : '');
   }
   // ---------- Onglet Plus (piscine, énergie, météo, réglages) ----------
   // volets Piscine dépliés (gardés d'une ouverture à l'autre)
@@ -3495,6 +3515,7 @@
     }
     if ((b = e.target.closest('[data-flow]'))) { var fc = FLOW && FLOW.log && FLOW.log.length ? FLOW.log[FLOW.log.length - 1].t : 60; flowEdit = Math.max(30, Math.min(80, (flowEdit != null ? flowEdit : fc) + +b.dataset.flow)); return render(); }
     if (e.target.closest('[data-flowsave]')) { var nv = flowEdit; return api({ action: 'flow.set', t: nv }).then(function (j) { FLOW = j; flowEdit = null; render(); }).catch(function () { toast('Réglage non enregistré, réessaie', true); }); }
+    if ((b = e.target.closest('[data-outsel]'))) { OUT_SEL[b.dataset.outsel] = !OUT_SEL[b.dataset.outsel]; store.set('maison.outsel', JSON.stringify(OUT_SEL)); return GR ? renderGraph() : render(); }
     if (e.target.closest('[data-motall]')) { MOT_ALL = !MOT_ALL; return render(); }
     if ((b = e.target.closest('[data-zexp]'))) { ZEXP[b.dataset.zexp] = !ZEXP[b.dataset.zexp]; return render(); }
     if ((b = e.target.closest('[data-yesno]'))) { var yid = +b.dataset.yesno; return send(yid, num(yid) === 1 ? 0 : 1); }
@@ -3683,6 +3704,7 @@
     var hls = e.target.closest('[data-hls]');
     if (hls && HL) { var st = Number(hls.dataset.hls); HL.open = HL.open === st ? null : st; HL.gt = null; return renderHeatLog(); }
     if (e.target.closest('[data-hlback]')) { HL = null; sheet.scrollTop = 0; return openSheet('graph'); }
+    if ((b = e.target.closest('[data-outsel]'))) { OUT_SEL[b.dataset.outsel] = !OUT_SEL[b.dataset.outsel]; store.set('maison.outsel', JSON.stringify(OUT_SEL)); return renderGraph(); }
     if ((b = e.target.closest('[data-grange]'))) { GR.range = b.dataset.grange; GR.end = null; return loadGraph(); }
     if ((b = e.target.closest('[data-groom]'))) { GR.room = b.dataset.groom; GR.end = null; return loadGraph(); }
     if ((b = e.target.closest('[data-gstep]'))) {
