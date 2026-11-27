@@ -1226,7 +1226,7 @@ async function placeOf(lat, lon) {
 }
 // ---- Cohérence présence : OwnTracks voit la personne loin de la maison, eedomus la croit encore présente → on passe eedomus à « absent » ----
 // Prudence : position récente (moins de 15 min), précise (moins de 200 m), à plus de 500 m de la maison,
-// et eedomus « présent » depuis au moins 10 min (pas juste après une arrivée). Une seule correction par départ, avec une notification.
+// et eedomus « présent » depuis au moins 10 min (pas juste après une arrivée). Une seule correction par départ, sans notification.
 async function presWatch() {
   const L = SD.loc || {}, home = (SD.route && SD.route.from) || CFG.meteoPos || null;
   if (!home || !Object.keys(L).length) return;
@@ -1249,8 +1249,7 @@ async function presWatch() {
     if (PW[c.id] && PW[c.id] > c.x.at - 60000) continue; // déjà corrigé pour ce départ
     await eedomus('set', 'action=periph.value&periph_id=' + c.id + '&value=0');
     PW[c.id] = Date.now();
-    const km = geoDist(c.x, home) / 1000, nm = String(b.last_value_text || '').replace(/ +Pr[ée]sente?$/i, '') || c.x.name;
-    await pushNotify({ tag: 'presence', title: '🔄 ' + nm + ' passé(e) en absent dans eedomus', body: 'eedomus le/la voyait encore à la maison, mais sa position est à ' + (km < 10 ? String(Math.round(km * 10) / 10).replace('.', ',') : Math.round(km)) + ' km (OwnTracks)' });
+    PW.log = (PW.log || []).concat([{ at: Date.now(), id: c.id, km: Math.round(geoDist(c.x, home) / 100) / 10 }]).slice(-20); // sans notification
   }
 }
 // « AAAA-MM-JJ HH:MM:SS » à l'heure de Paris → secondes depuis 1970
