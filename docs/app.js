@@ -769,7 +769,10 @@
       m.addControl(new Tg());
       var line = L.polyline(pts, { color: '#FF8A5B', weight: 4, opacity: .9 }).addTo(m);
       L.circleMarker(pts[pts.length - 1], { radius: 7, color: '#fff', weight: 2, fillColor: '#FF8A5B', fillOpacity: 1 }).addTo(m);
-      if (pts.length > 1) m.fitBounds(line.getBounds(), { padding: [24, 24], maxZoom: 18 }); else m.setView(pts[0], 18);
+      var fit = function () { m.invalidateSize(); if (pts.length > 1) m.fitBounds(line.getBounds(), { padding: [24, 24], maxZoom: 18 }); else m.setView(pts[0], 18); };
+      fit();
+      // la fiche s'ouvre avec une animation : la carte reprend sa vraie taille une fois affichée (sinon elle reste grise)
+      [150, 450, 900].forEach(function (t) { setTimeout(function () { if (document.body.contains(el)) fit(); }, t); });
     };
     if (window.L) return go();
     if (!document.getElementById('leafcss')) { var c = document.createElement('link'); c.id = 'leafcss'; c.rel = 'stylesheet'; c.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'; document.head.appendChild(c); }
