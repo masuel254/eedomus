@@ -676,7 +676,7 @@
       if (j.garage && j.garage.state !== 'open' && navigator.clearAppBadge) { try { navigator.clearAppBadge(); } catch (e) {} } // pastille effacée dès que la porte n'est plus ouverte // incomplet : on redemande ~15 s plus tard
       if (j.partial) setTimeout(function () { loadLogs(kind, true); }, 16000);
       try { var keep = { events: j.events, kind: j.kind }; localStorage.setItem('maison-logs-' + kind, JSON.stringify(keep)); } catch (e) {}
-      if (!busy()) render(); if (logsView === kind && !sheet.hidden) renderLogs();
+      if (!busy()) render(); if (logsView === kind && !sheet.hidden && sheet.dataset.view === 'logs') renderLogs(); // pas si une autre fiche a été ouverte entre-temps
     }).catch(function () { LOGS[kind] = { at: Date.now() - 90000, data: c ? c.data : null }; if (!quiet) toast('eedomus ne répond pas, réessaie', true); });
   }
   function openLogs(kind) { logsView = kind; sheet.scrollTop = 0; openSheet('logs'); LOGS[kind] && (LOGS[kind].at = 0); loadLogs(kind); if (kind === 'doors') loadImou(false); }
@@ -789,6 +789,7 @@
   }
   var garMsg = null, garMsgT = null; // retour visible après « Elle est ouverte / fermée »
   function renderLogs() {
+    if (sheet.dataset.view !== 'logs') return;
     var kind = logsView, L = LOGS[kind], d = L && L.data;
     var title = { people: 'Présence', alarm: 'Alarme', doors: 'Portes' }[kind];
     var h = '<div class="sh-hd"><h2>' + title + '</h2><button class="close" data-close aria-label="Fermer">×</button></div>';

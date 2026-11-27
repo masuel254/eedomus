@@ -1,7 +1,16 @@
 {
-  "version": "2.71.8",
+  "version": "2.71.9",
   "date": "2026-11-27",
   "releases": [
+    {
+      "version": "2.71.9",
+      "date": "2026-11-27",
+      "time": "17:32",
+      "title": "Fiche d'une personne réparée",
+      "changes": [
+        "Où est chacun : toucher une personne ouvre bien sa journée (la page Présence ne revient plus par-dessus)"
+      ]
+    },
     {
       "version": "2.71.8",
       "date": "2026-11-27",
@@ -2151,5 +2160,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "08:41"
+  "time": "17:32"
 }
