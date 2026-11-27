@@ -393,11 +393,11 @@ async function buildSummary(date) {
   progress({ step: 'recherche', done: 0, total: 0 });
   const ts = Math.floor(Date.now() / 1000);
   const ev = await post({ action: 'relay.events', date, ts, sig: crypto.createHmac('sha256', E.SECRET).update('events|' + date + '|' + ts).digest('hex') });
-  const jobs = []; // { t0, cam, name, file, off, dur }
+  const jobs = []; // { t0, cam, name, file, off, dur, need (à confirmer par la reconnaissance) }
   // caméras Imou : tranches de 10 min gardées ici
   cams().forEach((c) => {
     const times = (ev.imou && ev.imou[c.id]) || [];
-    if (!times.length) return;
+    if (!times.length && !(ev.imouRec && ev.imouRec[c.id] && ev.imouRec[c.id].length)) return;
     const dir = path.join(REC(), c.dir), day = date.replace(/-/g, '');
     let segs = [];
     try {
@@ -412,6 +412,13 @@ async function buildSummary(date) {
       const g = segs.find((x) => a + 4 >= x.b && a + 4 < x.e); if (!g) return;
       const off = Math.max(0, a - g.b), dur = Math.min(b, g.e) - (g.b + off);
       if (dur >= 2) jobs.push({ t0: g.b + off, cam: c.id, name: c.name, file: g.file, off, dur });
+    });
+    // caméra sans alertes (ex. garage) : ses enregistrements de mouvement, gardés seulement si une personne y est vue
+    ((ev.imouRec && ev.imouRec[c.id]) || []).forEach(([a, b]) => {
+      if (times.some((t) => t >= a - 20 && t <= b + 20)) return; // déjà couvert par une alerte « personne »
+      const g = segs.find((x) => a >= x.b && a < x.e); if (!g) return;
+      const off = Math.max(0, a - 2 - g.b), dur = Math.min(Math.min(b + 3, a + 60), g.e) - (g.b + off);
+      if (dur >= 2) jobs.push({ t0: g.b + off, cam: c.id, name: c.name, file: g.file, off, dur, need: true });
     });
   });
   // Présence : clips déposés par Netatmo sur la Freebox. Le nom ne donne que la minute de début (12:02) et le fichier
@@ -444,7 +451,8 @@ async function buildSummary(date) {
   const det2 = {}, toCheck = canCheck ? jobs.filter((x) => x.cam !== 'presence' && det[jobKey(x)] === undefined).length : 0;
   let checked = 0, dropped = 0; const checks = [];
   for (let i = jobs.length - 1; i >= 0; i--) {
-    const j = jobs[i]; if (j.cam === 'presence' || !canCheck) continue;
+    const j = jobs[i]; if (j.cam === 'presence') continue;
+    if (!canCheck) { if (j.need) jobs.splice(i, 1); continue; } // sans reconnaissance, un simple mouvement n'est pas gardé
     const k = jobKey(j);
     let sc = det[k];
     if (sc === undefined) {
@@ -456,7 +464,7 @@ async function buildSummary(date) {
     }
     if (sc !== null) det2[k] = sc; // un échec (null) sera retenté au prochain montage
     checks.push({ name: j.name, time: Math.floor(j.t0), score: sc });
-    if (sc !== null && sc !== undefined && sc < 0.45) { jobs.splice(i, 1); dropped++; } // personne invisible : faux passage
+    if ((sc !== null && sc !== undefined && sc < 0.45) || (j.need && !(sc >= 0.45))) { jobs.splice(i, 1); dropped++; } // personne invisible : faux passage
   }
   try { fs.mkdirSync(SUMDIR(), { recursive: true }); fs.writeFileSync(P.det, JSON.stringify(det2)); } catch (e) {}
   // extraits gardés d'un montage à l'autre : seuls les nouveaux passages (ou ceux qui ont changé) sont montés

@@ -1182,6 +1182,15 @@ async function relay(b) {
   throw fail(400, 'unknown_action');
 }
 // Détections « personne » d'une journée, pour le résumé vidéo fabriqué par le relais (authentifié par sa signature)
+// « AAAA-MM-JJ HH:MM:SS » à l'heure de Paris → secondes depuis 1970
+function parisEpoch(str) {
+  const m = /^([0-9]{4})-([0-9]{2})-([0-9]{2})[ T]([0-9]{2}):([0-9]{2}):([0-9]{2})/.exec(String(str || '')); if (!m) return 0;
+  const asUtc = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]), p = {};
+  new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' })
+    .formatToParts(new Date(asUtc)).forEach((x) => { p[x.type] = x.value; });
+  const off = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second) - asUtc;
+  return Math.round((asUtc - off) / 1000);
+}
 async function relayEvents(b) {
   const ts = Number(b.ts) || 0, day = String(b.date || '');
   if (Math.abs(Date.now() / 1000 - ts) > 300 || String(b.sig || '') !== hmac256hex(CFG.relay.secret, 'events|' + day + '|' + ts)) return reply(401, { ok: false, error: 'unauthorized' });
@@ -1189,7 +1198,17 @@ async function relayEvents(b) {
   const out = { ok: true, date: day, imou: {}, presence: [] };
   // résumé : seulement les caméras extérieures (et la Présence), seulement les personnes
   if (CFG.im) for (const d of (await imDevices()).filter((x) => CFG.relay.sumCams.includes(String(x.name).toLowerCase()))) {
-    try { const r = await imou({ action: 'im.alarms', cam: d.id, date: day }); out.imou[d.id] = r.alarms.filter((a) => /human|person/i.test(a.kind)).map((a) => a.time); } catch (e) { out.imou[d.id] = []; out.partial = true; }
+    let al = null;
+    try { const r = await imou({ action: 'im.alarms', cam: d.id, date: day }); al = r.alarms; out.imou[d.id] = al.filter((a) => /human|person/i.test(a.kind)).map((a) => a.time); } catch (e) { out.imou[d.id] = []; out.partial = true; }
+    // caméra qui n'envoie aucune alerte à Imou (ex. garage) : on prend ses enregistrements de mouvement (carte SD) ;
+    // le relais ne gardera que ceux où il voit vraiment une personne
+    if (al && !al.length) {
+      try {
+        const r = await imou({ action: 'im.records', cam: d.id, date: day });
+        out.imouRec = out.imouRec || {};
+        out.imouRec[d.id] = (r.records || []).filter((x) => /motion/i.test(String(x.type || ''))).map((x) => [parisEpoch(x.begin), parisEpoch(x.end)]).filter((x) => x[0] && x[1] >= x[0]);
+      } catch (e) {}
+    }
   }
   if (CFG.nt) {
     try {

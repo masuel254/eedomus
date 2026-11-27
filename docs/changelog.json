@@ -1,7 +1,16 @@
 {
-  "version": "2.68.4",
+  "version": "2.69.0",
   "date": "2026-11-27",
   "releases": [
+    {
+      "version": "2.69.0",
+      "date": "2026-11-27",
+      "time": "08:08",
+      "title": "Garage dans le résumé",
+      "changes": [
+        "Résumé de la journée : la caméra du garage (qui n'envoie pas d'alerte à Imou) est ajoutée à partir de ses enregistrements de mouvement, seulement quand une personne est vraiment visible"
+      ]
+    },
     {
       "version": "2.68.4",
       "date": "2026-11-27",
@@ -2050,5 +2059,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "08:01"
+  "time": "08:08"
 }
