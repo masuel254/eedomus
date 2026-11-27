@@ -1726,45 +1726,59 @@
   function outAt(pts, t) { var b = null, bd = Infinity; (pts || []).forEach(function (p) { var d = Math.abs(p[0] - t); if (d < bd) { bd = d; b = p; } }); return b; }
   // sondes extérieures de la maison affichées avec la météo (choix gardé sur l'iPhone)
   var OUT_SENS = [{ k: 'jardin', id: 2999507, name: 'Jardin', col: '#22C55E' }, { k: 'pergola', id: 3227865, name: 'Pergola', col: '#38BDF8' }];
-  var OUT_SEL = { jardin: true, pergola: true }; try { var os0 = JSON.parse(store.get('maison.outsel') || 'null'); if (os0) OUT_SEL = os0; } catch (e) {}
+  var OUT_SEL = { meteo: true, jardin: true, pergola: true }; try { var os0 = JSON.parse(store.get('maison.outsel') || 'null'); if (os0) OUT_SEL = os0; } catch (e) {}
+  function outToggle(k) {
+    var cur = k === 'meteo' ? OUT_SEL.meteo !== false : !!OUT_SEL[k];
+    var n = (OUT_SEL.meteo !== false ? 1 : 0) + (OUT_SEL.jardin ? 1 : 0) + (OUT_SEL.pergola ? 1 : 0);
+    if (cur && n <= 1) return false; // au moins une courbe
+    OUT_SEL[k] = !cur; store.set('maison.outsel', JSON.stringify(OUT_SEL)); return true;
+  }
   function outBandSVG(d, idx) {
     if (!d) return '';
     var x0 = d.begin, x1 = grEnd(d), reGr = function () { if (GR && sheet.dataset.view === 'graph' && !sheet.hidden) renderGraph(); };
-    var pts = x1 - x0 > 40 * 86400 ? outGet(outRange(x0, x1), reGr) : outsGet(x0, x1, reGr);
-    var W = 340, H = 96, L = 30, R = 8, T = 24, B = 6; // bande plus haute : la courbe dehors se lit mieux
-    var s = '<svg class="gsvg" viewBox="0 0 ' + W + ' ' + H + '" data-gsvg><line x1="' + L + '" x2="' + (W - R) + '" y1="1" y2="1" class="g-sep"/><text x="' + L + '" y="13" class="g-ot">Dehors</text>';
-    pts = (pts || []).filter(function (p) { return p[0] >= x0 - 3600 && p[0] <= x1 + 60; });
-    if (pts.length < 2) return s + '<text x="' + ((L + W - R) / 2) + '" y="42" class="g-om" text-anchor="middle">' + ((x1 - x0 > 40 * 86400 ? (OUTH[outRange(x0, x1).from + '|' + outRange(x0, x1).to] && !OUTH[outRange(x0, x1).from + '|' + outRange(x0, x1).to].busy) : !outsBusy) ? 'Pas de mesure extérieure sur cette période' : 'Chargement…') + '</text></svg>';
-    var mn = Infinity, mx = -Infinity; pts.forEach(function (p) { if (p[1] < mn) mn = p[1]; if (p[1] > mx) mx = p[1]; });
-    // sondes de la maison (Jardin, Pergola) en courbes fines : jusqu'à 35 jours en arrière
-    var ext = [], hrs = Math.ceil((Date.now() / 1000 - x0) / 3600) + 1;
-    if (hrs <= 24 * 35) OUT_SENS.forEach(function (sn) {
-      if (!OUT_SEL[sn.k]) return;
+    var W = 340, H = 96, L = 30, R = 8, T = 10, B = 6;
+    // courbes choisies (au moins une) : Météo, Jardin, Pergola ; chacune avec ses min · moy · max
+    var series = [], hrs = Math.ceil((Date.now() / 1000 - x0) / 3600) + 1, loading = false;
+    if (OUT_SEL.meteo !== false) {
+      var mp = ((x1 - x0 > 40 * 86400 ? outGet(outRange(x0, x1), reGr) : outsGet(x0, x1, reGr)) || []).filter(function (p) { return p[0] >= x0 - 3600 && p[0] <= x1 + 60; });
+      if (mp.length > 1) series.push({ k: 'meteo', name: 'Météo', col: '#F4B860', pts: mp }); else loading = true;
+    }
+    OUT_SENS.forEach(function (sn) {
+      if (!OUT_SEL[sn.k] || hrs > 24 * 35) return;
       var hk = hrs <= 26 ? 24 : hrs <= 24 * 8 ? 168 : 24 * 35; loadHistE(sn.id, hk);
       var hc = HISTE[sn.id + '|' + hk], sp = ((hc && hc.points) || []).map(function (q) { return [new Date(String(q[0]).replace(' ', 'T')).getTime() / 1000, q[1]]; })
         .filter(function (q) { return q[1] != null && q[0] >= x0 - 3600 && q[0] <= x1 + 60; });
-      if (sp.length > 1) { ext.push({ sn: sn, pts: sp }); sp.forEach(function (q) { if (q[1] < mn) mn = q[1]; if (q[1] > mx) mx = q[1]; }); }
+      if (sp.length > 1) series.push({ k: sn.k, name: sn.name, col: sn.col, pts: sp }); else if (!hc || hc.loading) loading = true;
     });
-    var omn = Infinity, omx = -Infinity; pts.forEach(function (p) { if (p[1] < omn) omn = p[1]; if (p[1] > omx) omx = p[1]; });
-    // marge en haut et en bas : la courbe et le point ne touchent jamais les bords (ni ne passent sous l'axe)
+    var leg = '<div class="olg">' + [{ k: 'meteo', name: 'Météo', col: '#F4B860' }].concat(OUT_SENS).map(function (sn) {
+      var on = sn.k === 'meteo' ? OUT_SEL.meteo !== false : !!OUT_SEL[sn.k];
+      return '<button class="' + (on ? 'on' : '') + '" data-outsel="' + sn.k + '"><i style="background:' + sn.col + '"></i>' + sn.name + '</button>'; }).join('') + '</div>';
+    var head = '<div class="ohd"><b>Dehors</b></div>';
+    if (!series.length) return head + leg + '<p class="muted" style="margin:6px 0 4px;font-size:13px">' + (loading ? 'Chargement…' : 'Pas de mesure sur cette période' + (hrs > 24 * 35 ? ' (sondes : 1 mois au plus)' : '')) + '</p>';
+    var mn = Infinity, mx = -Infinity;
+    series.forEach(function (e) {
+      var inP = e.pts.filter(function (p) { return p[0] >= x0 && p[0] <= x1; }), use = inP.length ? inP : e.pts, sum = 0;
+      e.mn = Infinity; e.mx = -Infinity; use.forEach(function (p) { sum += p[1]; if (p[1] < e.mn) e.mn = p[1]; if (p[1] > e.mx) e.mx = p[1]; }); e.av = sum / use.length;
+      e.pts.forEach(function (p) { if (p[1] < mn) mn = p[1]; if (p[1] > mx) mx = p[1]; });
+    });
     var pad = Math.max(0.4, (mx - mn) * 0.1), lo = Math.floor(mn - pad), hi = Math.ceil(mx + pad); if (hi - lo < 2) { lo = Math.floor((mn + mx) / 2) - 1; hi = lo + 2; }
     var X = function (t) { return L + (Math.max(x0, Math.min(x1, t)) - x0) / (x1 - x0) * (W - L - R); }, Y = function (v) { return T + (1 - (v - lo) / (hi - lo)) * (H - T - B); };
-    var inP = pts.filter(function (p) { return p[0] >= x0 && p[0] <= x1; }), av = 0; (inP.length ? inP : pts).forEach(function (p) { av += p[1]; }); av /= (inP.length || pts.length);
-    s += '<text x="' + (W - R) + '" y="13" class="g-om" text-anchor="end"><tspan class="g-k">min</tspan> ' + fmt(omn, 1) + '°  <tspan class="g-k">moy</tspan> ' + fmt(av, 1) + '°  <tspan class="g-k">max</tspan> ' + fmt(omx, 1) + '°</text>';
+    var s = '<svg class="gsvg" viewBox="0 0 ' + W + ' ' + H + '" data-gsvg>';
     [lo, hi].concat(lo < 0 && hi > 0 ? [0] : [Math.round((lo + hi) / 2)]).forEach(function (v) { s += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + Y(v).toFixed(1) + '" y2="' + Y(v).toFixed(1) + '" class="g-grid"/><text x="' + (L - 6) + '" y="' + (Y(v) + 3).toFixed(1) + '" class="g-yl" text-anchor="end">' + v + '</text>'; });
-    var dp = pts.map(function (p, i) { return (i ? 'L' : 'M') + X(p[0]).toFixed(1) + ' ' + Y(p[1]).toFixed(1); }).join(' ');
-    s += '<path d="' + dp + ' L' + X(pts[pts.length - 1][0]).toFixed(1) + ' ' + (H - B) + ' L' + X(pts[0][0]).toFixed(1) + ' ' + (H - B) + ' Z" class="g-oa"/><path d="' + dp + '" class="g-o"/>';
-    ext.forEach(function (e) { s += '<path d="' + e.pts.map(function (q, i) { return (i ? 'L' : 'M') + X(q[0]).toFixed(1) + ' ' + Y(q[1]).toFixed(1); }).join(' ') + '" fill="none" stroke="' + e.sn.col + '" stroke-width="1.6" stroke-linejoin="round" opacity=".95"/>'; });
-    var rows = grRows(d), c = rows[idx == null ? rows.length - 1 : idx], o = c ? outAt(pts, c[0]) : null;
+    series.forEach(function (e, n) {
+      var dp = e.pts.map(function (p, i) { return (i ? 'L' : 'M') + X(p[0]).toFixed(1) + ' ' + Y(p[1]).toFixed(1); }).join(' ');
+      if (series.length === 1) s += '<path d="' + dp + ' L' + X(e.pts[e.pts.length - 1][0]).toFixed(1) + ' ' + (H - B) + ' L' + X(e.pts[0][0]).toFixed(1) + ' ' + (H - B) + ' Z" fill="' + e.col + '" opacity=".14"/>';
+      s += '<path d="' + dp + '" fill="none" stroke="' + e.col + '" stroke-width="' + (series.length === 1 ? 2.2 : 1.8) + '" stroke-linejoin="round"/>';
+    });
+    var rows = grRows(d), c = rows[idx == null ? rows.length - 1 : idx], vals = [];
     if (c) s += '<line x1="' + X(c[0]).toFixed(1) + '" x2="' + X(c[0]).toFixed(1) + '" y1="' + T + '" y2="' + (H - B) + '" class="g-cur"/>';
-    if (o && Math.abs(o[0] - c[0]) < (x1 - x0) / 20 + 3600) s += '<circle cx="' + X(c[0]).toFixed(1) + '" cy="' + Y(o[1]).toFixed(1) + '" r="4.5" class="g-do"/>';
-    // valeurs au curseur pour chaque sonde
-    var vals = [];
-    if (o) vals.push('<span style="color:#F4B860">Météo ' + fmt(o[1], 1) + '°</span>');
-    ext.forEach(function (e) { var q = c ? outAt(e.pts, c[0]) : null; if (q && Math.abs(q[0] - c[0]) < (x1 - x0) / 20 + 3600) { s += '<circle cx="' + X(c[0]).toFixed(1) + '" cy="' + Y(q[1]).toFixed(1) + '" r="3.5" fill="' + e.sn.col + '" stroke="#fff" stroke-width="1.2"/>'; vals.push('<span style="color:' + e.sn.col + '">' + e.sn.name + ' ' + fmt(q[1], 1) + '°</span>'); } });
-    var leg = '<div class="olg">' + [{ k: 'meteo', name: 'Météo', col: '#F4B860', fixed: true }].concat(OUT_SENS).map(function (sn) {
-      return '<button class="' + (sn.fixed || OUT_SEL[sn.k] ? 'on' : '') + '"' + (sn.fixed ? '' : ' data-outsel="' + sn.k + '"') + '><i style="background:' + sn.col + '"></i>' + sn.name + '</button>'; }).join('') + '</div>';
-    return leg + s + '</svg>' + (vals.length > 1 ? '<div class="olv">' + vals.join('') + '</div>' : '');
+    series.forEach(function (e) {
+      var q = c ? outAt(e.pts, c[0]) : null;
+      if (q && Math.abs(q[0] - c[0]) < (x1 - x0) / 20 + 3600) { s += '<circle cx="' + X(c[0]).toFixed(1) + '" cy="' + Y(q[1]).toFixed(1) + '" r="4" fill="' + e.col + '" stroke="#fff" stroke-width="1.4"/>'; e.now = q[1]; }
+    });
+    var stats = '<div class="ost">' + series.map(function (e) {
+      return '<div><i style="background:' + e.col + '"></i><b style="color:' + e.col + '">' + e.name + (e.now != null ? ' ' + fmt(e.now, 1) + '°' : '') + '</b><span><em>min</em> ' + fmt(e.mn, 1) + '° <em>moy</em> ' + fmt(e.av, 1) + '° <em>max</em> ' + fmt(e.mx, 1) + '°</span></div>'; }).join('') + '</div>';
+    return head + leg + s + '</svg>' + stats;
   }
   // ---------- Onglet Plus (piscine, énergie, météo, réglages) ----------
   // volets Piscine dépliés (gardés d'une ouverture à l'autre)
@@ -3515,7 +3529,7 @@
     }
     if ((b = e.target.closest('[data-flow]'))) { var fc = FLOW && FLOW.log && FLOW.log.length ? FLOW.log[FLOW.log.length - 1].t : 60; flowEdit = Math.max(30, Math.min(80, (flowEdit != null ? flowEdit : fc) + +b.dataset.flow)); return render(); }
     if (e.target.closest('[data-flowsave]')) { var nv = flowEdit; return api({ action: 'flow.set', t: nv }).then(function (j) { FLOW = j; flowEdit = null; render(); }).catch(function () { toast('Réglage non enregistré, réessaie', true); }); }
-    if ((b = e.target.closest('[data-outsel]'))) { OUT_SEL[b.dataset.outsel] = !OUT_SEL[b.dataset.outsel]; store.set('maison.outsel', JSON.stringify(OUT_SEL)); return GR ? renderGraph() : render(); }
+    if ((b = e.target.closest('[data-outsel]'))) { if (!outToggle(b.dataset.outsel)) return toast('Garde au moins une courbe'); return GR ? renderGraph() : render(); }
     if (e.target.closest('[data-motall]')) { MOT_ALL = !MOT_ALL; return render(); }
     if ((b = e.target.closest('[data-zexp]'))) { ZEXP[b.dataset.zexp] = !ZEXP[b.dataset.zexp]; return render(); }
     if ((b = e.target.closest('[data-yesno]'))) { var yid = +b.dataset.yesno; return send(yid, num(yid) === 1 ? 0 : 1); }
@@ -3704,7 +3718,7 @@
     var hls = e.target.closest('[data-hls]');
     if (hls && HL) { var st = Number(hls.dataset.hls); HL.open = HL.open === st ? null : st; HL.gt = null; return renderHeatLog(); }
     if (e.target.closest('[data-hlback]')) { HL = null; sheet.scrollTop = 0; return openSheet('graph'); }
-    if ((b = e.target.closest('[data-outsel]'))) { OUT_SEL[b.dataset.outsel] = !OUT_SEL[b.dataset.outsel]; store.set('maison.outsel', JSON.stringify(OUT_SEL)); return renderGraph(); }
+    if ((b = e.target.closest('[data-outsel]'))) { if (!outToggle(b.dataset.outsel)) return toast('Garde au moins une courbe'); return renderGraph(); }
     if ((b = e.target.closest('[data-grange]'))) { GR.range = b.dataset.grange; GR.end = null; return loadGraph(); }
     if ((b = e.target.closest('[data-groom]'))) { GR.room = b.dataset.groom; GR.end = null; return loadGraph(); }
     if ((b = e.target.closest('[data-gstep]'))) {
