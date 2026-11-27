@@ -757,7 +757,9 @@
       var m = L.map(el, { zoomControl: false, attributionControl: true });
       // fond au choix : plan (OpenStreetMap) ou satellite (Esri), choix gardé sur l'iPhone
       var plan = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' });
+      // satellite : photos aériennes récentes de l'IGN (France), avec Esri dessous pour l'étranger
       var sat = L.layerGroup([L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Images © Esri' }),
+        L.tileLayer('https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=ORTHOIMAGERY.ORTHOPHOTOS&STYLE=normal&TILEMATRIXSET=PM&FORMAT=image/jpeg&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}', { maxZoom: 19, attribution: '© IGN' }),
         L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 })]);
       var cur = store.get('maison.mapsat') === '0' ? plan : sat; // satellite par défaut cur.addTo(m);
       var Tg = L.Control.extend({ options: { position: 'topright' }, onAdd: function () {
