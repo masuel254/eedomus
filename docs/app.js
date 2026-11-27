@@ -2411,7 +2411,7 @@
     var h = '<div class="sh-hd"><button class="back2" data-recback>' + icon('down') + 'Caméras</button><button class="close" data-close aria-label="Fermer">×</button></div>' +
       '<h2 class="rec-title">' + esc(c ? c.name : 'Caméra') + ' · enregistrements</h2>';
     h += REC.play ? '<div class="camcard player' + (PFS ? ' fs' : '') + '"><video id="recv" src="' + esc(REC.play.url) + '" autoplay playsinline controls></video>' +
-      '<div class="rates">' + [1, 2, 4, 8].map(function (x) { return '<button class="' + (REC.rate === x ? 'on' : '') + '" data-rate="' + x + '">×' + x + '</button>'; }).join('') + fsBtn() + '</div>' +
+      '<div class="rates">' + [1, 2, 4, 8, 16].map(function (x) { return '<button class="' + (REC.rate === x ? 'on' : '') + '" data-rate="' + x + '">×' + x + '</button>'; }).join('') + fsBtn() + '</div>' +
       '<div class="cammeta"><b>' + esc(REC.play.label) + ' <span class="src-tag' + (REC.play.relay ? ' fb' : '') + '">' + (REC.play.relay ? 'Freebox' : c && c.src === 'imou' ? 'Carte SD' : 'Caméra') + '</span></b>' + (REC.play.hdOk ? '<button class="hdbtn' + (REC.play.hd ? ' on' : '') + '" data-rechd>' + (REC.play.hd ? 'HD' : 'Passer en HD') + '</button>' : '') + '</div></div>'
       : '<div class="camcard player empty"><span>' + icon('play') + 'Choisis un enregistrement ci-dessous</span></div>';
     if (c && c.src === 'imou') {
@@ -2549,7 +2549,7 @@
     var days = weekStrip(SUM.date, 'data-sumday');
     var ready = st && (st.state === 'ready' || st.state === 'building') && st.url && RELAY && RELAY.url; // pendant un nouveau montage, le film précédent reste visible
     h += ready ? '<div class="camcard player' + (PFS ? ' fs' : '') + '"><video id="sumv" src="' + esc(relayUrl(st.url)) + '" playsinline controls></video>' +
-      '<div class="rates">' + [1, 2, 4, 8].map(function (x) { return '<button class="' + ((SUM.rate || 4) === x ? 'on' : '') + '" data-sumrate="' + x + '">×' + x + '</button>'; }).join('') + fsBtn() + '</div>' +
+      '<div class="rates">' + [1, 2, 4, 8, 16].map(function (x) { return '<button class="' + ((SUM.rate || 4) === x ? 'on' : '') + '" data-sumrate="' + x + '">×' + x + '</button>'; }).join('') + fsBtn() + '</div>' +
       '<div class="cammeta"><b>' + st.parts.length + ' passage' + (st.parts.length > 1 ? 's' : '') + ' · ' + Math.floor(st.duration / 60) + ' min ' + String(st.duration % 60).padStart(2, '0') + ' en temps réel</b><span class="src-tag fb">Freebox</span></div></div>'
       : '<div class="camcard player empty"><span>' + icon('play') + (st && st.state === 'building' ? 'Montage en cours… (voir ci-dessous)' : 'Pas encore de résumé') + '</span></div>';
     h += days;
