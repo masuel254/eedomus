@@ -67,6 +67,6 @@ done < "$T/parts.txt"
 python3 - "$T/lines.txt" "$OUT" <<'PY'
 import json, sys, time
 lines = [json.loads(l) for l in open(sys.argv[1]) if l.strip()]
-json.dump({'state': 'ready', 'at': int(time.time()), 'lines': lines}, open(sys.argv[2] + '.tmp', 'w'), ensure_ascii=False)
+json.dump({'state': 'ready', 'v': 2, 'at': int(time.time()), 'lines': lines}, open(sys.argv[2] + '.tmp', 'w'), ensure_ascii=False)
 PY
 mv -f "$OUT.tmp" "$OUT"
