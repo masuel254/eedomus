@@ -229,6 +229,24 @@ function serve() {
         if (u.pathname === '/api/summary/build') startSummary(date);
         return json(res, 200, sumState(date));
       }
+      // transcription de ce qui se dit dans une vidéo (à la demande, faite ici, gardée ensuite)
+      if (u.pathname === '/api/tr') {
+        const v = String(u.searchParams.get('v') || ''); let file = null;
+        const mm = /^\/v\/imou\/([A-Za-z0-9_-]+)\/([0-9]{8}-[0-9]{6}\.mp4)$/.exec(v);
+        if (mm) file = path.join(REC(), mm[1], mm[2]);
+        else if (v.indexOf('/v/presence/') === 0) { const rel = v.slice(12).split('/').map(decodeURIComponent).join('/'); if (!/(^|\/)\.\.?(\/|$)/.test(rel)) file = path.join(PRES(), rel); }
+        if (!file || !fs.existsSync(file)) return json(res, 404, { ok: false, error: 'not_found' });
+        const dir = '/var/lib/relais/tr'; fs.mkdirSync(dir, { recursive: true });
+        const out = path.join(dir, crypto.createHash('sha1').update(file).digest('hex').slice(0, 20) + '.json');
+        let cur = null; try { cur = JSON.parse(fs.readFileSync(out, 'utf8')); } catch (e) {}
+        const stale = cur && cur.state === 'building' && Date.now() - fs.statSync(out).mtimeMs > 40 * 60000;
+        if (u.searchParams.get('go') && (!cur || cur.state === 'error' || stale)) {
+          fs.writeFileSync(out, JSON.stringify({ state: 'building', step: 'démarrage', done: 0, total: 0 }));
+          spawnSync('systemd-run', ['--quiet', '--collect', '--unit', 'relais-tr-' + path.basename(out, '.json') + '-' + Date.now(), '-p', 'Nice=12', '/opt/relais/transcribe.sh', file, out], { timeout: 20000 });
+          cur = { state: 'building', step: 'démarrage' };
+        }
+        return json(res, 200, Object.assign({ ok: true }, cur || { state: 'none' }));
+      }
       const rs = /^\/v\/resume\/([0-9]{4}-[0-9]{2}-[0-9]{2}\.mp4)$/.exec(u.pathname);
       if (rs) return sendFile(req, res, SUMDIR(), rs[1]);
       let m = /^\/v\/imou\/([A-Za-z0-9_-]+)\/([0-9]{8}-[0-9]{6}\.mp4)$/.exec(u.pathname);
