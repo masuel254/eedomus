@@ -759,7 +759,7 @@
       var plan = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' });
       var sat = L.layerGroup([L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Images © Esri' }),
         L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 })]);
-      var cur = store.get('maison.mapsat') === '1' ? sat : plan; cur.addTo(m);
+      var cur = store.get('maison.mapsat') === '0' ? plan : sat; // satellite par défaut cur.addTo(m);
       var Tg = L.Control.extend({ options: { position: 'topright' }, onAdd: function () {
         var bt = L.DomUtil.create('button', 'mapsw'); bt.type = 'button'; bt.textContent = cur === sat ? 'Plan' : 'Satellite';
         L.DomEvent.disableClickPropagation(bt);
@@ -768,7 +768,7 @@
       m.addControl(new Tg());
       var line = L.polyline(pts, { color: '#FF8A5B', weight: 4, opacity: .9 }).addTo(m);
       L.circleMarker(pts[pts.length - 1], { radius: 7, color: '#fff', weight: 2, fillColor: '#FF8A5B', fillOpacity: 1 }).addTo(m);
-      if (pts.length > 1) m.fitBounds(line.getBounds(), { padding: [24, 24] }); else m.setView(pts[0], 15);
+      if (pts.length > 1) m.fitBounds(line.getBounds(), { padding: [24, 24], maxZoom: 18 }); else m.setView(pts[0], 18);
     };
     if (window.L) return go();
     if (!document.getElementById('leafcss')) { var c = document.createElement('link'); c.id = 'leafcss'; c.rel = 'stylesheet'; c.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'; document.head.appendChild(c); }

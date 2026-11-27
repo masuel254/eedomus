@@ -1,7 +1,16 @@
 {
-  "version": "2.71.2",
+  "version": "2.71.3",
   "date": "2026-11-27",
   "releases": [
+    {
+      "version": "2.71.3",
+      "date": "2026-11-27",
+      "time": "08:34",
+      "title": "Carte satellite par défaut",
+      "changes": [
+        "Déplacements : la carte s'ouvre en vue satellite (bouton « Plan » pour revenir au plan)"
+      ]
+    },
     {
       "version": "2.71.2",
       "date": "2026-11-27",
@@ -2097,5 +2106,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "08:31"
+  "time": "08:34"
 }
