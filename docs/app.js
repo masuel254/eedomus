@@ -719,6 +719,10 @@
     if (!mine) h += '<div class="card2 flat rs-list"><button class="row" data-otsetup><span class="ic">' + icon('walk') + '</span><span><b>Partager la position de cet iPhone</b><small>Avec l’appli gratuite OwnTracks, réglée en un appui</small></span><span class="val">›</span></button></div>';
     else h += '<div class="card2 flat rs-list"><button class="row" data-otsetup><span class="ic">' + icon('gear') + '</span><span><b>Régler à nouveau OwnTracks</b><small>Si la position ne se met plus à jour</small></span><span class="val">›</span></button>' +
       '<button class="row" data-otstop data-confirm><span class="ic">' + icon('x') + '</span><span><b>Ne plus partager ma position</b><small>Efface ma position du serveur (désinstalle aussi OwnTracks)</small></span><span class="val">›</span></button></div>';
+    if (LOC && LOC.pass) h += '<details class="acc2 otman"><summary><span>Réglage à la main dans OwnTracks</span>' + icon('down') + '</summary><div class="alr-b">' +
+      '<ul><li>OwnTracks › <b>i</b> › <b>Paramètres</b> › <b>Mode</b> : choisir <b>HTTP</b></li><li>Recopier les trois valeurs ci-dessous (toucher pour copier), activer <b>Authentification</b></li><li>Revenir à la carte et toucher la flèche d’envoi</li></ul>' +
+      [['URL', CFG.api], ['Identifiant (UserID)', (userName || 'Moi').trim()], ['Mot de passe', LOC.pass]].map(function (x) { return '<button class="otc" data-copy="' + esc(x[1]) + '"><small>' + esc(x[0]) + '</small><b>' + esc(x[1]) + '</b></button>'; }).join('') +
+      '</div></details>';
     return h + '<p class="note-q">Chaque personne choisit de partager sa position depuis son iPhone. Seule la dernière position est gardée, sur le serveur de la maison uniquement (aucun historique, aucune autre société). Les déplacements des 7 derniers jours sont gardés puis effacés automatiquement ; toute la famille peut les voir. Touche une personne pour voir sa journée.</p>';
   }
   // Journée d'une personne : arrêts et trajets, carte du parcours (OpenStreetMap)
@@ -3359,6 +3363,7 @@
     if (e.target.closest('[data-notifs]')) return openNotifs();
     if ((b = e.target.closest('[data-nfdel]'))) return notifDelete(b.dataset.nfdel);
     if (e.target.closest('[data-otsetup]')) return otSetup();
+    if ((b = e.target.closest('[data-copy]'))) { var cv = b.dataset.copy; return (navigator.clipboard ? navigator.clipboard.writeText(cv) : Promise.reject()).then(function () { toast('Copié'); }).catch(function () { toast('Copie impossible : recopie à la main', true); }); }
     if ((b = e.target.closest('[data-locday]'))) return openLocDay(b.dataset.locday, b.dataset.locname);
     if ((b = e.target.closest('[data-locdate]'))) { LOCD.date = b.dataset.locdate; return loadLocDay(); }
     if (e.target.closest('[data-locback]')) { LOCD = null; return openLogs('people'); }
