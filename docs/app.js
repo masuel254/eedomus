@@ -3250,6 +3250,15 @@
     var on = !alrOff(a.k);
     return '<div class="alr-set"><span>Recevoir sur cet iPhone' + (/smoke|alarm|water/.test(a.k) && !on ? ' <b class="bad">(sécurité coupée)</b>' : '') + '</span><button class="sw-b' + (on ? ' is-on' : '') + '" data-alrtog="' + a.k + '" aria-label="Recevoir cette alerte"><span class="sw"></span></button></div>';
   }
+  // alertes « enregistrement arrêté », caméra par caméra (pour toute la famille)
+  var CAMAL = null, camalAsk = 0;
+  function camAlertsHTML() {
+    if (Date.now() - camalAsk > 120000) { camalAsk = Date.now(); api({ action: 'cam.alerts' }).then(function (j) { CAMAL = j; if (!sheet.hidden && sheet.dataset.view === 'settings') renderSettings(); }).catch(function () {}); }
+    if (!CAMAL || !CAMAL.cams.length) return '';
+    return '<div class="alr-set"><span><b>Caméras surveillées</b></span></div>' + CAMAL.cams.map(function (c) {
+      return '<div class="alr-set"><span>' + esc(c.name) + (c.ok ? '' : ' · <i>arrêtée</i>') + '</span><button class="sw-b' + (c.on ? ' is-on' : '') + '" data-camal="' + esc(c.id) + '" aria-label="Alerte pour cette caméra"><span class="sw"></span></button></div>';
+    }).join('') + '<p class="note-q">Une caméra coupée ici ne donne plus d’alerte (ni « ne répond plus », ni « repart ») jusqu’à ce que tu la réactives. Réglage commun à toute la famille.</p>';
+  }
   var HEALTH = null, healthAsk = 0;
   function healthListHTML() {
     if (Date.now() - healthAsk > 120000) { healthAsk = Date.now(); api({ action: 'health.state' }).then(function (j) { HEALTH = j; if (!sheet.hidden && sheet.dataset.view === 'settings') renderSettings(); }).catch(function () {}); }
@@ -3378,7 +3387,7 @@
         return '<details class="acc2 alr" data-alr="' + a.k + '"' + (ALR_OPEN[a.k] ? ' open' : '') + '><summary><span class="ic">' + icon(a.ic) + '</span><span class="alr-t"><b>' + esc(a.t) + '</b><small>' + esc(typeof a.s === 'function' ? a.s(d) : a.s) + '</small></span>' +
           '<span class="' + (alrOff(a.k) ? 'mu2' : 'ok') + '">' + esc(alrOff(a.k) ? 'Coupée' : a.w) + '</span>' + icon('down') + '</summary><div class="alr-b"><ul>' +
           a.c.map(function (x) { return '<li>' + esc(typeof x === 'function' ? x(d) : x) + '</li>'; }).join('') + '</ul>' +
-          alrSwitch(a) + (a.k === 'route' ? routeHTML() : '') + (a.k === 'batt' ? battListHTML() : '') + (a.k === 'health' ? healthListHTML() : '') +
+          alrSwitch(a) + (a.k === 'route' ? routeHTML() : '') + (a.k === 'batt' ? battListHTML() : '') + (a.k === 'health' ? healthListHTML() + camAlertsHTML() : '') +
           (a.k === 'garage' ? '<div class="alr-set"><span>Délai avant l’alerte : <b>' + d + ' min</b></span><span class="stp2"><button data-push-delay="' + (PUSH_DELAYS[i - 1] || d) + '" aria-label="Moins">−</button><button data-push-delay="' + (PUSH_DELAYS[i + 1] || d) + '" aria-label="Plus">+</button></span></div>' : '') +
           '</div></details>';
       }).join('') + '</div></details>';
@@ -3938,6 +3947,11 @@
       tags.forEach(function (t) { offs[t] = cut; if (cut) PUSH.off[t] = true; else delete PUSH.off[t]; }); renderSettings();
       return pushSub().then(function (s) { return api({ action: 'push.prefs', endpoint: s ? s.endpoint : '', off: offs }); })
         .then(function (j) { PUSH.off = j.off || {}; renderSettings(); }).catch(function () { toast('Réglage non enregistré, réessaie', true); });
+    }
+    if ((b = e.target.closest('[data-camal]'))) {
+      var cid = b.dataset.camal, cc = CAMAL.cams.filter(function (x) { return x.id === cid; })[0]; if (!cc) return;
+      cc.on = !cc.on; renderSettings();
+      return api({ action: 'cam.alerts', id: cid, on: cc.on }).then(function (j) { CAMAL = j; renderSettings(); }).catch(function () { toast('Réglage non enregistré, réessaie', true); });
     }
     if ((b = e.target.closest('[data-hmute]'))) {
       return api({ action: 'health.mute', key: b.dataset.hmute, on: b.dataset.on === '1' }).then(function (j) { HEALTH = j; renderSettings(); }).catch(function () { toast('Réglage non enregistré, réessaie', true); });

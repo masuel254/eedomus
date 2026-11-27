@@ -905,6 +905,7 @@ async function healthWatch() {
   if (R.seen && now - R.seen < 30 * 60000 && R.status && R.status.cams) {
     H.camOff = H.camOff || {};
     R.status.cams.forEach((c) => {
+      if ((SD.camMute || {})[c.id]) { delete H.open['cam:' + c.id]; return; } // alertes de cette caméra coupées (Réglages)
       if (c.ok) { delete H.camOff[c.id]; return; }
       H.camOff[c.id] = H.camOff[c.id] || now;
       if (now - H.camOff[c.id] > HOUR) down['cam:' + c.id] = { name: camName(c.id) + ' (enregistrement arrêté)', since: H.camOff[c.id], once: true };
@@ -2382,6 +2383,15 @@ try {
     return reply(200, out);
   }
   // Correction manuelle de l'état de la porte de garage (après vérification sur la caméra)
+  // Alertes caméra par caméra (Réglages) : coupées jusqu'à ce que le propriétaire les réactive
+  if (body.action === 'cam.alerts') {
+    SD.camMute = SD.camMute || {};
+    if (body.id && /^[A-Za-z0-9:_-]{3,40}$/.test(String(body.id))) { if (body.on) delete SD.camMute[body.id]; else SD.camMute[body.id] = Date.now(); }
+    if (body.allOff) ((SD.relay && SD.relay.status && SD.relay.status.cams) || []).forEach((c) => { SD.camMute[c.id] = Date.now(); });
+    let names = {}; try { (await imDevices()).forEach((d) => { names[d.id] = d.name; }); } catch (e) {}
+    const cams = ((SD.relay && SD.relay.status && SD.relay.status.cams) || []).map((c) => ({ id: c.id, name: c.id === 'presence-live' ? 'Présence (enregistrement continu)' : names[c.id] || c.id.slice(0, 6), ok: c.ok, on: !SD.camMute[c.id] }));
+    return reply(200, { ok: true, cams });
+  }
   // Services en panne : liste actuelle et mise en pause d'une panne connue (ex. caméra débranchée exprès)
   if (body.action === 'health.state' || body.action === 'health.mute') {
     const H = SD.health = SD.health || { open: {} }; H.mute = H.mute || {};

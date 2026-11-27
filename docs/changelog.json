@@ -1,7 +1,16 @@
 {
-  "version": "2.78.1",
+  "version": "2.79.0",
   "date": "2026-11-27",
   "releases": [
+    {
+      "version": "2.79.0",
+      "date": "2026-11-27",
+      "time": "23:43",
+      "title": "Alertes caméra au choix",
+      "changes": [
+        "Réglages › Alertes › Sécurité › Service en panne : un interrupteur par caméra pour l’alerte « enregistrement arrêté » ; toutes coupées pour l’instant"
+      ]
+    },
     {
       "version": "2.78.1",
       "date": "2026-11-27",
@@ -2304,5 +2313,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "23:41"
+  "time": "23:43"
 }
