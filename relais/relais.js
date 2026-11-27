@@ -319,6 +319,8 @@ async function hello() {
   [['RETENTION_DAYS', C.retention], ['PRESENCE_RETENTION_DAYS', C.presRetention]].forEach(([k, v]) => {
     if (Number(v) >= 7 && Number(v) <= 365 && String(E[k]) !== String(v)) { saveEnv(k, Number(v)); console.log(k + ' = ' + v); }
   });
+  // caméra Présence (Netatmo) : enregistrement continu de son flux en qualité moyenne, lu sur le réseau de la maison
+  try { await presLive(C.presLive); } catch (e) { console.error('Présence en continu : ' + (e && e.message || e)); }
   // nouveau nom internet décidé côté serveur : certificat HTTPS (Caddy) et adresse annoncée
   const okH = (x) => x && /^[a-z0-9-]+([.][a-z0-9-]+)+$/.test(x);
   const want = [C.host, C.alt].filter(okH).join(', ');
@@ -333,6 +335,26 @@ async function hello() {
     await new Promise((ok) => setTimeout(ok, 20000)); // le temps d'obtenir le certificat
     return hello();
   }
+}
+// Le serveur donne l'adresse de la caméra chez Netatmo ; la caméra indique alors son adresse sur le réseau local.
+// L'adresse change quand la caméra redémarre : elle est vérifiée à chaque signal (toutes les 15 min).
+async function presLive(vpn) {
+  const ID = 'presence-live', line = (u) => ID + '|Présence|' + u;
+  let conf = ''; try { conf = fs.readFileSync(CAMS_FILE, 'utf8'); } catch (e) {}
+  const lines = conf.split(/\r?\n/).filter((l) => l.trim()), cur = lines.find((l) => l.indexOf(ID + '|') === 0);
+  if (!vpn || !/^https:[/][/][a-z0-9.-]+[/]/.test(vpn)) return;
+  let url = null;
+  try {
+    const r = await fetch(vpn + '/command/ping', { signal: AbortSignal.timeout(15000) });
+    const j = await r.json(); if (j && /^http:[/][/][0-9.]+[/]/.test(j.local_url || '')) url = j.local_url + '/live/files/medium/index.m3u8';
+  } catch (e) {}
+  if (!url) url = vpn + '/live/files/medium/index.m3u8'; // pas joignable en local : par Netatmo
+  if (cur === line(url)) return;
+  const out = lines.filter((l) => l.indexOf(ID + '|') !== 0).concat([line(url)]).join('\n') + '\n';
+  fs.writeFileSync(CAMS_FILE + '.tmp', out); fs.renameSync(CAMS_FILE + '.tmp', CAMS_FILE);
+  spawnSync('systemctl', ['enable', 'relais-cam@' + ID + '.service'], { timeout: 20000 });
+  spawnSync('systemctl', ['restart', 'relais-cam@' + ID + '.service'], { timeout: 20000 });
+  console.log('Présence : enregistrement continu ' + (url.indexOf('http://') === 0 ? 'en local' : 'par Netatmo'));
 }
 async function pair(code) {
   const j = await post({ action: 'relay.hello', url: E.PUBLIC_URL, code: String(code).replace(/[^0-9]/g, '') });

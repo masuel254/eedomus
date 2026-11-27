@@ -901,7 +901,7 @@ async function healthWatch() {
   if (R.url && R.seen && now - R.seen > 20 * 60000) await relayProbe();
   if (R.url && R.seen && now - R.seen > HOUR) down.relay = { name: 'Relais caméras (Freebox)', since: R.seen };
   const names = {}; try { (await imDevices()).forEach((d) => { names[d.id] = d.name; }); } catch (e) {}
-  const camName = (id) => 'Caméra ' + (names[id] || String(id).slice(0, 6));
+  const camName = (id) => 'Caméra ' + (id === 'presence-live' ? 'Présence (enregistrement continu)' : names[id] || String(id).slice(0, 6));
   if (R.seen && now - R.seen < 30 * 60000 && R.status && R.status.cams) {
     H.camOff = H.camOff || {};
     R.status.cams.forEach((c) => {
@@ -1323,7 +1323,10 @@ async function relayHello(b) {
   if (b.status && typeof b.status === 'object') R.status = { disk: b.status.disk || null, retention: b.status.retention || null,
     cams: (b.status.cams || []).slice(0, 12).map((c) => ({ id: String(c.id), ok: !!c.ok, gb: Number(c.gb) || 0, from: c.from || null })),
     presence: b.status.presence || null };
-  return reply(200, { ok: true, url, cfg: { retention: CFG.relay.retention, presRetention: CFG.relay.presRetention, host: R.host || null, alt: R.alt || null } });
+  // caméra Présence : adresse chez Netatmo, pour que le relais l'enregistre en continu (il trouve ensuite son adresse locale)
+  let presLive = null;
+  try { const cs = await ntCameras(false); const pc = (cs.cameras || []).find((c) => c.type === 'NOC' && c.live); if (pc) presLive = pc.live.replace(/[/]live[/]files[/].*$/, ''); } catch (e) {}
+  return reply(200, { ok: true, url, cfg: { retention: CFG.relay.retention, presRetention: CFG.relay.presRetention, host: R.host || null, alt: R.alt || null, presLive } });
 }
 
 // ---------------- Smart Life / Tuya ----------------

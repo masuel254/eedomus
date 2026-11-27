@@ -2341,6 +2341,9 @@
   function loadPres() {
     var want = REC.date, rc = presAll()[want];
     REC.clips = rc ? rc.list : null; REC.nev = null; loadNev(want);
+    // enregistrement continu de la Présence (tranches de 10 min gardées sur la Freebox)
+    REC.segs = null;
+    relayJson('/api/imou?cam=presence-live&date=' + want).then(function (j) { if (REC && REC.date === want) { REC.segs = j.records; renderRec(); } }).catch(function () {});
     relayJson('/api/presence?date=' + want).then(function (j) {
       presStore(want, j.clips);
       if (REC && REC.date === want) { REC.clips = j.clips; REC.relay = true; renderRec(); }
@@ -2430,6 +2433,16 @@
     } else if (c) {
       if (REC.clips || (RELAY && RELAY.url)) {
         h += '<h3>Vidéos gardées sur la Freebox</h3>' + weekStrip(REC.date, 'data-recday');
+        if (REC.segs && REC.segs.length) h += '<div class="days seg2"><button class="' + (REC.all ? '' : 'on') + '" data-recall="0">Passages</button><button class="' + (REC.all ? 'on' : '') + '" data-recall="1">Toute la journée</button></div>';
+      }
+      if (REC.all && REC.segs && REC.segs.length) {
+        h += '<div class="evlist">' + REC.segs.map(function (r, i) {
+          var playing = REC.play && REC.play.key === r.begin;
+          return '<button class="ev rec' + (playing ? ' on' : '') + '" data-recplay="' + i + '"><span class="evic">' + icon('play') + '</span>' +
+            '<span><b>' + esc(r.begin.slice(11, 16)) + ' → ' + esc(r.end.slice(11, 16)) + '</b><small>Enregistrement continu · ' + dur(r.begin, r.end) + '</small></span>' +
+            '<span class="evt">' + (r.size ? fmt(r.size / 1048576, 1) + ' Mo' : '') + '</span></button>';
+        }).join('') + '</div>';
+      } else if (REC.clips || (RELAY && RELAY.url)) {
         if (!REC.clips) h += '<p class="muted">' + (REC.relay === false ? 'La Freebox ne répond pas pour le moment.' : 'Lecture de la Freebox…') + '</p>';
         else if (!REC.clips.length) h += '<p class="muted">Aucune vidéo ce jour-là.</p>';
         else h += '<div class="evlist">' + REC.clips.map(function (cl, i) {
@@ -3756,7 +3769,7 @@
       var g = r.url ? r : segAt(r.begin);
       if (g && RELAY && RELAY.url) {
         var off = g === r ? 0 : Math.max(0, secs(g.begin, r.begin) - 3);
-        REC.play = { url: relayUrl(g.url) + (off ? '#t=' + off : ''), seek: off, relay: true, seg: g.begin, label: label, key: r.begin, hd: false, hdOk: true, imou: { begin: r.begin, end: r.end } };
+        REC.play = { url: relayUrl(g.url) + (off ? '#t=' + off : ''), seek: off, relay: true, seg: g.begin, label: label, key: r.begin, hd: false, hdOk: (camById(REC.cam) || {}).src === 'imou', imou: { begin: r.begin, end: r.end } };
         sheet.scrollTop = 0; return renderRec();
       }
       b.classList.add('busy');

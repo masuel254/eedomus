@@ -14,11 +14,14 @@ OUT="$REC_DIR/$DIR"
 mkdir -p "$OUT"
 FAILS=$(cat $STATE/fail-$DIR 2>/dev/null || echo 0)
 
-probe() { timeout 50 ffprobe -v error -rtsp_transport tcp -timeout 20000000 -analyzeduration 10000000 -probesize 5000000 \
+# flux RTSP (Imou) ou HLS en http (caméra Présence de Netatmo, sur le réseau de la maison)
+NET="-rtsp_transport tcp -timeout 20000000"
+case "$URL" in http*) NET="-rw_timeout 20000000";; esac
+probe() { timeout 50 ffprobe -v error $NET -analyzeduration 10000000 -probesize 5000000 \
   -select_streams v:0 -show_entries stream=codec_name -of csv=p=0 "$1" 2>/dev/null | head -n1; }
 
 CODEC=$(probe "$URL")
-if [ -z "$CODEC" ] && [ "$FAILS" -ge 2 ]; then
+if [ -z "$CODEC" ] && [ "$FAILS" -ge 2 ] && [ "${URL#rtsp}" != "$URL" ]; then
   # muette plusieurs fois : adresse changée ? on cherche une caméra qui accepte ce même code
   IP=$(echo "$URL" | sed -E 's#^rtsp://[^@]*@([^:/]+).*#\1#')
   NET=$(ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p' | cut -d. -f1-3)
@@ -49,7 +52,7 @@ AUDIO="-map 0:a:0? -c:a aac -b:a 32k -ar 16000"
 T0=$(date +%s)
 set -f   # « 0:a:0? » ne doit pas être pris pour un nom de fichier
 ffmpeg -hide_banner -loglevel error -nostdin \
-  -rtsp_transport tcp -timeout 20000000 -analyzeduration 10000000 -probesize 5000000 -fflags +genpts -i "$URL" \
+  $NET -analyzeduration 10000000 -probesize 5000000 -fflags +genpts -i "$URL" \
   -map 0:v:0 -c:v copy $TAG $AUDIO \
   -f segment -segment_time 600 -segment_atclocktime 1 -reset_timestamps 1 -strftime 1 \
   -segment_format mp4 -segment_format_options movflags=+faststart \
