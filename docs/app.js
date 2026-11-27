@@ -720,7 +720,7 @@
     else h += '<div class="card2 flat rs-list"><button class="row" data-otsetup><span class="ic">' + icon('gear') + '</span><span><b>Régler à nouveau OwnTracks</b><small>Si la position ne se met plus à jour</small></span><span class="val">›</span></button></div>';
     if (LOC && LOC.pass) h += '<details class="acc2 otman"><summary><span>Réglage à la main dans OwnTracks</span>' + icon('down') + '</summary><div class="alr-b">' +
       '<ul><li>OwnTracks › <b>i</b> › <b>Paramètres</b> › <b>Mode</b> : choisir <b>HTTP</b></li><li>Recopier les trois valeurs ci-dessous (toucher pour copier), activer <b>Authentification</b></li><li>Revenir à la carte et toucher la flèche d’envoi</li></ul>' +
-      [['URL', CFG.api], ['Identifiant (UserID)', (userName || 'Moi').trim()], ['Mot de passe', LOC.pass]].map(function (x) { return '<button class="otc" data-copy="' + esc(x[1]) + '"><small>' + esc(x[0]) + '</small><b>' + esc(x[1]) + '</b></button>'; }).join('') +
+      [['URL', CFG.api], ['Identifiant (UserID)', otUser()], ['Mot de passe', LOC.pass]].map(function (x) { return '<button class="otc" data-copy="' + esc(x[1]) + '"><small>' + esc(x[0]) + '</small><b>' + esc(x[1]) + '</b></button>'; }).join('') +
       '</div></details>';
     return h + '<p class="note-q">Chaque personne choisit de partager sa position depuis son iPhone. Seule la dernière position est gardée, sur le serveur de la maison uniquement (aucun historique, aucune autre société). Les déplacements des 7 derniers jours sont gardés puis effacés automatiquement ; toute la famille peut les voir. Touche une personne pour voir sa journée.</p>';
   }
@@ -779,9 +779,11 @@
     if (!document.getElementById('leafcss')) { var c = document.createElement('link'); c.id = 'leafcss'; c.rel = 'stylesheet'; c.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'; document.head.appendChild(c); }
     var sc = document.createElement('script'); sc.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'; sc.onload = go; document.head.appendChild(sc);
   }
+  // identifiant OwnTracks sans accent ni espace : l'iPhone n'envoie pas le mot de passe si l'identifiant contient « ç », « é »…
+  function otUser() { return ((userName || 'Moi').trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9_-]/g, '') || 'Moi'); }
   function otSetup() {
     if (!LOC || !LOC.pass) { locLoad(true); return toast('Un instant, réessaie', true); }
-    var nm = (userName || 'Moi').trim(), tid = nm.replace(/[^A-Za-zÀ-ÿ]/g, '').slice(0, 2).toUpperCase() || 'ME';
+    var nm = otUser(), tid = nm.replace(/[^A-Za-zÀ-ÿ]/g, '').slice(0, 2).toUpperCase() || 'ME';
     var conf = { _type: 'configuration', mode: 3, url: CFG.api, auth: true, username: nm, password: LOC.pass, tid: tid, monitoring: 1, extendedData: true, cmd: false, allowRemoteLocation: false, ranging: false };
     var b64 = btoa(unescape(encodeURIComponent(JSON.stringify(conf))));
     location.href = 'owntracks:///config?inline=' + encodeURIComponent(b64);
