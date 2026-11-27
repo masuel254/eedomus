@@ -928,7 +928,10 @@ async function healthWatch() {
       H.open[k] = { at: o ? o.at : now, remind: now, name: d.name };
     }
   }
-  for (const k of Object.keys(H.open)) if (!down[k]) {
+  // caméra : « repart » seulement si le relais la voit vraiment enregistrer (sans nouvelles du relais, on ne conclut rien)
+  const camOk = {}, fresh = R.seen && now - R.seen < 30 * 60000;
+  ((R.status && R.status.cams) || []).forEach((c) => { camOk[c.id] = !!c.ok; });
+  for (const k of Object.keys(H.open)) if (!down[k] && (k.indexOf('cam:') !== 0 || (fresh && camOk[k.slice(4)] === true))) {
     delete H.mute[k];
     const nm = k.indexOf('cam:') === 0 ? camName(k.slice(4)) + ' : enregistrement' : H.open[k].name;
     await pushNotify({ tag: 'health', title: '✅ ' + nm.replace(/ [(]enregistrement arrêté[)]$/, ' : enregistrement') + ' repart', body: 'Revenu ' + hm(now) });
