@@ -755,7 +755,17 @@
     var go = function () {
       var el = document.getElementById('locmap'); if (!el || !window.L) return;
       var m = L.map(el, { zoomControl: false, attributionControl: true });
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '© OpenStreetMap' }).addTo(m);
+      // fond au choix : plan (OpenStreetMap) ou satellite (Esri), choix gardé sur l'iPhone
+      var plan = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' });
+      var sat = L.layerGroup([L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Images © Esri' }),
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 })]);
+      var cur = store.get('maison.mapsat') === '1' ? sat : plan; cur.addTo(m);
+      var Tg = L.Control.extend({ options: { position: 'topright' }, onAdd: function () {
+        var bt = L.DomUtil.create('button', 'mapsw'); bt.type = 'button'; bt.textContent = cur === sat ? 'Plan' : 'Satellite';
+        L.DomEvent.disableClickPropagation(bt);
+        bt.onclick = function () { m.removeLayer(cur); cur = cur === sat ? plan : sat; cur.addTo(m); store.set('maison.mapsat', cur === sat ? '1' : '0'); bt.textContent = cur === sat ? 'Plan' : 'Satellite'; };
+        return bt; } });
+      m.addControl(new Tg());
       var line = L.polyline(pts, { color: '#FF8A5B', weight: 4, opacity: .9 }).addTo(m);
       L.circleMarker(pts[pts.length - 1], { radius: 7, color: '#fff', weight: 2, fillColor: '#FF8A5B', fillOpacity: 1 }).addTo(m);
       if (pts.length > 1) m.fitBounds(line.getBounds(), { padding: [24, 24] }); else m.setView(pts[0], 15);
