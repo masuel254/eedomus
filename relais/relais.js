@@ -69,6 +69,31 @@ function complete(p, st) {
   if (ok || Date.now() - st.mtimeMs > 900000) { headOk.set(k, ok); if (headOk.size > 30000) headOk.clear(); }
   return ok;
 }
+// ---------- Transcriptions ----------
+const TRDIR = '/var/lib/relais/tr';
+function trHash(file) { return crypto.createHash('sha1').update(file).digest('hex').slice(0, 20); }
+function trFile(v) {
+  v = String(v || ''); let file = null;
+  const mm = /^\/v\/imou\/([A-Za-z0-9_-]+)\/([0-9]{8}-[0-9]{6}\.mp4)$/.exec(v);
+  if (mm) file = path.join(REC(), mm[1], mm[2]);
+  else if (v.indexOf('/v/presence/') === 0) { const rel = v.slice(12).split('/').map(decodeURIComponent).join('/'); if (!/(^|\/)\.\.?(\/|$)/.test(rel)) file = path.join(PRES(), rel); }
+  return file && fs.existsSync(file) ? file : null;
+}
+let trList = { at: 0, names: [] };
+function trState(name) { try { const s = JSON.parse(fs.readFileSync(path.join(TRDIR, name), 'utf8')).state; return s === 'ready' || s === 'building' ? s : null; } catch (e) { return null; } }
+// transcriptions faites ou en cours pour une tranche : la tranche entière (tr) et les moments de mouvement (trs)
+function trOf(file) {
+  if (Date.now() - trList.at > 5000) { try { trList = { at: Date.now(), names: fs.readdirSync(TRDIR) }; } catch (e) { trList = { at: Date.now(), names: [] }; } }
+  const h = trHash(file), o = {};
+  trList.names.forEach((n) => {
+    if (n.slice(0, 20) !== h) return;
+    if (n === h + '.json') { const st = trState(n); if (st) o.tr = st; return; }
+    const m = /^[0-9a-f]{20}-([0-9]+)-([0-9]+)\.json$/.exec(n); if (!m) return;
+    const st = trState(n); if (st) (o.trs = o.trs || []).push({ a: +m[1], d: +m[2], st });
+  });
+  return o;
+}
+
 function imouDay(cam, date) {
   const dir = path.join(REC(), safeDir(cam));
   const day = date.replace(/-/g, '');
@@ -82,9 +107,8 @@ function imouDay(cam, date) {
     if (st.size < 20000 || !complete(path.join(dir, n), st)) { if (i === names.length - 1) recording = true; return; }
     const b = new Date(+n.slice(0, 4), +n.slice(4, 6) - 1, +n.slice(6, 8), +n.slice(9, 11), +n.slice(11, 13), +n.slice(13, 15));
     const e = st.mtimeMs > b.getTime() && st.mtimeMs - b.getTime() < 3600000 ? new Date(st.mtimeMs) : new Date(b.getTime() + 600000);
-    // transcription déjà faite ou en cours pour cette tranche (repère dans la liste de l'appli)
-    let tr; try { const tj = JSON.parse(fs.readFileSync(path.join('/var/lib/relais/tr', crypto.createHash('sha1').update(path.join(dir, n)).digest('hex').slice(0, 20) + '.json'), 'utf8')); if (tj.state === 'ready' || tj.state === 'building') tr = tj.state; } catch (e) {}
-    out.push({ begin: local(b), end: local(e), type: 'regular', size: st.size, url: '/v/imou/' + safeDir(cam) + '/' + n, tr });
+    // transcriptions déjà faites ou en cours dans cette tranche (repères dans la liste de l'appli)
+    out.push(Object.assign({ begin: local(b), end: local(e), type: 'regular', size: st.size, url: '/v/imou/' + safeDir(cam) + '/' + n }, trOf(path.join(dir, n))));
   });
   out.reverse();
   return { records: out, recording };
@@ -234,13 +258,13 @@ function serve() {
       }
       // transcription de ce qui se dit dans une vidéo (à la demande, faite ici, gardée ensuite)
       if (u.pathname === '/api/tr') {
-        const v = String(u.searchParams.get('v') || ''); let file = null;
-        const mm = /^\/v\/imou\/([A-Za-z0-9_-]+)\/([0-9]{8}-[0-9]{6}\.mp4)$/.exec(v);
-        if (mm) file = path.join(REC(), mm[1], mm[2]);
-        else if (v.indexOf('/v/presence/') === 0) { const rel = v.slice(12).split('/').map(decodeURIComponent).join('/'); if (!/(^|\/)\.\.?(\/|$)/.test(rel)) file = path.join(PRES(), rel); }
-        if (!file || !fs.existsSync(file)) return json(res, 404, { ok: false, error: 'not_found' });
-        const dir = '/var/lib/relais/tr'; fs.mkdirSync(dir, { recursive: true });
-        const out = path.join(dir, crypto.createHash('sha1').update(file).digest('hex').slice(0, 20) + '.json');
+        // v : tranche de 10 min ; a et d (secondes) : seulement le moment d'un mouvement ; v2 : tranche suivante s'il est à cheval sur deux
+        const file = trFile(u.searchParams.get('v')), file2 = u.searchParams.get('v2') ? trFile(u.searchParams.get('v2')) : null;
+        if (!file || (u.searchParams.get('v2') && !file2)) return json(res, 404, { ok: false, error: 'not_found' });
+        const a = Math.round(Number(u.searchParams.get('a'))), d = Math.round(Number(u.searchParams.get('d')));
+        const win = u.searchParams.has('d') && a >= 0 && a <= 3600 && d >= 5 && d <= 1200;
+        fs.mkdirSync(TRDIR, { recursive: true });
+        const out = path.join(TRDIR, trHash(file) + (win ? '-' + a + '-' + d : '') + '.json');
         let cur = null; try { cur = JSON.parse(fs.readFileSync(out, 'utf8')); } catch (e) {}
         const unit = 'relais-tr-' + path.basename(out, '.json');
         // tâche arrêtée en route (manque de mémoire, redémarrage) : relancée ; une tâche en attente ou en cours n'est jamais doublée
@@ -251,7 +275,9 @@ function serve() {
         if (old && !u.searchParams.get('go')) cur = null;
         if (u.searchParams.get('go') && (!cur || cur.state === 'error' || stale || old)) {
           fs.writeFileSync(out, JSON.stringify({ state: 'building', step: 'démarrage', done: 0, total: 0 }));
-          spawnSync('systemd-run', ['--quiet', '--collect', '--unit', unit, '-p', 'Nice=15', '-p', 'MemoryMax=700M', '/opt/relais/transcribe.sh', file, out], { timeout: 20000 });
+          // priorité très basse : les enregistrements et l'appli passent toujours avant
+          spawnSync('systemd-run', ['--quiet', '--collect', '--unit', unit, '-p', 'Nice=19', '-p', 'CPUWeight=10', '-p', 'IOWeight=10', '-p', 'MemoryMax=700M',
+            '/opt/relais/transcribe.sh', file, out].concat(win ? [String(a), String(d)].concat(file2 ? [file2] : []) : []), { timeout: 20000 });
           cur = { state: 'building', step: 'démarrage' };
         }
         return json(res, 200, Object.assign({ ok: true }, cur || { state: 'none' }));

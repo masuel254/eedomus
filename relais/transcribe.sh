@@ -1,9 +1,10 @@
 #!/bin/bash
 # Transcription (en français) de ce qui se dit dans une vidéo, faite sur la Freebox : le son ne sort pas de la maison.
-# Usage : transcribe.sh <vidéo> <fichier résultat .json>
+# Usage : transcribe.sh <vidéo> <fichier résultat .json> [début (s) durée (s) [vidéo suivante]]
+# (avec début et durée : seulement le moment d'un mouvement, éventuellement à cheval sur la tranche suivante)
 # 1. son extrait (16 kHz, mono) ; 2. seuls les passages où quelqu'un parle sont gardés (le reste est du silence ou du bruit) ;
 # 3. chaque passage est transcrit par Whisper (whisper.cpp, modèle « small » compressé) ; 4. résultat : phrases avec leur heure.
-IN="$1"; OUT="$2"
+IN="$1"; OUT="$2"; A0="$3"; D0="$4"; IN2="$5"
 W=/opt/relais/whisper; BIN=$W/whisper-cli; MODEL=$W/ggml-small-q5_1.bin
 T=$(mktemp -d /var/tmp/tr-XXXXXX); trap 'rm -rf "$T"' EXIT; : > "$T/lines.txt"
 # avancement, avec les phrases déjà trouvées (affichées au fur et à mesure)
@@ -15,18 +16,31 @@ json.dump({'state': 'building', 'step': sys.argv[1], 'done': int(sys.argv[2]), '
 PY
 mv -f "$OUT.tmp" "$OUT"; }
 fail() { printf '{"state":"error","error":"%s"}\n' "$1" > "$OUT.tmp" && mv -f "$OUT.tmp" "$OUT"; exit 0; }
-# un cœur reste libre pour les enregistrements et pour répondre à l'appli
-TH=$(( $(nproc) > 1 ? $(nproc) - 1 : 1 ))
+# tous les cœurs : la tâche a une priorité minimale, les enregistrements et l'appli passent toujours avant
+TH=$(nproc)
 [ -x "$BIN" ] && [ -s "$MODEL" ] || fail "reconnaissance vocale pas encore installée (quelques minutes après la mise à jour)"
 # une seule transcription à la fois (sinon la mémoire de la VM déborde) : les autres attendent leur tour
 step attente
 exec 9> /var/lib/relais/tr.lock; flock 9
 step son
-ffmpeg -v error -y -i "$IN" -vn -ac 1 -ar 16000 -af "highpass=f=120,lowpass=f=7000,dynaudnorm" "$T/a.wav" || fail "pas de son dans cette vidéo"
+F="highpass=f=120,lowpass=f=7000"
+if [ -n "$D0" ] && [ -n "$IN2" ]; then
+  # mouvement à cheval sur deux tranches : fin de la première + début de la suivante
+  ffmpeg -v error -y -ss "$A0" -i "$IN" -i "$IN2" -filter_complex "[0:a][1:a]concat=n=2:v=0:a=1,atrim=0:$D0,$F" -ac 1 -ar 16000 "$T/r.wav" || fail "pas de son dans cette vidéo"
+elif [ -n "$D0" ]; then
+  ffmpeg -v error -y -ss "$A0" -t "$D0" -i "$IN" -vn -af "$F" -ac 1 -ar 16000 "$T/r.wav" || fail "pas de son dans cette vidéo"
+else
+  ffmpeg -v error -y -i "$IN" -vn -af "$F" -ac 1 -ar 16000 "$T/r.wav" || fail "pas de son dans cette vidéo"
+fi
+[ -s "$T/r.wav" ] || fail "pas de son dans cette vidéo"
+# seuil de silence adapté au bruit de fond de la vidéo : on ne garde que ce qui est plus fort que le niveau moyen
+MEAN=$(ffmpeg -i "$T/r.wav" -af volumedetect -f null - 2>&1 | sed -n 's/.*mean_volume: \(-[0-9.]*\) dB.*/\1/p' | cut -d. -f1)
+TH_DB=$(( ${MEAN:--40} + 2 )); [ "$TH_DB" -gt -24 ] && TH_DB=-24; [ "$TH_DB" -lt -45 ] && TH_DB=-45
+ffmpeg -v error -y -i "$T/r.wav" -af dynaudnorm "$T/a.wav" || cp "$T/r.wav" "$T/a.wav"
 [ -s "$T/a.wav" ] || fail "pas de son dans cette vidéo"
 DUR=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$T/a.wav" | cut -d. -f1)
-# passages de parole : tout ce qui n'est pas du silence pendant au moins 0,6 s (seuil adapté au niveau sonore de la vidéo)
-ffmpeg -v info -i "$T/a.wav" -af "silencedetect=noise=-38dB:d=0.6" -f null - 2> "$T/sil.txt"
+# passages de parole : tout ce qui dépasse le seuil pendant au moins 0,8 s (repéré sur le son d'origine, avant mise à niveau)
+ffmpeg -v info -i "$T/r.wav" -af "silencedetect=noise=${TH_DB}dB:d=0.8" -f null - 2> "$T/sil.txt"
 python3 - "$T/sil.txt" "${DUR:-600}" > "$T/parts.txt" <<'PY'
 import re, sys
 txt = open(sys.argv[1]).read(); dur = float(sys.argv[2] or 600)

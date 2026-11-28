@@ -1,7 +1,19 @@
 {
-  "version": "2.79.5",
+  "version": "2.80.0",
   "date": "2026-11-28",
   "releases": [
+    {
+      "version": "2.80.0",
+      "date": "2026-11-28",
+      "time": "07:15",
+      "title": "Transcription bien plus rapide",
+      "changes": [
+        "Sur une vidéo de mouvement, seul le moment du mouvement est transcrit : quelques minutes au lieu de 45.",
+        "Si le mouvement est à cheval sur deux tranches de 10 minutes, la transcription prend bien les deux.",
+        "Les moments calmes sont mieux sautés : la Freebox n'écoute que ce qui dépasse le bruit de fond.",
+        "Dans « Toute la journée », le bouton transcrit toujours la tranche entière de 10 minutes."
+      ]
+    },
     {
       "version": "2.79.5",
       "date": "2026-11-28",
@@ -2361,5 +2373,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "06:58"
+  "time": "07:15"
 }
