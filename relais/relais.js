@@ -223,6 +223,8 @@ function serve() {
         const run = (cmd, args) => { const r = spawnSync(cmd, args, { encoding: 'utf8', timeout: 20000 }); return String(r.stdout || '') + String(r.stderr || ''); };
         return json(res, 200, { ok: true, uptime: run('uptime', []).trim(), mem: run('free', ['-m']), boots: run('journalctl', ['--list-boots', '--no-pager']).split('\n').slice(-4),
           clean: run('systemctl', ['status', 'relais-clean.service', 'relais-clean.timer', '--no-pager', '-n', '0']),
+          procs: run('bash', ['-c', 'ps -eo pid,etimes,pcpu,rss,stat,ni,args --sort=-pcpu | grep -E "whisper|transcribe|ffmpeg -nostdin -v error -y -ss|python3" | grep -v grep | cut -c1-200']),
+          units: run('bash', ['-c', 'systemctl list-units "relais-tr-*" --no-pager --plain --no-legend']),
           cams: run('journalctl', ['-u', 'relais-cam@*', '-n', '60', '--no-pager', '-o', 'short-iso']),
           journal: run('journalctl', ['-u', 'relais-clean', '-u', 'relais-web', '-n', String(Math.min(400, Number(u.searchParams.get('n')) || 120)), '--no-pager', '-o', 'short-iso']),
           oom: run('journalctl', ['-k', '-g', 'oom|Out of memory|killed process', '-n', '20', '--no-pager']) });
