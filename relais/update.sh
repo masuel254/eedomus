@@ -28,12 +28,16 @@ if [ "$(cat $F 2>/dev/null)" != "$W" ]; then mkdir -p $D; printf '%s\n' "$W" > $
 cmp -s "$T/transcribe.sh" $OPT/transcribe.sh || install -m 755 "$T/transcribe.sh" $OPT/transcribe.sh
 # reconnaissance vocale (whisper.cpp, compilé ici une seule fois, en tâche de fond : 10 à 20 min) et modèle « small » compressé (190 Mo)
 WH=$OPT/whisper
+# mémoire de secours (swap) de 2 Go, toujours active (même après un redémarrage) : la VM n'a qu'1 Go et Whisper en prend 500 Mo
+[ -f /var/swap-relais ] || { fallocate -l 2G /var/swap-relais 2>/dev/null || dd if=/dev/zero of=/var/swap-relais bs=1M count=2048 status=none; chmod 600 /var/swap-relais; mkswap /var/swap-relais >/dev/null; }
+grep -q /var/swap-relais /etc/fstab || echo '/var/swap-relais none swap sw 0 0' >> /etc/fstab
+swapon --show=NAME --noheadings | grep -q /var/swap-relais || swapon /var/swap-relais
+# anciennes transcriptions lancées en parallèle (avant la file d'attente) : arrêtées, elles seront refaites une par une
+systemctl stop 'relais-tr-*-1*.service' 2>/dev/null || true
 if [ ! -x $WH/whisper-cli ] && ! systemctl is-active --quiet relais-whisper-build 2>/dev/null && [ ! -f $WH/.echec ]; then
   mkdir -p $WH
   # la VM n'a qu'1 Go de mémoire : mémoire de secours (swap) de 2 Go, compilation sur un seul cœur, priorité minimale,
   # mémoire du compilateur plafonnée (la VM reste disponible pour les vidéos pendant ce temps)
-  [ -f /var/swap-relais ] || { fallocate -l 2G /var/swap-relais 2>/dev/null || dd if=/dev/zero of=/var/swap-relais bs=1M count=2048 status=none; chmod 600 /var/swap-relais; mkswap /var/swap-relais >/dev/null; }
-  swapon --show=NAME --noheadings | grep -q /var/swap-relais || swapon /var/swap-relais
   systemd-run --quiet --collect --unit relais-whisper-build -p Nice=19 -p IOSchedulingClass=idle -p MemoryMax=600M -p CPUQuota=60% /bin/bash -c "
     DEBIAN_FRONTEND=noninteractive apt-get install -y -qq build-essential cmake git >/dev/null 2>&1
     rm -rf $WH/src && git clone -q --depth 1 -b v1.7.4 https://github.com/ggml-org/whisper.cpp $WH/src &&

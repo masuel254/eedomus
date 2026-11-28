@@ -239,13 +239,16 @@ function serve() {
         const dir = '/var/lib/relais/tr'; fs.mkdirSync(dir, { recursive: true });
         const out = path.join(dir, crypto.createHash('sha1').update(file).digest('hex').slice(0, 20) + '.json');
         let cur = null; try { cur = JSON.parse(fs.readFileSync(out, 'utf8')); } catch (e) {}
-        const age = cur ? Date.now() - fs.statSync(out).mtimeMs : 0, stale = cur && cur.state === 'building' && (age > 15 * 60000 || (cur.step === 'démarrage' && age > 3 * 60000)); // tâche jamais partie
+        const unit = 'relais-tr-' + path.basename(out, '.json');
+        // tâche arrêtée en route (manque de mémoire, redémarrage) : relancée ; une tâche en attente ou en cours n'est jamais doublée
+        const running = cur && cur.state === 'building' && spawnSync('systemctl', ['is-active', '--quiet', unit]).status === 0;
+        const stale = cur && cur.state === 'building' && !running;
         // résultats d'une ancienne version de la transcription (erronée) : refaits
         const old = cur && cur.state === 'ready' && cur.v !== 2;
         if (old && !u.searchParams.get('go')) cur = null;
         if (u.searchParams.get('go') && (!cur || cur.state === 'error' || stale || old)) {
           fs.writeFileSync(out, JSON.stringify({ state: 'building', step: 'démarrage', done: 0, total: 0 }));
-          spawnSync('systemd-run', ['--quiet', '--collect', '--unit', 'relais-tr-' + path.basename(out, '.json') + '-' + Date.now(), '-p', 'Nice=15', '-p', 'MemoryMax=700M', '/opt/relais/transcribe.sh', file, out], { timeout: 20000 });
+          spawnSync('systemd-run', ['--quiet', '--collect', '--unit', unit, '-p', 'Nice=15', '-p', 'MemoryMax=700M', '/opt/relais/transcribe.sh', file, out], { timeout: 20000 });
           cur = { state: 'building', step: 'démarrage' };
         }
         return json(res, 200, Object.assign({ ok: true }, cur || { state: 'none' }));

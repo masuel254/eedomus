@@ -16,6 +16,9 @@ PY
 mv -f "$OUT.tmp" "$OUT"; }
 fail() { printf '{"state":"error","error":"%s"}\n' "$1" > "$OUT.tmp" && mv -f "$OUT.tmp" "$OUT"; exit 0; }
 [ -x "$BIN" ] && [ -s "$MODEL" ] || fail "reconnaissance vocale pas encore installée (quelques minutes après la mise à jour)"
+# une seule transcription à la fois (sinon la mémoire de la VM déborde) : les autres attendent leur tour
+step attente
+exec 9> /var/lib/relais/tr.lock; flock 9
 step son
 ffmpeg -v error -y -i "$IN" -vn -ac 1 -ar 16000 -af "highpass=f=120,lowpass=f=7000,dynaudnorm" "$T/a.wav" || fail "pas de son dans cette vidéo"
 [ -s "$T/a.wav" ] || fail "pas de son dans cette vidéo"
@@ -49,7 +52,9 @@ while read -r A B; do
   # -nostdin et < /dev/null : sinon ffmpeg et whisper « mangent » la liste des passages lue par la boucle
   rm -f "$T/p.json"
   ffmpeg -nostdin -v error -y -ss "$A" -to "$B" -i "$T/a.wav" -ac 1 -ar 16000 "$T/p.wav" < /dev/null || continue
-  nice -n 15 "$BIN" -m "$MODEL" -l fr -t "$(nproc)" -nt -np -f "$T/p.wav" -oj -of "$T/p" < /dev/null >/dev/null 2>&1 || continue
+  # un second essai si Whisper a été interrompu (mémoire)
+  nice -n 15 "$BIN" -m "$MODEL" -l fr -t "$(nproc)" -nt -np -f "$T/p.wav" -oj -of "$T/p" < /dev/null >/dev/null 2>&1 ||
+    nice -n 15 "$BIN" -m "$MODEL" -l fr -t "$(nproc)" -nt -np -f "$T/p.wav" -oj -of "$T/p" < /dev/null >/dev/null 2>&1 || continue
   python3 - "$T/p.json" "$A" >> "$T/lines.txt" <<'PY'
 import json, sys
 try: d = json.load(open(sys.argv[1]))
@@ -61,6 +66,14 @@ for s in d.get('transcription', []):
     import re
     if not t or t.startswith('[') or t.startswith('(') or not re.search(r'[A-Za-zÀ-ÿ]{2}', t): continue
     if re.search(r'amara|sous-titr|merci d.avoir regard|abonnez-vous', t, re.I): continue
+    # formules que Whisper invente sur un bruit de fond, seules sur la ligne
+    if re.fullmatch(r"(merci( beaucoup)?|je vous souhaite une bonne soirée|au revoir|à bientôt)[ .!,]*", t, re.I): continue
+    # même phrase répétée en boucle : gardée une seule fois
+    ph, seen = [], set()
+    for x in re.split(r'(?<=[.!?])\s+', t):
+        k = x.strip().lower()
+        if k and k not in seen: seen.add(k); ph.append(x.strip())
+    t = ' '.join(ph)
     print(json.dumps({'t': round(a + s['offsets']['from'] / 1000, 1), 'text': t}, ensure_ascii=False))
 PY
 done < "$T/parts.txt"
