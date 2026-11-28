@@ -2446,7 +2446,8 @@
       api({ action: 'im.records', cam: c.id, date: want }).then(function (j) { save(key, j.records); if (mine()) { REC.list = j.records; REC.loading = false; renderRec(); } })
         .catch(function () { if (REC) { REC.loading = false; if (!REC.list) REC.error = true; renderRec(); } });
     } else REC.loading = false;
-    if (!fresh(fc)) relayJson('/api/imou?cam=' + encodeURIComponent(c.id) + '&date=' + want)
+    // liste de la Freebox : toujours remise à jour en arrière-plan (repères de transcription), même pour un jour passé
+    if (!fc || Date.now() - fc.at > 20000) relayJson('/api/imou?cam=' + encodeURIComponent(c.id) + '&date=' + want)
       .then(function (j) { save(fk, j.records); if (mine()) { REC.segs = j.records; renderRec(); } })
       .catch(function () { if (mine() && !REC.segs) { REC.segs = null; renderRec(); } });
     renderRec();
