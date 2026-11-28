@@ -64,7 +64,10 @@ for s in d.get('transcription', []):
     t = (s.get('text') or '').strip()
     # phrases parasites fréquentes sur du bruit (Whisper « invente » parfois ces formules)
     import re
-    if not t or t.startswith('[') or t.startswith('(') or not re.search(r'[A-Za-zÀ-ÿ]{2}', t): continue
+    # bruits notés par Whisper : (...), (Rires), *Propos indistincts*, [Musique], <i>…</i>
+    t = re.sub(r'\([^)]*\)|\*[^*]*\*|\[[^\]]*\]|</?i>', ' ', t)
+    t = re.sub(r'\s+', ' ', t).strip(' -')
+    if not t or not re.search(r'[A-Za-zÀ-ÿ]{2}', t): continue
     if re.search(r'amara|sous-titr|merci d.avoir regard|abonnez-vous', t, re.I): continue
     # formules que Whisper invente sur un bruit de fond, seules sur la ligne
     if re.fullmatch(r"(merci( beaucoup)?|je vous souhaite une bonne soirée|au revoir|à bientôt)[ .!,]*", t, re.I): continue
