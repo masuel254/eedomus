@@ -275,7 +275,7 @@ function serve() {
         // résultats d'une ancienne version de la transcription (erronée) : refaits
         const old = cur && cur.state === 'ready' && cur.v !== 2;
         if (old && !u.searchParams.get('go')) cur = null;
-        if (u.searchParams.get('go') && (!cur || cur.state === 'error' || stale || old)) {
+        if ((u.searchParams.get('go') && (!cur || cur.state === 'error' || old)) || stale) { // interrompue : relancée d'office
           fs.writeFileSync(out, JSON.stringify({ state: 'building', step: 'démarrage', done: 0, total: 0 }));
           // priorité très basse : les enregistrements et l'appli passent toujours avant
           spawnSync('systemd-run', ['--quiet', '--collect', '--unit', unit, '-p', 'Nice=19', '-p', 'CPUWeight=10', '-p', 'IOWeight=10', '-p', 'MemoryMax=700M',
