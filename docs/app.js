@@ -2511,6 +2511,12 @@
     });
   }
   var TRF = {};
+  // repère dans la liste : vidéo transcrite, ou transcription en cours (la tranche de 10 min qui contient ce moment)
+  function trTag(r) {
+    var g = r.url ? r : segAt(r.begin); if (!g || !g.url) return '';
+    var t = TR[g.url], st = t && t.state !== 'none' && t.state !== 'error' ? t.state : g.tr;
+    return st === 'ready' ? ' <span class="trtag ok">Transcrite</span>' : st === 'building' ? ' <span class="trtag">Transcription…</span>' : '';
+  }
   var RT = { videomotion: 'Mouvement', alarm: 'Alarme', human: 'Personne', manual: 'Manuel', regular: 'Continu', all: 'Enregistrement' };
   function dur(a, b) {
     var s = Math.max(0, (new Date(b.replace(' ', 'T')) - new Date(a.replace(' ', 'T'))) / 1000);
@@ -2537,7 +2543,7 @@
       else if (L) h += '<div class="evlist">' + L.map(function (r, i) {
         var playing = REC.play && REC.play.key === r.begin;
         return '<button class="ev rec' + (playing ? ' on' : '') + '" data-recplay="' + i + '"><span class="evic">' + icon('play') + '</span>' +
-          '<span><b>' + esc(r.begin.slice(11, 16)) + ' → ' + esc(r.end.slice(11, 16)) + '</b><small>' + esc(recTypes(r) || RT[String(r.type || '').toLowerCase()] || 'Enregistrement') + ' · ' + dur(r.begin, r.end) + '</small></span>' +
+          '<span><b>' + esc(r.begin.slice(11, 16)) + ' → ' + esc(r.end.slice(11, 16)) + '</b><small>' + esc(recTypes(r) || RT[String(r.type || '').toLowerCase()] || 'Enregistrement') + ' · ' + dur(r.begin, r.end) + trTag(r) + '</small></span>' +
           '<span class="evt">' + (r.size ? fmt(r.size / 1048576, 1) + ' Mo' : '') + '</span></button>';
       }).join('') + '</div>';
       h += REC.segs && REC.segs.length ? '<p class="note-q">Les vidéos se lisent depuis la Freebox (qualité réduite, la caméra filme en continu). Les 10 dernières minutes et « Passer en HD » passent par la carte SD de la caméra.</p>'
@@ -2551,7 +2557,7 @@
         h += '<div class="evlist">' + REC.segs.map(function (r, i) {
           var playing = REC.play && REC.play.key === r.begin;
           return '<button class="ev rec' + (playing ? ' on' : '') + '" data-recplay="' + i + '"><span class="evic">' + icon('play') + '</span>' +
-            '<span><b>' + esc(r.begin.slice(11, 16)) + ' → ' + esc(r.end.slice(11, 16)) + '</b><small>Enregistrement continu · ' + dur(r.begin, r.end) + '</small></span>' +
+            '<span><b>' + esc(r.begin.slice(11, 16)) + ' → ' + esc(r.end.slice(11, 16)) + '</b><small>Enregistrement continu · ' + dur(r.begin, r.end) + trTag(r) + '</small></span>' +
             '<span class="evt">' + (r.size ? fmt(r.size / 1048576, 1) + ' Mo' : '') + '</span></button>';
         }).join('') + '</div>';
       } else if (REC.clips || (RELAY && RELAY.url)) {

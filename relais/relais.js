@@ -82,7 +82,9 @@ function imouDay(cam, date) {
     if (st.size < 20000 || !complete(path.join(dir, n), st)) { if (i === names.length - 1) recording = true; return; }
     const b = new Date(+n.slice(0, 4), +n.slice(4, 6) - 1, +n.slice(6, 8), +n.slice(9, 11), +n.slice(11, 13), +n.slice(13, 15));
     const e = st.mtimeMs > b.getTime() && st.mtimeMs - b.getTime() < 3600000 ? new Date(st.mtimeMs) : new Date(b.getTime() + 600000);
-    out.push({ begin: local(b), end: local(e), type: 'regular', size: st.size, url: '/v/imou/' + safeDir(cam) + '/' + n });
+    // transcription déjà faite ou en cours pour cette tranche (repère dans la liste de l'appli)
+    let tr; try { const tj = JSON.parse(fs.readFileSync(path.join('/var/lib/relais/tr', crypto.createHash('sha1').update(path.join(dir, n)).digest('hex').slice(0, 20) + '.json'), 'utf8')); if (tj.state === 'ready' || tj.state === 'building') tr = tj.state; } catch (e) {}
+    out.push({ begin: local(b), end: local(e), type: 'regular', size: st.size, url: '/v/imou/' + safeDir(cam) + '/' + n, tr });
   });
   out.reverse();
   return { records: out, recording };
