@@ -1,7 +1,17 @@
 {
-  "version": "2.80.1",
+  "version": "2.80.2",
   "date": "2026-11-28",
   "releases": [
+    {
+      "version": "2.80.2",
+      "date": "2026-11-28",
+      "time": "08:34",
+      "title": "Transcription encore plus rapide",
+      "changes": [
+        "Les morceaux de son envoyés à la reconnaissance vocale sont mieux remplis : environ un tiers de temps en moins.",
+        "Une transcription interrompue repart toute seule."
+      ]
+    },
     {
       "version": "2.80.1",
       "date": "2026-11-28",
@@ -2382,5 +2392,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "07:18"
+  "time": "08:34"
 }

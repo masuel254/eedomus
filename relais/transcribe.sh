@@ -52,11 +52,12 @@ for i, s in enumerate(st):
     if s - t > 0.5: edges.append([t, s])
     t = en[i] if i < len(en) else dur
 if dur - t > 0.5: edges.append([t, dur])
-# marges et regroupement des zones proches (moins de 1,5 s d'écart), au plus 30 s par morceau
+# marges et regroupement des zones proches (moins de 8 s d'écart), au plus 30 s par morceau :
+# chaque morceau coûte autant à Whisper qu'un morceau plein de 30 s, mieux vaut peu de morceaux bien remplis
 out = []
 for a, b in edges:
     a, b = max(0, a - 0.4), min(dur, b + 0.4)
-    if out and a - out[-1][1] < 1.5 and b - out[-1][0] <= 30: out[-1][1] = b
+    if out and a - out[-1][1] < 8 and b - out[-1][0] <= 30: out[-1][1] = b
     else: out.append([a, b])
 for a, b in out:
     while b - a > 30: print('%.2f %.2f' % (a, a + 30)); a += 30
