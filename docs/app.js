@@ -2479,15 +2479,24 @@
   function trHTML() {
     var P = REC && REC.play; if (!P || !P.vpath || !RELAY || !RELAY.url) return '';
     // la transcription demandée reste affichée même si la vidéo passe à la tranche suivante
-    var mine = trKey(P), vp = REC.trv && TR[REC.trv] && TR[REC.trv].state !== 'none' ? REC.trv : mine, t = TR[vp];
+    var mine = trKey(P), full = 'v=' + encodeURIComponent(P.vpath), vp = REC.trv && TR[REC.trv] && TR[REC.trv].state !== 'none' ? REC.trv : mine;
     if (!TRL[mine]) TRL[mine] = { lab: trLab(P), base: P.trbase || 0 };
+    // mouvement pas transcrit seul, mais sa tranche entière l'est (ou est en cours) : on montre celle-ci
+    if (vp === mine && mine !== full) {
+      if (!TRL[full]) TRL[full] = { lab: trLab({ vpath: P.vpath }), base: 0 };
+      if (TR[full] === undefined) { TR[full] = { state: 'none' }; trGet(full, false); }
+      if (TR[mine] === undefined) { TR[mine] = { state: 'none' }; trGet(mine, false); }
+      var tm = TR[mine], tf = TR[full];
+      if ((!tm || tm.state === 'none') && (tf.state === 'ready' || tf.state === 'building')) vp = full;
+    }
+    var t = TR[vp];
     if (!t) { trGet(vp, false); return ''; }
-    var other = vp !== mine, lab = (TRL[vp] || {}).lab;
+    var other = vp !== mine && vp !== full, lab = (TRL[vp] || {}).lab;
     var h = '<div class="trbox"><div class="tr-hd"><b>Ce qui se dit' + (lab ? ' · ' + esc(lab) : '') + '</b>' + (other ? '<button class="lnk" data-trclose>Fermer</button>' : '');
     if (t.state === 'none' || t.state === 'error') h += '<button class="act" data-trgo>' + (t.state === 'error' ? 'Réessayer' : 'Transcrire') + '</button></div>' + (t.error ? '<p class="muted">' + esc(t.error) + '</p>' : '<p class="muted">La Freebox écoute le son ' + (P.trq ? 'de ce mouvement' : 'de ces 10 minutes') + ' et écrit ce qui se dit (' + (P.trq ? 'quelques minutes' : 'environ 45 min') + ', rien ne sort de la maison). Inutile de rester sur la vidéo.</p>');
-    else if (t.state === 'building') h += '</div><p class="muted">' + (t.step === 'transcription' && t.total ? 'Écoute en cours : passage ' + t.done + ' / ' + t.total + ' (environ ' + Math.max(1, Math.round((t.total - t.done + 1) * 1.5)) + ' min)…' : 'Préparation du son…') + '</p>' + trLines(t.lines, vp === mine ? (P.trbase || 0) : null);
+    else if (t.state === 'building') h += '</div><p class="muted">' + (t.step === 'transcription' && t.total ? 'Écoute en cours : passage ' + t.done + ' / ' + t.total + ' (environ ' + Math.max(1, Math.round((t.total - t.done + 1) * 1.5)) + ' min)…' : 'Préparation du son…') + '</p>' + trLines(t.lines, vp === mine ? (P.trbase || 0) : vp === full ? 0 : null);
     else if (!t.lines.length) h += '</div><p class="muted">Personne ne parle de façon audible dans cette vidéo.</p>';
-    else h += '</div>' + trLines(t.lines, vp === mine ? (P.trbase || 0) : null);
+    else h += '</div>' + trLines(t.lines, vp === mine ? (P.trbase || 0) : vp === full ? 0 : null);
     return h + '</div>';
   }
   function trLines(lines, seek) {
@@ -2499,15 +2508,15 @@
   }
   function trGet(vp, go) {
     relayJson('/api/tr?' + vp + (go ? '&go=1' : '')).then(function (j) {
-      TR[vp] = j; TRF[vp] = 0; if (REC && REC.play && (trKey(REC.play) === vp || REC.trv === vp)) { var bx = sheet.querySelector('.trbox'); if (bx) bx.outerHTML = trHTML(); else renderRec(); }
-      clearTimeout(trT); if (j.state === 'building') trT = setTimeout(function () { if (REC && REC.play && (trKey(REC.play) === vp || REC.trv === vp)) trGet(vp, false); }, 5000);
+      TR[vp] = j; TRF[vp] = 0; if (REC && REC.play && (trKey(REC.play) === vp || REC.trv === vp || 'v=' + encodeURIComponent(REC.play.vpath || '') === vp)) { var bx = sheet.querySelector('.trbox'); if (bx) bx.outerHTML = trHTML(); else renderRec(); }
+      clearTimeout(trT); if (j.state === 'building') trT = setTimeout(function () { if (REC && REC.play && (trKey(REC.play) === vp || REC.trv === vp || 'v=' + encodeURIComponent(REC.play.vpath || '') === vp)) trGet(vp, false); }, 5000);
     }).catch(function () {
       // Freebox très occupée pendant une transcription : on patiente et on redemande, sans perdre ce qui est déjà affiché
       TRF[vp] = (TRF[vp] || 0) + 1;
-      var keep = REC && REC.play && (trKey(REC.play) === vp || REC.trv === vp);
+      var keep = REC && REC.play && (trKey(REC.play) === vp || REC.trv === vp || 'v=' + encodeURIComponent(REC.play.vpath || '') === vp);
       if (TRF[vp] < 10 && keep) {
         if (!TR[vp] || TR[vp].state !== 'building') { TR[vp] = { state: 'building', step: 'démarrage', done: 0, total: 0 }; var bx = sheet.querySelector('.trbox'); if (bx) bx.outerHTML = trHTML(); }
-        clearTimeout(trT); trT = setTimeout(function () { if (REC && REC.play && (trKey(REC.play) === vp || REC.trv === vp)) trGet(vp, go); }, 15000);
+        clearTimeout(trT); trT = setTimeout(function () { if (REC && REC.play && (trKey(REC.play) === vp || REC.trv === vp || 'v=' + encodeURIComponent(REC.play.vpath || '') === vp)) trGet(vp, go); }, 15000);
       } else TR[vp] = { state: 'error', error: 'La Freebox ne répond pas pour le moment.' };
     });
   }
@@ -2531,6 +2540,8 @@
     var mt = trMotion(r, g), t = TR[mt.q || 'v=' + encodeURIComponent(g.url)], st = t && t.state !== 'none' && t.state !== 'error' ? t.state : null;
     if (!st && !mt.q) st = g.tr;
     if (!st && mt.q) (g.trs || []).forEach(function (x) { if (Math.abs(x.a - mt.a) <= 2) st = x.st; });
+    // sinon, la tranche entière de 10 min qui contient ce mouvement
+    if (!st && mt.q) { var tf = TR['v=' + encodeURIComponent(g.url)]; st = tf && (tf.state === 'ready' || tf.state === 'building') ? tf.state : g.tr; }
     return st === 'ready' ? ' <span class="trtag ok">Transcrite</span>' : st === 'building' ? ' <span class="trtag">Transcription…</span>' : '';
   }
   var RT = { videomotion: 'Mouvement', alarm: 'Alarme', human: 'Personne', manual: 'Manuel', regular: 'Continu', all: 'Enregistrement' };
