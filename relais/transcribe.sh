@@ -15,6 +15,8 @@ json.dump({'state': 'building', 'step': sys.argv[1], 'done': int(sys.argv[2]), '
 PY
 mv -f "$OUT.tmp" "$OUT"; }
 fail() { printf '{"state":"error","error":"%s"}\n' "$1" > "$OUT.tmp" && mv -f "$OUT.tmp" "$OUT"; exit 0; }
+# un cœur reste libre pour les enregistrements et pour répondre à l'appli
+TH=$(( $(nproc) > 1 ? $(nproc) - 1 : 1 ))
 [ -x "$BIN" ] && [ -s "$MODEL" ] || fail "reconnaissance vocale pas encore installée (quelques minutes après la mise à jour)"
 # une seule transcription à la fois (sinon la mémoire de la VM déborde) : les autres attendent leur tour
 step attente
@@ -53,8 +55,8 @@ while read -r A B; do
   rm -f "$T/p.json"
   ffmpeg -nostdin -v error -y -ss "$A" -to "$B" -i "$T/a.wav" -ac 1 -ar 16000 "$T/p.wav" < /dev/null || continue
   # un second essai si Whisper a été interrompu (mémoire)
-  nice -n 15 "$BIN" -m "$MODEL" -l fr -t "$(nproc)" -nt -np -f "$T/p.wav" -oj -of "$T/p" < /dev/null >/dev/null 2>&1 ||
-    nice -n 15 "$BIN" -m "$MODEL" -l fr -t "$(nproc)" -nt -np -f "$T/p.wav" -oj -of "$T/p" < /dev/null >/dev/null 2>&1 || continue
+  nice -n 15 "$BIN" -m "$MODEL" -l fr -t "$TH" -nt -np -f "$T/p.wav" -oj -of "$T/p" < /dev/null >/dev/null 2>&1 ||
+    nice -n 15 "$BIN" -m "$MODEL" -l fr -t "$TH" -nt -np -f "$T/p.wav" -oj -of "$T/p" < /dev/null >/dev/null 2>&1 || continue
   python3 - "$T/p.json" "$A" >> "$T/lines.txt" <<'PY'
 import json, sys
 try: d = json.load(open(sys.argv[1]))

@@ -1,7 +1,17 @@
 {
-  "version": "2.79.3",
+  "version": "2.79.4",
   "date": "2026-11-28",
   "releases": [
+    {
+      "version": "2.79.4",
+      "date": "2026-11-28",
+      "time": "06:57",
+      "title": "Transcription patiente",
+      "changes": [
+        "Si la Freebox est très occupée, l'appli patiente et redemande au lieu d'afficher « ne répond pas ».",
+        "Pendant une transcription, la Freebox garde un processeur libre pour les caméras et l'appli."
+      ]
+    },
     {
       "version": "2.79.3",
       "date": "2026-11-28",
@@ -2342,5 +2352,5 @@
     "Révoquer à la fin : mot de passe EDF",
     "Sonde « Jardin » (eedomus 2999507) muette depuis le 27/10 : vérifier la pile ou la remplacer (l’appli utilise la sonde de la pergola pour l’extérieur)"
   ],
-  "time": "04:16"
+  "time": "06:57"
 }

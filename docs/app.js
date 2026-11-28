@@ -2498,10 +2498,19 @@
   }
   function trGet(vp, go) {
     relayJson('/api/tr?v=' + encodeURIComponent(vp) + (go ? '&go=1' : '')).then(function (j) {
-      TR[vp] = j; if (REC && REC.play && (REC.play.vpath === vp || REC.trv === vp)) { var bx = sheet.querySelector('.trbox'); if (bx) bx.outerHTML = trHTML(); else renderRec(); }
+      TR[vp] = j; TRF[vp] = 0; if (REC && REC.play && (REC.play.vpath === vp || REC.trv === vp)) { var bx = sheet.querySelector('.trbox'); if (bx) bx.outerHTML = trHTML(); else renderRec(); }
       clearTimeout(trT); if (j.state === 'building') trT = setTimeout(function () { if (REC && REC.play && (REC.play.vpath === vp || REC.trv === vp)) trGet(vp, false); }, 5000);
-    }).catch(function () { TR[vp] = { state: 'error', error: 'La Freebox ne répond pas pour le moment.' }; });
+    }).catch(function () {
+      // Freebox très occupée pendant une transcription : on patiente et on redemande, sans perdre ce qui est déjà affiché
+      TRF[vp] = (TRF[vp] || 0) + 1;
+      var keep = REC && REC.play && (REC.play.vpath === vp || REC.trv === vp);
+      if (TRF[vp] < 10 && keep) {
+        if (!TR[vp] || TR[vp].state !== 'building') { TR[vp] = { state: 'building', step: 'démarrage', done: 0, total: 0 }; var bx = sheet.querySelector('.trbox'); if (bx) bx.outerHTML = trHTML(); }
+        clearTimeout(trT); trT = setTimeout(function () { if (REC && REC.play && (REC.play.vpath === vp || REC.trv === vp)) trGet(vp, go); }, 15000);
+      } else TR[vp] = { state: 'error', error: 'La Freebox ne répond pas pour le moment.' };
+    });
   }
+  var TRF = {};
   var RT = { videomotion: 'Mouvement', alarm: 'Alarme', human: 'Personne', manual: 'Manuel', regular: 'Continu', all: 'Enregistrement' };
   function dur(a, b) {
     var s = Math.max(0, (new Date(b.replace(' ', 'T')) - new Date(a.replace(' ', 'T'))) / 1000);
